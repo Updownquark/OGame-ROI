@@ -3,10 +3,6 @@ package org.quark.ogame;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Font;
-import java.awt.event.FocusEvent;
-import java.awt.event.FocusListener;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -21,16 +17,16 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
-import javax.swing.JTextField;
 import javax.swing.table.DefaultTableCellRenderer;
 
 import org.observe.Observable;
-import org.observe.SettableValue;
 import org.observe.collect.ObservableCollection;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.ObservableTableModel;
+import org.observe.util.swing.ObservableTextField;
 import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
+import org.qommons.io.Format;
 
 import com.google.common.reflect.TypeToken;
 
@@ -55,13 +51,16 @@ public class OGameRoiGui extends JPanel {
 		configPanel.add(fieldPanel);
 		
 		labelPanel.add(new JLabel("Metal Trade Rate:"));
-		fieldPanel.add(fieldFor(theROI.getMetalTradeRate()));
+		fieldPanel.add(new ObservableTextField<>(theROI.getMetalTradeRate(), //
+				Format.validate(Format.doubleFormat("0.00"), v -> v <= 0 ? "Trade rate must be >0" : null), null));
 		labelPanel.add(new JLabel("Crystal Trade Rate:"));
-		fieldPanel.add(fieldFor(theROI.getCrystalTradeRate()));
+		fieldPanel.add(new ObservableTextField<>(theROI.getCrystalTradeRate(), //
+				Format.validate(Format.doubleFormat("0.00"), v -> v <= 0 ? "Trade rate must be >0" : null), null));
 		labelPanel.add(new JLabel("Deut Trade Rate:"));
-		fieldPanel.add(fieldFor(theROI.getDeutTradeRate()));
+		fieldPanel.add(new ObservableTextField<>(theROI.getDeutTradeRate(), //
+				Format.validate(Format.doubleFormat("0.00"), v -> v <= 0 ? "Trade rate must be >0" : null), null));
 		labelPanel.add(new JLabel("Avg. Planet Temp:"));
-		fieldPanel.add(fieldFor(theROI.getPlanetTemp()));
+		fieldPanel.add(new ObservableTextField<>(theROI.getPlanetTemp(), Format.INT, null));
 		labelPanel.add(new JLabel("With Fusion:"));
 		JCheckBox fusionCheck=new JCheckBox();
 		ObservableSwingUtils.checkFor(fusionCheck, "Whether to use fusion instead of satellites for energy", theROI.isWithFusion());
@@ -122,9 +121,9 @@ public class OGameRoiGui extends JPanel {
 		});
 		table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
 			@Override
-			public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row,
+			public Component getTableCellRendererComponent(JTable _table, Object value, boolean isSelected, boolean hasFocus, int row,
 					int column) {
-				super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+				super.getTableCellRendererComponent(_table, value, isSelected, hasFocus, row, column);
 				if (value != null) {
 					setText(QommonsUtils
 							.printTimeLength(((Duration) value).getSeconds(), ((Duration) value).getNano(), new StringBuilder(), true)
@@ -137,9 +136,9 @@ public class OGameRoiGui extends JPanel {
 		Font bold = normal.deriveFont(Font.BOLD);
 		class UpgradeRenderer extends DefaultTableCellRenderer {
 			@Override
-			public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row,
+			public Component getTableCellRendererComponent(JTable _table, Object value, boolean isSelected, boolean hasFocus, int row,
 					int column) {
-				super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+				super.getTableCellRendererComponent(_table, value, isSelected, hasFocus, row, column);
 				if (columnTypes.get(column) == theSequence.get(row).type) {
 					setFont(bold);
 				} else {
@@ -154,48 +153,6 @@ public class OGameRoiGui extends JPanel {
 		JScrollPane scroll = new JScrollPane(table);
 		scroll.getVerticalScrollBar().setUnitIncrement(10);
 		add(scroll);
-	}
-
-	private JTextField fieldFor(SettableValue<? extends Number> value) {
-		JTextField field = new JTextField(10);
-		field.setText(value.get().toString());
-		boolean isFloat = value.getType().unwrap().getRawType() != int.class;
-		class FieldListener extends KeyAdapter implements FocusListener {
-			private boolean isDirty;
-			@Override
-			public void keyReleased(KeyEvent e) {
-				if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-					updateValue();
-				} else {
-					isDirty=true;
-				}
-			}
-
-			@Override
-			public void focusGained(FocusEvent e) {
-			}
-
-			@Override
-			public void focusLost(FocusEvent e) {
-				updateValue();
-			}
-
-			private void updateValue() {
-				if (!isDirty) {
-					return;
-				}
-				isDirty = true;
-				if (isFloat) {
-					((SettableValue<Double>) value).set(Double.parseDouble(field.getText()), null);
-				} else {
-					((SettableValue<Integer>) value).set(Integer.parseInt(field.getText()), null);
-				}
-			}
-		}
-		FieldListener listener = new FieldListener();
-		field.addKeyListener(listener);
-		field.addFocusListener(listener);
-		return field;
 	}
 
 	public static void main(String[] args) {
