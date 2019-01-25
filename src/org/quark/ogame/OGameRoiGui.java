@@ -97,9 +97,11 @@ public class OGameRoiGui extends JPanel {
 
 		List<OGameImprovementType> columnTypes = Arrays.asList(null, //
 				OGameImprovementType.Metal, OGameImprovementType.Crystal, OGameImprovementType.Deut, //
-				OGameImprovementType.Planet, OGameImprovementType.Plasma, OGameImprovementType.Fusion, OGameImprovementType.Energy);
+				OGameImprovementType.Planet, OGameImprovementType.Plasma, OGameImprovementType.Fusion, OGameImprovementType.Energy, //
+				null, null);
 		JTable table=new JTable(new ObservableTableModel<OGameImprovement>(theSequence,//
-				new String[]{"ROI", "Metal", "Crystal", "Deut", "Planets", "Plasma", "Fusion", "Energy"},//
+				new String[] { "ROI", "Metal", "Crystal", "Deut", "Planets", "Plasma", "Fusion", "Energy", "Account Value", "Metal Ratio",
+						"Crystal Ratio" }, //
 				new Function[]{//
 						(Function<OGameImprovement, Duration>) imp->imp.roi, //
 						(Function<OGameImprovement, Integer>) imp->imp.metal, //
@@ -108,7 +110,18 @@ public class OGameRoiGui extends JPanel {
 						(Function<OGameImprovement, Integer>) imp->imp.planets, //
 						(Function<OGameImprovement, Integer>) imp->imp.plasma, //
 						(Function<OGameImprovement, Integer>) imp->imp.fusion, //
-						(Function<OGameImprovement, Integer>) imp->imp.energy //
+						(Function<OGameImprovement, Integer>) imp -> imp.energy, //
+						(Function<OGameImprovement, Double>) imp -> //
+						imp.accountValue.getValue(theROI.getMetalTradeRate().get(), theROI.getCrystalTradeRate().get(),
+								theROI.getDeutTradeRate().get()), //
+						(Function<OGameImprovement, Double>) imp -> //
+						imp.accountValue.getTotalCost(2) == 0 //
+								? imp.accountValue.getTotalCost(0) * 1.0 / imp.accountValue.getTotalCost(1)
+								: imp.accountValue.getTotalCost(0) * 1.0 / imp.accountValue.getTotalCost(2), //
+						(Function<OGameImprovement, Double>) imp -> //
+						imp.accountValue.getTotalCost(2) == 0 //
+								? 1
+								: imp.accountValue.getTotalCost(1) * 1.0 / imp.accountValue.getTotalCost(2) //
 		}) {
 			@Override
 			public boolean isCellEditable(int rowIndex, int columnIndex) {

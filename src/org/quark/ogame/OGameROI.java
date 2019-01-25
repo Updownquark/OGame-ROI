@@ -89,7 +89,7 @@ public class OGameROI {
 				return true;
 			}
 			for(OGameImprovementType type : OGameImprovementType.values()){
-				double [] cost=theState.getImprovementCost(type);
+				OGameCost cost = theState.getImprovementCost(type);
 				OGameState.Upgrade upgrade = theState.upgrade(type);
 				double [] production=theState.getProduction();
 				Duration roi=calculateROI(cost, theCurrentProduction, production);
@@ -102,6 +102,7 @@ public class OGameROI {
 			int level = theState.upgrade(bestType).effect();
 			theCurrentProduction = theState.getProduction();
 			action.accept(new OGameImprovement(theState, bestType, level, bestROI));
+			System.out.println(bestType + ": " + theState.getAccountValue());
 			return true;
 		}
 
@@ -120,8 +121,9 @@ public class OGameROI {
 			return 0;
 		}
 
-		private Duration calculateROI(double[] upgradeCost, double[] previousProduction, double[] postProduction) {
-			double valueCost = upgradeCost[0] / theTradeRates[0] + upgradeCost[1] / theTradeRates[1] + upgradeCost[2] / theTradeRates[2];
+		private Duration calculateROI(OGameCost upgradeCost, double[] previousProduction, double[] postProduction) {
+			double valueCost = upgradeCost.getTotalCost(0) / theTradeRates[0] + upgradeCost.getTotalCost(1) / theTradeRates[1]
+					+ upgradeCost.getTotalCost(2) / theTradeRates[2];
 			double productionValueDiff = (postProduction[0] - previousProduction[0]) / theTradeRates[0]//
 					+ (postProduction[1] - previousProduction[1]) / theTradeRates[1]//
 					+ (postProduction[2] - previousProduction[2]) / theTradeRates[2];

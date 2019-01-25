@@ -27,8 +27,7 @@ public class OGameState {
 	/** Metal/crystal/deut/fusion %usage */
 	private final int[] theUtilizations;
 	private final int[] thePreviousUtilizations;
-	private final double[] theBuildingCost;
-	private final double[] theResearchCost;
+	private OGameCost theAccountValue;
 
 	public OGameState(OGameRules rules, int uniSpeed, int planetTemp, boolean withFusion) {
 		theRules = rules;
@@ -37,8 +36,7 @@ public class OGameState {
 		theSatEnergy = (int) Math.floor((theAvgPlanetTemp + 160) / 6);
 		theUtilizations = new int[] { 100, 100, 100, 100 };
 		thePreviousUtilizations = theUtilizations.clone();
-		theBuildingCost = new double[3];
-		theResearchCost = new double[3];
+		theAccountValue = OGameCost.ZERO;
 		this.withFusion = withFusion;
 
 		planets = 1;
@@ -90,15 +88,15 @@ public class OGameState {
 		return theUtilizations[type] / 100.0;
 	}
 
-	public double getBuildingCost(int resourceType) {
-		return theBuildingCost[resourceType];
+	public OGameCost getAccountValue() {
+		return theAccountValue;
 	}
 
 	public double[] getProduction() {
 		return theRules.getResourceProduction(this);
 	}
 
-	public double[] getImprovementCost(OGameImprovementType improvement) {
+	public OGameCost getImprovementCost(OGameImprovementType improvement) {
 		int prevLevel = -1;
 		switch (improvement) {
 		case Metal:
@@ -152,11 +150,9 @@ public class OGameState {
 				@Override
 				public int effect() {
 					plasma--;
-					double[] cost = getImprovementCost(improvement);
+					OGameCost cost = getImprovementCost(improvement);
+					theAccountValue = theAccountValue.plus(cost);
 					plasma++;
-					theResearchCost[0] += cost[0];
-					theResearchCost[1] += cost[1];
-					theResearchCost[2] += cost[2];
 					return plasma;
 				}
 
@@ -171,13 +167,8 @@ public class OGameState {
 				@Override
 				public int effect() {
 					planets--;
-					double[] cost = getImprovementCost(improvement);
-					theResearchCost[0] += cost[0] - theBuildingCost[0];
-					theResearchCost[1] += cost[1] - theBuildingCost[1];
-					theResearchCost[2] += cost[2] - theBuildingCost[2];
-					theBuildingCost[0] *= (planets + 1) / planets;
-					theBuildingCost[1] *= (planets + 1) / planets;
-					theBuildingCost[2] *= (planets + 1) / planets;
+					OGameCost cost = getImprovementCost(improvement);
+					theAccountValue = theAccountValue.plus(cost);
 					planets++;
 					return planets;
 				}
@@ -217,23 +208,9 @@ public class OGameState {
 				@Override
 				public int effect() {
 					undo.run();
-					double[] cost = getImprovementCost(type);
+					OGameCost cost = getImprovementCost(type);
 					effect.run();
-					switch (type) {
-					case Metal:
-					case Crystal:
-					case Deut:
-					case Fusion:
-						theBuildingCost[0] += cost[0];
-						theBuildingCost[1] += cost[1];
-						theBuildingCost[2] += cost[2];
-						break;
-					default:
-						theResearchCost[0] += cost[0];
-						theResearchCost[1] += cost[1];
-						theResearchCost[2] += cost[2];
-						break;
-					}
+					theAccountValue = theAccountValue.plus(cost);
 					return newLevel;
 				}
 
@@ -251,23 +228,9 @@ public class OGameState {
 				@Override
 				public int effect() {
 					undo.run();
-					double[] cost = getImprovementCost(type);
+					OGameCost cost = getImprovementCost(type);
 					effect.run();
-					switch (type) {
-					case Metal:
-					case Crystal:
-					case Deut:
-					case Fusion:
-						theBuildingCost[0] += cost[0];
-						theBuildingCost[1] += cost[1];
-						theBuildingCost[2] += cost[2];
-						break;
-					default:
-						theResearchCost[0] += cost[0];
-						theResearchCost[1] += cost[1];
-						theResearchCost[2] += cost[2];
-						break;
-					}
+					theAccountValue = theAccountValue.plus(cost);
 					return newLevel;
 				}
 

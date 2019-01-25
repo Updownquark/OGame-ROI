@@ -11,58 +11,46 @@ public class OGameRules {
 		private final double theInitialCrystalCost;
 		private final double theInitialDeutCost;
 		private final double theLevelExponent;
+		private final boolean isResearch;
 
-		public ImprovementScheme(double initialMetalCost, double initialCrystalCost, double initialDeutCost, double levelExponent) {
+		public ImprovementScheme(double initialMetalCost, double initialCrystalCost, double initialDeutCost, double levelExponent,
+				boolean research) {
 			theInitialMetalCost = initialMetalCost;
 			theInitialCrystalCost = initialCrystalCost;
 			theInitialDeutCost = initialDeutCost;
 			theLevelExponent = levelExponent;
+			isResearch = research;
 		}
 
-		double[] getUpgradeCost(OGameState initState, int preLevel, int postLevel, boolean research) {
-			double[] cost = new double[3];
+		OGameCost getUpgradeCost(OGameState initState, int preLevel, int postLevel) {
+			long[] cost = new long[3];
 			if (postLevel == 0) {
-				return cost;
+				return OGameCost.ZERO;
 			}
 			// POW(exp, preLevel)*((1-POW(exp, ABS(postLevel-preLevel)))/(1-exp))
 			double levelUp = Math.pow(theLevelExponent, preLevel)
 					* ((1 - Math.pow(theLevelExponent, postLevel - preLevel)) / (1 - theLevelExponent));
-			cost[0] = theInitialMetalCost * levelUp;
-			cost[1] = theInitialCrystalCost * levelUp;
-			cost[2] = theInitialDeutCost * levelUp;
-			return cost;
+			cost[0] = (long) Math.ceil(theInitialMetalCost * levelUp);
+			cost[1] = (long) Math.ceil(theInitialCrystalCost * levelUp);
+			cost[2] = (long) Math.ceil(theInitialDeutCost * levelUp);
+			return new OGameCost(isResearch ? null : cost, isResearch ? cost : null);
 		}
 	}
 
 	private static class BuildingImprovementScheme extends ImprovementScheme {
 		BuildingImprovementScheme(double initialMetalCost, double initialCrystalCost, double initialDeutCost, double levelExponent) {
-			super(initialMetalCost, initialCrystalCost, initialDeutCost, levelExponent);
+			super(initialMetalCost, initialCrystalCost, initialDeutCost, levelExponent, false);
 		}
 
 		@Override
-		double[] getUpgradeCost(OGameState initState, int preLevel, int postLevel, boolean research) {
-			if (research) {
-				return new double[3];
-			}
-			double[] cost = super.getUpgradeCost(initState, preLevel, postLevel, false);
-			cost[0] *= initState.getPlanets();
-			cost[1] *= initState.getPlanets();
-			cost[2] *= initState.getPlanets();
-			return cost;
+		OGameCost getUpgradeCost(OGameState initState, int preLevel, int postLevel) {
+			return super.getUpgradeCost(initState, preLevel, postLevel).multiply(initState.getPlanets());
 		}
 	}
 
 	private static class TechImprovementScheme extends ImprovementScheme {
 		TechImprovementScheme(double initialMetalCost, double initialCrystalCost, double initialDeutCost, double levelExponent) {
-			super(initialMetalCost, initialCrystalCost, initialDeutCost, levelExponent);
-		}
-
-		@Override
-		double[] getUpgradeCost(OGameState initState, int preLevel, int postLevel, boolean research) {
-			if (!research) {
-				return new double[3];
-			}
-			return super.getUpgradeCost(initState, preLevel, postLevel, true);
+			super(initialMetalCost, initialCrystalCost, initialDeutCost, levelExponent, true);
 		}
 	}
 
@@ -72,16 +60,9 @@ public class OGameRules {
 		}
 
 		@Override
-		double[] getUpgradeCost(OGameState initState, int preLevel, int postLevel, boolean research) {
-			if (research) {
-				return super.getUpgradeCost(initState, preLevel * 2 - 3, postLevel * 2 - 3, true);
-			} else {
-				double [] cost=new double[3];
-				cost[0] = initState.getBuildingCost(0) / initState.getPlanets();
-				cost[1] = initState.getBuildingCost(1) / initState.getPlanets();
-				cost[2] = initState.getBuildingCost(2) / initState.getPlanets();
-				return cost;
-			}
+		OGameCost getUpgradeCost(OGameState initState, int preLevel, int postLevel) {
+			return super.getUpgradeCost(initState, preLevel * 2 - 3, postLevel * 2 - 3)//
+					.plus(initState.getAccountValue().justBuildings().divide(initState.getPlanets()));
 		}
 	}
 
@@ -163,20 +144,8 @@ public class OGameRules {
 		theProductionSchemes.add(new FusionProductionScheme());
 	}
 
-	public double[] getUpgradeCost(OGameState initState, OGameImprovementType improvement, int preLevel, int postLevel) {
-		boolean research;
-		switch (improvement) {
-		case Metal:
-		case Crystal:
-		case Deut:
-		case Fusion:
-			research = false;
-			break;
-		default:
-			research = true;
-			break;
-		}
-		return theImprovementSchemes.get(improvement).getUpgradeCost(initState, preLevel, postLevel, research);
+	public OGameCost getUpgradeCost(OGameState initState, OGameImprovementType improvement, int preLevel, int postLevel) {
+		return theImprovementSchemes.get(improvement).getUpgradeCost(initState, preLevel, postLevel);
 	}
 
 	public double[] getEnergyProductionConsumption(OGameState state) {

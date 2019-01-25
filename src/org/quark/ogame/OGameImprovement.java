@@ -15,6 +15,8 @@ public class OGameImprovement {
 	public final int level;
 	public final Duration roi;
 
+	public final OGameCost accountValue;
+
 	public OGameImprovement(OGameState state, OGameImprovementType type, int level, Duration roi) {
 		metal = state.getBuildingLevel(0);
 		crystal = state.getBuildingLevel(1);
@@ -27,5 +29,7 @@ public class OGameImprovement {
 		this.type = type;
 		this.level = level;
 		this.roi = roi;
+
+		accountValue = state.getAccountValue();
 	}
 }
