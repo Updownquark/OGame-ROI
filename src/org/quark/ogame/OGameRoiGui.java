@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JFrame;
@@ -30,6 +29,8 @@ import org.qommons.io.Format;
 
 import com.google.common.reflect.TypeToken;
 
+import net.miginfocom.swing.MigLayout;
+
 public class OGameRoiGui extends JPanel {
 	private final OGameROI theROI;
 	private final ObservableCollection<OGameImprovement> theSequence;
@@ -40,34 +41,32 @@ public class OGameRoiGui extends JPanel {
 		theROI = roi;
 		theSequence=ObservableCollection.create(TypeToken.of(OGameImprovement.class));
 
-		JPanel configPanel=new JPanel();
-		configPanel.setLayout(new BoxLayout(configPanel, BoxLayout.X_AXIS));
+		JPanel configPanel = new JPanel(new MigLayout("fillx", "[shrink][grow, fill]"));
 		add(configPanel, BorderLayout.NORTH);
-		JPanel labelPanel = new JPanel();
-		labelPanel.setLayout(new BoxLayout(labelPanel, BoxLayout.Y_AXIS));
-		configPanel.add(labelPanel);
-		JPanel fieldPanel = new JPanel();
-		fieldPanel.setLayout(new BoxLayout(fieldPanel, BoxLayout.Y_AXIS));
-		configPanel.add(fieldPanel);
 		
-		labelPanel.add(new JLabel("Metal Trade Rate:"));
-		fieldPanel.add(new ObservableTextField<>(theROI.getMetalTradeRate(), //
-				Format.validate(Format.doubleFormat("0.00"), v -> v <= 0 ? "Trade rate must be >0" : null), null));
-		labelPanel.add(new JLabel("Crystal Trade Rate:"));
-		fieldPanel.add(new ObservableTextField<>(theROI.getCrystalTradeRate(), //
-				Format.validate(Format.doubleFormat("0.00"), v -> v <= 0 ? "Trade rate must be >0" : null), null));
-		labelPanel.add(new JLabel("Deut Trade Rate:"));
-		fieldPanel.add(new ObservableTextField<>(theROI.getDeutTradeRate(), //
-				Format.validate(Format.doubleFormat("0.00"), v -> v <= 0 ? "Trade rate must be >0" : null), null));
-		labelPanel.add(new JLabel("Avg. Planet Temp:"));
-		fieldPanel.add(new ObservableTextField<>(theROI.getPlanetTemp(), Format.INT, null));
-		labelPanel.add(new JLabel("With Fusion:"));
-		JCheckBox fusionCheck=new JCheckBox();
+		configPanel.add(new JLabel("Metal Trade Rate:"), "align right");
+		configPanel.add(new ObservableTextField<>(theROI.getMetalTradeRate(), //
+				Format.validate(Format.doubleFormat("0.00"), v -> v <= 0 ? "Trade rate must be >0" : null), null), "wrap");
+		configPanel.add(new JLabel("Crystal Trade Rate:"), "align right");
+		configPanel.add(new ObservableTextField<>(theROI.getCrystalTradeRate(), //
+				Format.validate(Format.doubleFormat("0.00"), v -> v <= 0 ? "Trade rate must be >0" : null), null), "wrap");
+		configPanel.add(new JLabel("Deut Trade Rate:"), "align right");
+		configPanel.add(new ObservableTextField<>(theROI.getDeutTradeRate(), //
+				Format.validate(Format.doubleFormat("0.00"), v -> v <= 0 ? "Trade rate must be >0" : null), null), "wrap");
+		configPanel.add(new JLabel("Avg. Planet Temp:"), "align right");
+		configPanel.add(new ObservableTextField<>(theROI.getPlanetTemp(), Format.INT, null), "wrap");
+		configPanel.add(new JLabel("Universe Speed:"), "align right");
+		configPanel.add(
+				new ObservableTextField<>(theUniSpeed, Format.validate(Format.INT, i -> i <= 0 ? "Universe speed must be >0" : null), null),
+				"wrap");
+		configPanel.add(new JLabel("With Fusion:"), "align right");
+		JCheckBox fusionCheck = new JCheckBox();
 		ObservableSwingUtils.checkFor(fusionCheck, "Whether to use fusion instead of satellites for energy", theROI.isWithFusion());
-		fieldPanel.add(fusionCheck);
-		labelPanel.add(new JLabel("Compute:"));
+		configPanel.add(fusionCheck, "wrap");
+		JPanel buttonPanel = new JPanel(new MigLayout("fillx"));
+		configPanel.add(buttonPanel, "span, grow");
 		JButton computeButton = new JButton("Compute");
-		fieldPanel.add(computeButton);
+		buttonPanel.add(computeButton, "align center");
 		computeButton.addActionListener(evt -> {
 			Consumer<OGameImprovement> seqAdd = theSequence::add;
 			try (Transaction t = theSequence.lock(true, null)) {
