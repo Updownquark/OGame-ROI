@@ -3,6 +3,8 @@ package org.quark.ogame;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Font;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -19,6 +21,7 @@ import javax.swing.JTable;
 import javax.swing.table.DefaultTableCellRenderer;
 
 import org.observe.Observable;
+import org.observe.SimpleSettableValue;
 import org.observe.collect.ObservableCollection;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.ObservableTableModel;
@@ -35,11 +38,14 @@ public class OGameRoiGui extends JPanel {
 	private final OGameROI theROI;
 	private final ObservableCollection<OGameImprovement> theSequence;
 	private OGameROI.ROIComputation theComputation;
+	private SimpleSettableValue<Integer> theUniSpeed;
 
 	public OGameRoiGui(OGameROI roi) {
 		super(new BorderLayout());
 		theROI = roi;
 		theSequence=ObservableCollection.create(TypeToken.of(OGameImprovement.class));
+		theUniSpeed = new SimpleSettableValue<>(int.class, false);
+		theUniSpeed.set(7, null);
 
 		JPanel configPanel = new JPanel(new MigLayout("fillx", "[shrink][grow, fill]"));
 		add(configPanel, BorderLayout.NORTH);
@@ -75,7 +81,7 @@ public class OGameRoiGui extends JPanel {
 					for (int i = 0; i < 175; i++) {
 						theComputation.tryAdvance(seqAdd);
 					}
-					computeButton.setText("More...");
+					computeButton.setText("More Levels...");
 				} else {
 					for (int i = 0; i < 25; i++) {
 						theComputation.tryAdvance(seqAdd);
@@ -83,12 +89,65 @@ public class OGameRoiGui extends JPanel {
 				}
 			}
 		});
+		String[] columnNames = new String[] { "ROI", "Metal", "Crystal", "Deut", "Planets", "Plasma", //
+				// "Fusion", "Energy",//
+				"Economy Value", "Metal Ratio", "Crystal Ratio" };
+		Function<OGameImprovement, ?>[] columns = new Function[] { //
+				(Function<OGameImprovement, Duration>) imp -> imp.roi.dividedBy(theUniSpeed.get()), //
+				(Function<OGameImprovement, Integer>) imp -> imp.metal, //
+				(Function<OGameImprovement, Integer>) imp -> imp.crystal, //
+				(Function<OGameImprovement, Integer>) imp -> imp.deut, //
+				(Function<OGameImprovement, Integer>) imp -> imp.planets, //
+				(Function<OGameImprovement, Integer>) imp -> imp.plasma, //
+				// (Function<OGameImprovement, Integer>) imp -> imp.fusion, //
+				// (Function<OGameImprovement, Integer>) imp -> imp.energy, //
+				(Function<OGameImprovement, Double>) imp -> //
+				imp.accountValue.getValue(theROI.getMetalTradeRate().get(), theROI.getCrystalTradeRate().get(), theROI.getDeutTradeRate().get()), //
+				(Function<OGameImprovement, Double>) imp -> //
+				imp.accountValue.getTotalCost(2) == 0 //
+						? imp.accountValue.getTotalCost(0) * 1.0 / imp.accountValue.getTotalCost(1)
+						: imp.accountValue.getTotalCost(0) * 1.0 / imp.accountValue.getTotalCost(2), //
+				(Function<OGameImprovement, Double>) imp -> //
+				imp.accountValue.getTotalCost(2) == 0 //
+						? 1 : imp.accountValue.getTotalCost(1) * 1.0 / imp.accountValue.getTotalCost(2) //
+		};
+		JButton exportButton = new JButton("Copy CSV to Clipboard");
+		theSequence.observeSize().changes().act(evt -> {
+			exportButton.setEnabled(evt.getNewValue() > 0);
+		});
+		exportButton.addActionListener(evt -> {
+			StringBuilder str = new StringBuilder();
+			boolean firstCol = true;
+			for (String column : columnNames) {
+				if (!firstCol) {
+					str.append(',');
+				}
+				firstCol = false;
+				str.append(column);
+			}
+			str.append('\n');
+			for (OGameImprovement row : theSequence) {
+				firstCol = true;
+				for (Function<OGameImprovement, ?> column : columns) {
+					if (firstCol) {
+						Duration rowRoi = (Duration) column.apply(row);
+						QommonsUtils.printTimeLength(rowRoi.getSeconds(), rowRoi.getNano(), str, true);
+						firstCol = false;
+					} else {
+						str.append(',').append(column.apply(row));
+					}
+				}
+				str.append('\n');
+			}
+			Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(str.toString()), null);
+		});
+		buttonPanel.add(exportButton, "align center");
 		
-		Observable.or(theROI.getMetalTradeRate().changes(), //
-				theROI.getCrystalTradeRate().changes(), //
-				theROI.getDeutTradeRate().changes(), //
-				theROI.getPlanetTemp().changes(), //
-				theROI.isWithFusion().changes()).act(v -> {
+		Observable.or(theROI.getMetalTradeRate().noInitChanges(), //
+				theROI.getCrystalTradeRate().noInitChanges(), //
+				theROI.getDeutTradeRate().noInitChanges(), //
+				theROI.getPlanetTemp().noInitChanges(), //
+				theROI.isWithFusion().noInitChanges(), theUniSpeed.noInitChanges()).act(v -> {
 					theComputation = null;
 					theSequence.clear();
 					computeButton.setText("Compute");
@@ -98,30 +157,7 @@ public class OGameRoiGui extends JPanel {
 				OGameImprovementType.Metal, OGameImprovementType.Crystal, OGameImprovementType.Deut, //
 				OGameImprovementType.Planet, OGameImprovementType.Plasma, OGameImprovementType.Fusion, OGameImprovementType.Energy, //
 				null, null);
-		JTable table=new JTable(new ObservableTableModel<OGameImprovement>(theSequence,//
-				new String[] { "ROI", "Metal", "Crystal", "Deut", "Planets", "Plasma", "Fusion", "Energy", "Account Value", "Metal Ratio",
-						"Crystal Ratio" }, //
-				new Function[]{//
-						(Function<OGameImprovement, Duration>) imp->imp.roi, //
-						(Function<OGameImprovement, Integer>) imp->imp.metal, //
-						(Function<OGameImprovement, Integer>) imp->imp.crystal, //
-						(Function<OGameImprovement, Integer>) imp->imp.deut, //
-						(Function<OGameImprovement, Integer>) imp->imp.planets, //
-						(Function<OGameImprovement, Integer>) imp->imp.plasma, //
-						(Function<OGameImprovement, Integer>) imp->imp.fusion, //
-						(Function<OGameImprovement, Integer>) imp -> imp.energy, //
-						(Function<OGameImprovement, Double>) imp -> //
-						imp.accountValue.getValue(theROI.getMetalTradeRate().get(), theROI.getCrystalTradeRate().get(),
-								theROI.getDeutTradeRate().get()), //
-						(Function<OGameImprovement, Double>) imp -> //
-						imp.accountValue.getTotalCost(2) == 0 //
-								? imp.accountValue.getTotalCost(0) * 1.0 / imp.accountValue.getTotalCost(1)
-								: imp.accountValue.getTotalCost(0) * 1.0 / imp.accountValue.getTotalCost(2), //
-						(Function<OGameImprovement, Double>) imp -> //
-						imp.accountValue.getTotalCost(2) == 0 //
-								? 1
-								: imp.accountValue.getTotalCost(1) * 1.0 / imp.accountValue.getTotalCost(2) //
-		}) {
+		JTable table = new JTable(new ObservableTableModel<OGameImprovement>(theSequence, columnNames, columns) {
 			@Override
 			public boolean isCellEditable(int rowIndex, int columnIndex) {
 				return false;
