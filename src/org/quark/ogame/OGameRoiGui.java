@@ -154,9 +154,10 @@ public class OGameRoiGui extends JPanel {
 				});
 
 		List<OGameImprovementType> columnTypes = Arrays.asList(null, //
-				OGameImprovementType.Metal, OGameImprovementType.Crystal, OGameImprovementType.Deut, //
-				OGameImprovementType.Planet, OGameImprovementType.Plasma, OGameImprovementType.Fusion, OGameImprovementType.Energy, //
-				null, null);
+				OGameImprovementType.Metal, OGameImprovementType.Crystal, OGameImprovementType.Deut, OGameImprovementType.Planet,
+				OGameImprovementType.Plasma, //
+				// OGameImprovementType.Fusion, OGameImprovementType.Energy, //
+				null, null, null);
 		JTable table = new JTable(new ObservableTableModel<OGameImprovement>(theSequence, columnNames, columns) {
 			@Override
 			public boolean isCellEditable(int rowIndex, int columnIndex) {
