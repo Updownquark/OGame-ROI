@@ -27,6 +27,7 @@ public class OGameState {
 	private int planets;
 	private int theSatellites;
 
+	private int theRobotics;
 	private int theNanites;
 	private int theResearchLab;
 	private int theIRN;
@@ -91,6 +92,8 @@ public class OGameState {
 			return deut;
 		case Fusion:
 			return fusion;
+		case Robotics:
+			return theRobotics;
 		case Nanite:
 			return theNanites;
 		case ResearchLab:
@@ -135,6 +138,9 @@ public class OGameState {
 		case Energy:
 			prevLevel = energy;
 			break;
+		case Robotics:
+			prevLevel = theRobotics;
+			break;
 		case Nanite:
 			prevLevel = theNanites;
 			break;
@@ -146,7 +152,7 @@ public class OGameState {
 			break;
 		}
 		if (prevLevel < 0) {
-			throw new IllegalStateException("Unrecognized improvement type: "+improvement);
+			throw new IllegalStateException("Unrecognized improvement type: " + improvement);
 		}
 		return theRules.getUpgradeCost(this, improvement, prevLevel, prevLevel + 1);
 	}
@@ -174,9 +180,17 @@ public class OGameState {
 		case Planet:
 			return testUpgrade(//
 					() -> planets++, () -> planets--, improvement, planets + 1, false);
-		case Nanite:
+		case Robotics:
 			return testUpgrade(//
-					() -> theNanites++, () -> theNanites--, improvement, theNanites + 1, false);
+					() -> theRobotics++, () -> theRobotics--, improvement, theRobotics + 1, false);
+		case Nanite:
+			if (theRobotics < 10) { // Can't upgrade nanite if robotics<10
+				return testUpgrade(//
+						() -> theRobotics++, () -> theRobotics--, improvement, theRobotics + 1, false);
+			} else {
+				return testUpgrade(//
+						() -> theNanites++, () -> theNanites--, improvement, theNanites + 1, false);
+			}
 		case ResearchLab:
 			return testUpgrade(//
 					() -> theResearchLab++, () -> theResearchLab--, improvement, theResearchLab + 1, false);

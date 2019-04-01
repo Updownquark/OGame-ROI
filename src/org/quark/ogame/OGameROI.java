@@ -8,6 +8,7 @@ import org.observe.SettableValue;
 import org.observe.SimpleSettableValue;
 
 public class OGameROI {
+	private final SettableValue<Integer> theUniSpeed;
 	private final SettableValue<Integer> thePlanetTemp;
 	private final SettableValue<Double> theMetalTradeRate;
 	private final SettableValue<Double> theCrystalTradeRate;
@@ -15,6 +16,8 @@ public class OGameROI {
 	private final SettableValue<Boolean> withFusion;
 
 	public OGameROI() {
+		theUniSpeed = new SimpleSettableValue<>(int.class, false);
+		theUniSpeed.set(7, null);
 		thePlanetTemp = new SimpleSettableValue<>(int.class, false);
 		thePlanetTemp.set(30, null);
 		theMetalTradeRate = new SimpleSettableValue<>(double.class, false);
@@ -25,6 +28,10 @@ public class OGameROI {
 		theDeutTradeRate.set(1.0, null);
 		withFusion = new SimpleSettableValue<>(boolean.class, false);
 		withFusion.set(false, null);
+	}
+
+	public SettableValue<Integer> getUniSpeed() {
+		return theUniSpeed;
 	}
 
 	public SettableValue<Integer> getPlanetTemp() {
@@ -48,7 +55,8 @@ public class OGameROI {
 	}
 
 	public ROIComputation compute() {
-		return new ROIComputation(thePlanetTemp.get(), withFusion.get(), theMetalTradeRate.get(), theCrystalTradeRate.get(),
+		return new ROIComputation(theUniSpeed.get(), thePlanetTemp.get(), withFusion.get(), theMetalTradeRate.get(),
+				theCrystalTradeRate.get(),
 				theDeutTradeRate.get());
 	}
 
@@ -57,9 +65,10 @@ public class OGameROI {
 		private final double[] theTradeRates;
 		private double[] theCurrentProduction;
 
-		ROIComputation(int planetTemp, boolean withFusion, double metalTradeRate, double crystalTradeRate, double deutTradeRate) {
+		ROIComputation(int uniSpeed, int planetTemp, boolean withFusion, double metalTradeRate, double crystalTradeRate,
+				double deutTradeRate) {
 			theTradeRates = new double[] { metalTradeRate, crystalTradeRate, deutTradeRate };
-			theState = new OGameState(new OGameRules(), 1, planetTemp, withFusion);
+			theState = new OGameState(new OGameRules(), uniSpeed, planetTemp, withFusion);
 			theCurrentProduction = theState.getProduction();
 		}
 
@@ -105,22 +114,22 @@ public class OGameROI {
 			// See if any helpers' upgrade time improvements make enough difference
 			for (boolean helped = true; helped;) {
 				helped = false;
+				double[] preProduction = theState.getProduction();
+				OGameState.Upgrade preHelpUpgrade = theState.upgrade(bestType);
+				Duration preUpgradeTime = preHelpUpgrade.getUpgradeTime();
+				preHelpUpgrade.undo();
 				for (int i = 0; i < bestType.helpers.size(); i++) {
-					OGameState.Upgrade preHelpUpgrade = theState.upgrade(bestType);
-					Duration preUpgradeTime = preHelpUpgrade.getUpgradeTime();
-					preHelpUpgrade.undo();
-
 					OGameState.Upgrade helperUpgrade = theState.upgrade(bestType.helpers.get(i));
 					double helperCost = calcValueCost(theState.getImprovementCost(bestType.helpers.get(i)));
 
 					OGameState.Upgrade postHelpUpgrade = theState.upgrade(bestType);
 					Duration postUpgradeTime = postHelpUpgrade.getUpgradeTime();
-					double[] production = theState.getProduction();
+					double[] postProduction = theState.getProduction();
 					postHelpUpgrade.undo();
 					Duration upgradeTimeDiff = preUpgradeTime.minus(postUpgradeTime);
 
-					double addedProduction = calcValue(production[0], production[1], production[2])
-							* (upgradeTimeDiff.getSeconds() / 3600.0);
+					double addedProduction = calcValue(postProduction[0] - preProduction[0], postProduction[1] - preProduction[1],
+							postProduction[2] - preProduction[2]) * (upgradeTimeDiff.getSeconds() / 3600.0);
 					if (addedProduction >= helperCost) {
 						helped = true;
 						action.accept(new OGameImprovement(theState, bestType.helpers.get(i), helperUpgrade.effect(), postUpgradeTime));

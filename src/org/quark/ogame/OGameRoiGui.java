@@ -21,7 +21,6 @@ import javax.swing.JTable;
 import javax.swing.table.DefaultTableCellRenderer;
 
 import org.observe.Observable;
-import org.observe.SimpleSettableValue;
 import org.observe.collect.ObservableCollection;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.ObservableTableModel;
@@ -38,14 +37,11 @@ public class OGameRoiGui extends JPanel {
 	private final OGameROI theROI;
 	private final ObservableCollection<OGameImprovement> theSequence;
 	private OGameROI.ROIComputation theComputation;
-	private SimpleSettableValue<Integer> theUniSpeed;
 
 	public OGameRoiGui(OGameROI roi) {
 		super(new BorderLayout());
 		theROI = roi;
 		theSequence=ObservableCollection.create(TypeToken.of(OGameImprovement.class));
-		theUniSpeed = new SimpleSettableValue<>(int.class, false);
-		theUniSpeed.set(7, null);
 
 		JPanel configPanel = new JPanel(new MigLayout("fillx", "[shrink][grow, fill]"));
 		add(configPanel, BorderLayout.NORTH);
@@ -62,9 +58,8 @@ public class OGameRoiGui extends JPanel {
 		configPanel.add(new JLabel("Avg. Planet Temp:"), "align right");
 		configPanel.add(new ObservableTextField<>(theROI.getPlanetTemp(), Format.INT, null), "wrap");
 		configPanel.add(new JLabel("Universe Speed:"), "align right");
-		configPanel.add(
-				new ObservableTextField<>(theUniSpeed, Format.validate(Format.INT, i -> i <= 0 ? "Universe speed must be >0" : null), null),
-				"wrap");
+		configPanel.add(new ObservableTextField<>(theROI.getUniSpeed(),
+				Format.validate(Format.INT, i -> i <= 0 ? "Universe speed must be >0" : null), null), "wrap");
 		configPanel.add(new JLabel("With Fusion:"), "align right");
 		JCheckBox fusionCheck = new JCheckBox();
 		ObservableSwingUtils.checkFor(fusionCheck, "Whether to use fusion instead of satellites for energy", theROI.isWithFusion());
@@ -89,16 +84,17 @@ public class OGameRoiGui extends JPanel {
 				}
 			}
 		});
-		String[] columnNames = new String[] { "ROI", "Metal", "Crystal", "Deut", "Planets", "Plasma", "Nanite", "Lab", "IRN", //
+		String[] columnNames = new String[] { "ROI", "Metal", "Crystal", "Deut", "Planets", "Plasma", "Robotics", "Nanite", "Lab", "IRN", //
 				// "Fusion", "Energy",//
 				"Economy Value", "Metal Ratio", "Crystal Ratio" };
 		Function<OGameImprovement, ?>[] columns = new Function[] { //
-				(Function<OGameImprovement, Duration>) imp -> imp.roi.dividedBy(theUniSpeed.get()), //
+				(Function<OGameImprovement, Duration>) imp -> imp.roi, //
 				(Function<OGameImprovement, Integer>) imp -> imp.metal, //
 				(Function<OGameImprovement, Integer>) imp -> imp.crystal, //
 				(Function<OGameImprovement, Integer>) imp -> imp.deut, //
 				(Function<OGameImprovement, Integer>) imp -> imp.planets, //
 				(Function<OGameImprovement, Integer>) imp -> imp.plasma, //
+				(Function<OGameImprovement, Integer>) imp -> imp.robotics, //
 				(Function<OGameImprovement, Integer>) imp -> imp.nanites, //
 				(Function<OGameImprovement, Integer>) imp -> imp.researchLab, //
 				(Function<OGameImprovement, Integer>) imp -> imp.irn, //
@@ -150,7 +146,8 @@ public class OGameRoiGui extends JPanel {
 				theROI.getCrystalTradeRate().noInitChanges(), //
 				theROI.getDeutTradeRate().noInitChanges(), //
 				theROI.getPlanetTemp().noInitChanges(), //
-				theROI.isWithFusion().noInitChanges(), theUniSpeed.noInitChanges()).act(v -> {
+				theROI.isWithFusion().noInitChanges(), //
+				theROI.getUniSpeed().noInitChanges()).act(v -> {
 					theComputation = null;
 					theSequence.clear();
 					computeButton.setText("Compute");

@@ -6,9 +6,9 @@ import java.util.List;
 
 public enum OGameImprovementType {
 	// Helper improvements
-	Nanite, ResearchLab, IRN, //
+	Robotics, Nanite, ResearchLab, IRN, //
 	// Buildings
-	Metal(Nanite), Crystal(Nanite), Deut(Nanite), Fusion(Nanite), //
+	Metal(Robotics, Nanite), Crystal(Robotics, Nanite), Deut(Robotics, Nanite), Fusion(Robotics, Nanite), //
 	// Research
 	Energy(ResearchLab, IRN), Plasma(ResearchLab, IRN), Planet(ResearchLab, IRN);
 

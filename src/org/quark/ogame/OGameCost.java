@@ -47,6 +47,10 @@ public class OGameCost {
 		return theUpgradeTime[0].plus(theUpgradeTime[1]);
 	}
 
+	public OGameCost noTime() {
+		return new OGameCost(theCosts, new Duration[] { Duration.ZERO, Duration.ZERO });
+	}
+
 	public OGameCost plus(OGameCost other) {
 		return new OGameCost(add(theCosts, other.theCosts), add(theUpgradeTime, other.theUpgradeTime));
 	}

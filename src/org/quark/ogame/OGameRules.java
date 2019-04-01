@@ -36,10 +36,12 @@ public class OGameRules {
 			cost[2] = (long) Math.ceil(theInitialDeutCost * levelUp);
 			double upgradeHours;
 			if (isResearch) {
+				int joinedLabs = Math.min(1 + initState.getIRN(), initState.getPlanets());
 				upgradeHours = (cost[0] + cost[1]) / 1000.0 / initState.getUniSpeed()
-						/ (1 + initState.getBuildingLevel(OGameBuildingType.ResearchLab) * (1 + initState.getIRN()));
+						/ (1 + initState.getBuildingLevel(OGameBuildingType.ResearchLab) * joinedLabs);
 			} else {
-				upgradeHours = (cost[0] + cost[1]) / 2500.0 / initState.getUniSpeed() / 11
+				upgradeHours = (cost[0] + cost[1]) / 2500.0 / initState.getUniSpeed()
+						/ (1 + initState.getBuildingLevel(OGameBuildingType.Robotics))
 						/ pow2(initState.getBuildingLevel(OGameBuildingType.Nanite));
 			}
 			Duration upgradeTime = Duration.ofSeconds(Math.round(upgradeHours * 3600));
@@ -73,7 +75,7 @@ public class OGameRules {
 		@Override
 		OGameCost getUpgradeCost(OGameState initState, int preLevel, int postLevel) {
 			return super.getUpgradeCost(initState, preLevel * 2 - 3, postLevel * 2 - 3)//
-					.plus(initState.getAccountValue().justBuildings().divide(initState.getPlanets()));
+					.plus(initState.getAccountValue().justBuildings().noTime().divide(initState.getPlanets()));
 		}
 	}
 
@@ -111,7 +113,8 @@ public class OGameRules {
 			p *= (1 + thePlasmaBonus / 100 * state.getPlasmaTech());// Plasma adjustment
 			p *= state.getUtilization(theResourceType.ordinal());
 			p *= Math.min(1, energyFactor);
-			p *= state.getUniSpeed() * state.getPlanets();
+			p *= state.getUniSpeed();
+			p *= state.getPlanets();
 			production[theResourceType.ordinal()] += p;
 		}
 
@@ -149,6 +152,7 @@ public class OGameRules {
 		theImprovementSchemes.put(OGameImprovementType.Energy, new TechImprovementScheme(0, 800, 400, 2));
 		theImprovementSchemes.put(OGameImprovementType.Plasma, new TechImprovementScheme(2000, 4000, 1000, 2));
 		theImprovementSchemes.put(OGameImprovementType.Planet, new ColonyImprovementScheme(4000, 8000, 4000, 1.75));
+		theImprovementSchemes.put(OGameImprovementType.Robotics, new BuildingImprovementScheme(400, 120, 200, 2));
 		theImprovementSchemes.put(OGameImprovementType.Nanite, new BuildingImprovementScheme(1000000, 500000, 100000, 2));
 		theImprovementSchemes.put(OGameImprovementType.IRN, new TechImprovementScheme(240000, 400000, 160000, 2));
 		theImprovementSchemes.put(OGameImprovementType.ResearchLab, new BuildingImprovementScheme(200, 400, 200, 2));
