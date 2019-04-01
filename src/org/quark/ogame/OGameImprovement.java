@@ -10,6 +10,9 @@ public class OGameImprovement {
 	public final int energy;
 	public final int plasma;
 	public final int planets;
+	public final int nanites;
+	public final int researchLab;
+	public final int irn;
 
 	public final OGameImprovementType type;
 	public final int level;
@@ -18,13 +21,16 @@ public class OGameImprovement {
 	public final OGameCost accountValue;
 
 	public OGameImprovement(OGameState state, OGameImprovementType type, int level, Duration roi) {
-		metal = state.getBuildingLevel(0);
-		crystal = state.getBuildingLevel(1);
-		deut = state.getBuildingLevel(2);
-		fusion = state.getBuildingLevel(3);
+		metal = state.getBuildingLevel(OGameBuildingType.Metal);
+		crystal = state.getBuildingLevel(OGameBuildingType.Crystal);
+		deut = state.getBuildingLevel(OGameBuildingType.Deuterium);
+		fusion = state.getBuildingLevel(OGameBuildingType.Fusion);
 		energy = state.getEnergyTech();
 		plasma = state.getPlasmaTech();
 		planets = state.getPlanets();
+		nanites = state.getBuildingLevel(OGameBuildingType.Nanite);
+		researchLab = state.getBuildingLevel(OGameBuildingType.ResearchLab);
+		irn = state.getIRN();
 
 		this.type = type;
 		this.level = level;

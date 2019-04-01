@@ -89,7 +89,7 @@ public class OGameRoiGui extends JPanel {
 				}
 			}
 		});
-		String[] columnNames = new String[] { "ROI", "Metal", "Crystal", "Deut", "Planets", "Plasma", //
+		String[] columnNames = new String[] { "ROI", "Metal", "Crystal", "Deut", "Planets", "Plasma", "Nanite", "Lab", "IRN", //
 				// "Fusion", "Energy",//
 				"Economy Value", "Metal Ratio", "Crystal Ratio" };
 		Function<OGameImprovement, ?>[] columns = new Function[] { //
@@ -99,6 +99,9 @@ public class OGameRoiGui extends JPanel {
 				(Function<OGameImprovement, Integer>) imp -> imp.deut, //
 				(Function<OGameImprovement, Integer>) imp -> imp.planets, //
 				(Function<OGameImprovement, Integer>) imp -> imp.plasma, //
+				(Function<OGameImprovement, Integer>) imp -> imp.nanites, //
+				(Function<OGameImprovement, Integer>) imp -> imp.researchLab, //
+				(Function<OGameImprovement, Integer>) imp -> imp.irn, //
 				// (Function<OGameImprovement, Integer>) imp -> imp.fusion, //
 				// (Function<OGameImprovement, Integer>) imp -> imp.energy, //
 				(Function<OGameImprovement, Double>) imp -> //

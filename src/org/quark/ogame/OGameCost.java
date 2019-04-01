@@ -1,28 +1,34 @@
 package org.quark.ogame;
 
+import java.time.Duration;
 import java.util.Arrays;
 
 public class OGameCost {
 	public static final OGameCost ZERO = new OGameCost(new long[][] { //
 			new long[] { 0, 0, 0 }, //
-			new long[] { 0, 0, 0 } });
+					new long[] { 0, 0, 0 } }, //
+			new Duration[] { Duration.ZERO, Duration.ZERO });
 
 	private final long[][] theCosts;
+	private final Duration[] theUpgradeTime;
 
-	public OGameCost(long[] buildingCost, long[] researchCost) {
-		this(new long[][] { buildingCost == null ? new long[3] : buildingCost, researchCost == null ? new long[3] : researchCost });
+	public OGameCost(long[] buildingCost, long[] researchCost, Duration buildingUpgradeTime, Duration researchTime) {
+		this(new long[][] { buildingCost == null ? new long[3] : buildingCost, researchCost == null ? new long[3] : researchCost }, //
+				new Duration[] { buildingUpgradeTime == null ? Duration.ZERO : buildingUpgradeTime, //
+						researchTime == null ? Duration.ZERO : researchTime });
 	}
 
-	private OGameCost(long[][] costs) {
+	private OGameCost(long[][] costs, Duration[] upgradeTime) {
 		theCosts = costs;
+		theUpgradeTime = upgradeTime;
 	}
 
 	public OGameCost justBuildings() {
-		return new OGameCost(theCosts[0], null);
+		return new OGameCost(theCosts[0], null, theUpgradeTime[0], null);
 	}
 
 	public OGameCost justResearch() {
-		return new OGameCost(null, theCosts[1]);
+		return new OGameCost(null, theCosts[1], null, theUpgradeTime[1]);
 	}
 
 	public long getBuildingCost(int resourceType) {
@@ -37,8 +43,12 @@ public class OGameCost {
 		return theCosts[0][resourceType] + theCosts[1][resourceType];
 	}
 
+	public Duration getUpgradeTime() {
+		return theUpgradeTime[0].plus(theUpgradeTime[1]);
+	}
+
 	public OGameCost plus(OGameCost other) {
-		return new OGameCost(add(theCosts, other.theCosts));
+		return new OGameCost(add(theCosts, other.theCosts), add(theUpgradeTime, other.theUpgradeTime));
 	}
 
 	public OGameCost multiply(int num) {
@@ -47,7 +57,7 @@ public class OGameCost {
 		} else if (num == 1) {
 			return this;
 		} else {
-			return new OGameCost(multiply(theCosts, num));
+			return new OGameCost(multiply(theCosts, num), theUpgradeTime); // Upgrade times are not affected by multiplication
 		}
 	}
 
@@ -55,7 +65,7 @@ public class OGameCost {
 		if (num == 1) {
 			return this;
 		} else {
-			return new OGameCost(divide(theCosts, num));
+			return new OGameCost(divide(theCosts, num), theUpgradeTime); // Upgrade times are not affected by division
 		}
 	}
 
@@ -79,6 +89,14 @@ public class OGameCost {
 			}
 		}
 		return newA;
+	}
+
+	private static Duration[] add(Duration[] d1, Duration[] d2) {
+		Duration[] newD = new Duration[d1.length];
+		for (int i = 0; i < newD.length; i++) {
+			newD[i] = d1[i].plus(d2[i]);
+		}
+		return newD;
 	}
 
 	private static long[][] multiply(long[][] a, int mult) {
