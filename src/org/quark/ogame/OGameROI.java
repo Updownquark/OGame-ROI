@@ -115,21 +115,23 @@ public class OGameROI {
 			for (boolean helped = true; helped;) {
 				helped = false;
 				double[] preProduction = theState.getProduction();
-				OGameState.Upgrade preHelpUpgrade = theState.upgrade(bestType);
-				Duration preUpgradeTime = preHelpUpgrade.getUpgradeTime();
-				preHelpUpgrade.undo();
 				for (int i = 0; i < bestType.helpers.size(); i++) {
+					OGameState.Upgrade preHelpUpgrade = theState.upgrade(bestType);
+					double[] postProduction = theState.getProduction();
+					Duration preUpgradeTime = preHelpUpgrade.getCost().getUpgradeTime();
+					preHelpUpgrade.undo();
+					double addedProductionRate = calcValue(postProduction[0] - preProduction[0], postProduction[1] - preProduction[1],
+							postProduction[2] - preProduction[2]);
+
 					OGameState.Upgrade helperUpgrade = theState.upgrade(bestType.helpers.get(i));
-					double helperCost = calcValueCost(theState.getImprovementCost(bestType.helpers.get(i)));
+					double helperCost = calcValueCost(helperUpgrade.getCost());
 
 					OGameState.Upgrade postHelpUpgrade = theState.upgrade(bestType);
-					Duration postUpgradeTime = postHelpUpgrade.getUpgradeTime();
-					double[] postProduction = theState.getProduction();
+					Duration postUpgradeTime = postHelpUpgrade.getCost().getUpgradeTime();
 					postHelpUpgrade.undo();
 					Duration upgradeTimeDiff = preUpgradeTime.minus(postUpgradeTime);
 
-					double addedProduction = calcValue(postProduction[0] - preProduction[0], postProduction[1] - preProduction[1],
-							postProduction[2] - preProduction[2]) * (upgradeTimeDiff.getSeconds() / 3600.0);
+					double addedProduction = addedProductionRate * (upgradeTimeDiff.getSeconds() / 3600.0);
 					if (addedProduction >= helperCost) {
 						helped = true;
 						action.accept(new OGameImprovement(theState, bestType.helpers.get(i), helperUpgrade.effect(), postUpgradeTime));

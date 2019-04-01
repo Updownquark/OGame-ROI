@@ -1,13 +1,12 @@
 package org.quark.ogame;
 
-import java.time.Duration;
 import java.util.Arrays;
 
 public class OGameState {
 	public static interface Upgrade {
 		int effect();
 
-		Duration getUpgradeTime();
+		OGameCost getCost();
 
 		void undo();
 	}
@@ -234,8 +233,8 @@ public class OGameState {
 				}
 
 				@Override
-				public Duration getUpgradeTime() {
-					return cost.getUpgradeTime();
+				public OGameCost getCost() {
+					return cost;
 				}
 
 				@Override
@@ -260,8 +259,8 @@ public class OGameState {
 				}
 
 				@Override
-				public Duration getUpgradeTime() {
-					return cost.getUpgradeTime();
+				public OGameCost getCost() {
+					return cost;
 				}
 
 				@Override
