@@ -147,7 +147,7 @@ public class OGameROI {
 
 					if (addedProduction >= helperCost) {
 						helped = true;
-						action.accept(new OGameImprovement(theState, bestType.helpers.get(i), helperUpgrade.effect(), postUpgradeTime));
+						action.accept(new OGameImprovement(theState, bestType.helpers.get(i), helperUpgrade.effect(), bestROI));
 						System.out.println(bestType.helpers.get(i) + ": " + theState.getAccountValue());
 					} else {
 						helperUpgrade.undo();
