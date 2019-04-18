@@ -97,6 +97,7 @@ public class OGameROI {
 				action.accept(new OGameImprovement(theState, OGameImprovementType.Fusion, 10, bestROI));
 				return true;
 			}
+			OGameCost bestCost = null;
 			for (OGameImprovementType type : OGameImprovementType.values()) {
 				if (type.helpers.isEmpty()) {
 					continue; // A helper improvement, no upgrade benefit by itself
@@ -107,6 +108,7 @@ public class OGameROI {
 				Duration roi = calculateROI(cost, theCurrentProduction, production);
 				if (bestROI == null || roi.compareTo(bestROI) < 0) {
 					bestType = type;
+					bestCost = cost;
 					bestROI = roi;
 				}
 				upgrade.undo();
@@ -132,6 +134,17 @@ public class OGameROI {
 					Duration upgradeTimeDiff = preUpgradeTime.minus(postUpgradeTime);
 
 					double addedProduction = addedProductionRate * (upgradeTimeDiff.getSeconds() / 3600.0);
+					// addedProduction is now the amount of extra value that would be generated
+					// as a result of finishing the upgrade sooner because of the helper.
+					// But the helper actually helps more than that.
+					// It will generate increased production for future upgrades as well.
+					// The question we need answered is whether the helper will generate value enough to cover its cost
+					// faster than upgrading something else.
+					// We'll apply a multiplier to approximate how much value the helper will create over the current ROI time
+					double roiMult = calcValue(postProduction[0], postProduction[1], postProduction[2]) / calcValueCost(bestCost)//
+						* (bestROI.getSeconds() / 3600.0);
+					addedProduction *= roiMult;
+
 					if (addedProduction >= helperCost) {
 						helped = true;
 						action.accept(new OGameImprovement(theState, bestType.helpers.get(i), helperUpgrade.effect(), postUpgradeTime));
