@@ -60,6 +60,11 @@ public class OGameRoiGui extends JPanel {
 		configPanel.add(new JLabel("Universe Speed:"), "align right");
 		configPanel.add(new ObservableTextField<>(theROI.getUniSpeed(),
 				Format.validate(Format.INT, i -> i <= 0 ? "Universe speed must be >0" : null), null), "wrap");
+		configPanel.add(new JLabel("Aggressive Helpers:"), "align right");
+		JCheckBox aggHelperCheck = new JCheckBox();
+		ObservableSwingUtils.checkFor(aggHelperCheck, "Whether to upgrade speed-improvement buildings/techs aggressively",
+				theROI.isWithAggressiveHelpers());
+		configPanel.add(aggHelperCheck, "wrap");
 		configPanel.add(new JLabel("With Fusion:"), "align right");
 		JCheckBox fusionCheck = new JCheckBox();
 		ObservableSwingUtils.checkFor(fusionCheck, "Whether to use fusion instead of satellites for energy", theROI.isWithFusion());
@@ -147,6 +152,7 @@ public class OGameRoiGui extends JPanel {
 				theROI.getDeutTradeRate().noInitChanges(), //
 				theROI.getPlanetTemp().noInitChanges(), //
 				theROI.isWithFusion().noInitChanges(), //
+				theROI.isWithAggressiveHelpers().noInitChanges(), //
 				theROI.getUniSpeed().noInitChanges()).act(v -> {
 					theComputation = null;
 					theSequence.clear();

@@ -14,6 +14,7 @@ public class OGameROI {
 	private final SettableValue<Double> theCrystalTradeRate;
 	private final SettableValue<Double> theDeutTradeRate;
 	private final SettableValue<Boolean> withFusion;
+	private final SettableValue<Boolean> withAggressiveHelpers;
 
 	public OGameROI() {
 		theUniSpeed = new SimpleSettableValue<>(int.class, false);
@@ -28,6 +29,8 @@ public class OGameROI {
 		theDeutTradeRate.set(1.0, null);
 		withFusion = new SimpleSettableValue<>(boolean.class, false);
 		withFusion.set(false, null);
+		withAggressiveHelpers = new SimpleSettableValue<>(boolean.class, false);
+		withAggressiveHelpers.set(true, null);
 	}
 
 	public SettableValue<Integer> getUniSpeed() {
@@ -54,20 +57,25 @@ public class OGameROI {
 		return withFusion;
 	}
 
+	public SettableValue<Boolean> isWithAggressiveHelpers() {
+		return withAggressiveHelpers;
+	}
+
 	public ROIComputation compute() {
-		return new ROIComputation(theUniSpeed.get(), thePlanetTemp.get(), withFusion.get(), theMetalTradeRate.get(),
-				theCrystalTradeRate.get(),
-				theDeutTradeRate.get());
+		return new ROIComputation(theUniSpeed.get(), thePlanetTemp.get(), withFusion.get(), withAggressiveHelpers.get(), //
+				theMetalTradeRate.get(), theCrystalTradeRate.get(), theDeutTradeRate.get());
 	}
 
 	public static class ROIComputation implements Spliterator<OGameImprovement> {
 		private final OGameState theState;
 		private final double[] theTradeRates;
 		private double[] theCurrentProduction;
+		private final boolean isWithAggressiveHelpers;
 
-		ROIComputation(int uniSpeed, int planetTemp, boolean withFusion, double metalTradeRate, double crystalTradeRate,
-				double deutTradeRate) {
+		ROIComputation(int uniSpeed, int planetTemp, boolean withFusion, boolean aggressiveHelpers, //
+				double metalTradeRate, double crystalTradeRate, double deutTradeRate) {
 			theTradeRates = new double[] { metalTradeRate, crystalTradeRate, deutTradeRate };
+			isWithAggressiveHelpers = aggressiveHelpers;
 			theState = new OGameState(new OGameRules(), uniSpeed, planetTemp, withFusion);
 			theCurrentProduction = theState.getProduction();
 		}
@@ -134,16 +142,18 @@ public class OGameROI {
 					Duration upgradeTimeDiff = preUpgradeTime.minus(postUpgradeTime);
 
 					double addedProduction = addedProductionRate * (upgradeTimeDiff.getSeconds() / 3600.0);
-					// addedProduction is now the amount of extra value that would be generated
-					// as a result of finishing the upgrade sooner because of the helper.
-					// But the helper actually helps more than that.
-					// It will generate increased production for future upgrades as well.
-					// The question we need answered is whether the helper will generate value enough to cover its cost
-					// faster than upgrading something else.
-					// We'll apply a multiplier to approximate how much value the helper will create over the current ROI time
-					double roiMult = calcValue(postProduction[0], postProduction[1], postProduction[2]) / calcValueCost(bestCost)//
-						* (bestROI.getSeconds() / 3600.0);
-					addedProduction *= roiMult;
+					if (isWithAggressiveHelpers) {
+						// addedProduction is now the amount of extra value that would be generated
+						// as a result of finishing the upgrade sooner because of the helper.
+						// But the helper actually helps more than that.
+						// It will generate increased production for future upgrades as well.
+						// The question we need answered is whether the helper will generate value enough to cover its cost
+						// faster than upgrading something else.
+						// We'll apply a multiplier to approximate how much value the helper will create over the current ROI time
+						double roiMult = calcValue(postProduction[0], postProduction[1], postProduction[2]) / calcValueCost(bestCost)//
+								* (bestROI.getSeconds() / 3600.0);
+						addedProduction *= roiMult;
+					}
 
 					if (addedProduction >= helperCost) {
 						helped = true;
