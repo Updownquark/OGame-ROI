@@ -203,7 +203,7 @@ public class OGameROI {
 			if (hours < 0) {
 				return Duration.ofDays(365000000);
 			}
-			return Duration.ofSeconds((int) (hours * 60 * 60));
+			return Duration.ofSeconds((long) (hours * 60 * 60));
 		}
 	}
 }
