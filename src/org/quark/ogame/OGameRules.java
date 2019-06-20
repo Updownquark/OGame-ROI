@@ -112,7 +112,7 @@ public class OGameRules {
 			p *= theTempBonusOffset - theTempBonusMult * state.getAvgPlanetTemp();
 			p *= (1 + thePlasmaBonus / 100 * state.getPlasmaTech());// Plasma adjustment
 			p *= state.getUtilization(theResourceType.ordinal());
-			p *= Math.min(1, energyFactor);
+			p *= energyFactor;
 			p *= state.getUniSpeed();
 			p *= state.getPlanets();
 			production[theResourceType.ordinal()] += p;
@@ -128,9 +128,12 @@ public class OGameRules {
 	private static class FusionProductionScheme implements ProductionScheme {
 		@Override
 		public void addProduction(OGameState state, double[] production, double energyFactor) {
-			production[2] -= 10 * state.getUniSpeed() * state.getBuildingLevel(OGameBuildingType.Fusion)
-					* Math.pow(1.1, state.getBuildingLevel(OGameBuildingType.Fusion))
-					* state.getUtilization(OGameBuildingType.Fusion.ordinal());
+			double deutUsage = 10 * state.getBuildingLevel(OGameBuildingType.Fusion)
+				* Math.pow(1.1, state.getBuildingLevel(OGameBuildingType.Fusion));
+			deutUsage *= state.getUtilization(OGameBuildingType.Fusion.ordinal());
+			deutUsage *= state.getUniSpeed();
+			deutUsage *= state.getPlanets();
+			production[2] -= deutUsage;
 		}
 
 		@Override
@@ -184,6 +187,7 @@ public class OGameRules {
 	public double[] getResourceProduction(OGameState state) {
 		double[] energy = getEnergyProductionConsumption(state);
 		double energyFactor = energy[0] == 0 ? 0 : energy[0] / energy[1];
+		energyFactor = Math.min(1, energyFactor);
 		double[] production = new double[3];
 		for (ProductionScheme scheme : theProductionSchemes) {
 			scheme.addProduction(state, production, energyFactor);

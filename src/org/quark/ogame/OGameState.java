@@ -1,7 +1,5 @@
 package org.quark.ogame;
 
-import java.util.Arrays;
-
 public class OGameState {
 	public static interface Upgrade {
 		int effect();
@@ -14,7 +12,6 @@ public class OGameState {
 	private final OGameRules theRules;
 	private final int theUniSpeed;
 	private final int theAvgPlanetTemp;
-	private final boolean withFusion;
 	private final int theSatEnergy;
 
 	private int metal;
@@ -36,7 +33,7 @@ public class OGameState {
 	private final int[] thePreviousUtilizations;
 	private OGameCost theAccountValue;
 
-	public OGameState(OGameRules rules, int uniSpeed, int planetTemp, boolean withFusion) {
+	public OGameState(OGameRules rules, int uniSpeed, int planetTemp) {
 		theRules = rules;
 		theUniSpeed = uniSpeed;
 		theAvgPlanetTemp = planetTemp;
@@ -44,7 +41,6 @@ public class OGameState {
 		theUtilizations = new int[] { 100, 100, 100, 100 };
 		thePreviousUtilizations = theUtilizations.clone();
 		theAccountValue = OGameCost.ZERO;
-		this.withFusion = withFusion;
 
 		planets = 1;
 	}
@@ -55,10 +51,6 @@ public class OGameState {
 
 	public int getAvgPlanetTemp() {
 		return theAvgPlanetTemp;
-	}
-
-	public boolean isWithFusion() {
-		return withFusion;
 	}
 
 	public double getSatelliteEnergy() {
@@ -75,6 +67,10 @@ public class OGameState {
 
 	public int getEnergyTech() {
 		return energy;
+	}
+
+	public double[] getEnergyProductionConsumption() {
+		return theRules.getEnergyProductionConsumption(this);
 	}
 
 	public int getIRN() {
@@ -203,74 +199,46 @@ public class OGameState {
 	private Upgrade testUpgrade(Runnable effect, Runnable undo, OGameImprovementType type, int newLevel, boolean affectsUtilization) {
 		OGameCost cost = getImprovementCost(type);
 		effect.run();
-		if (withFusion && fusion > 0) {
-			int preSats = theSatellites;
-			if (affectsUtilization) {
-				theSatellites = 0;
+		int preSats = theSatellites;
+		if (affectsUtilization) {
+			double[] energyPC;
+			theSatellites = 0;
+			if (fusion > 0) {
 				System.arraycopy(theUtilizations, 0, thePreviousUtilizations, 0, 4);
-				Arrays.fill(theUtilizations, 100);
-				double[] energyPC = theRules.getEnergyProductionConsumption(this);
+				theUtilizations[3] = 100;
+				energyPC = theRules.getEnergyProductionConsumption(this);
 				double production = energyPC[0];
 				double consumption = energyPC[1];
 				if (production > consumption) {
 					// Assume that the best production is always with mines running at 100%
 					theUtilizations[3] = (int) Math.ceil(consumption / production * 10) * 10;
-				} else {
-					// For this, we'll assume that we want to maximize energy consumption up to production,
-					int utilization = (int) Math.floor(production / consumption * 10) * 10;
-					theUtilizations[0] = theUtilizations[1] = theUtilizations[2] = utilization;
-					for (int i = 0; i < 3 && energyPC[1] < energyPC[0]; i++) {
-						theUtilizations[i] += 10;
-						energyPC = theRules.getEnergyProductionConsumption(this);
-					}
 				}
+			} else {
+				energyPC = theRules.getEnergyProductionConsumption(this);
 			}
-			return new Upgrade() {
-				@Override
-				public int effect() {
-					theAccountValue = theAccountValue.plus(cost);
-					return newLevel;
-				}
-
-				@Override
-				public OGameCost getCost() {
-					return cost;
-				}
-
-				@Override
-				public void undo() {
-					undo.run();
-					if (affectsUtilization) {
-						theSatellites = preSats;
-						System.arraycopy(thePreviousUtilizations, 0, theUtilizations, 0, 4);
-					}
-				}
-			};
-		} else {
-			int prevSats = theSatellites;
-			if (affectsUtilization) {
-				theSatellites = (int) Math.ceil(theRules.getEnergyProductionConsumption(this)[1] / theSatEnergy);
-			}
-			return new Upgrade() {
-				@Override
-				public int effect() {
-					theAccountValue = theAccountValue.plus(cost);
-					return newLevel;
-				}
-
-				@Override
-				public OGameCost getCost() {
-					return cost;
-				}
-
-				@Override
-				public void undo() {
-					undo.run();
-					if (affectsUtilization) {
-						theSatellites = prevSats;
-					}
-				}
-			};
+			double requiredEnergy = energyPC[1] - energyPC[0];
+			theSatellites = (int) Math.ceil(requiredEnergy / theSatEnergy);
 		}
+		return new Upgrade() {
+			@Override
+			public int effect() {
+				theAccountValue = theAccountValue.plus(cost);
+				return newLevel;
+			}
+
+			@Override
+			public OGameCost getCost() {
+				return cost;
+			}
+
+			@Override
+			public void undo() {
+				undo.run();
+				if (affectsUtilization) {
+					theSatellites = preSats;
+					System.arraycopy(thePreviousUtilizations, 0, theUtilizations, 0, 4);
+				}
+			}
+		};
 	}
 }
