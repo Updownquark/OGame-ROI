@@ -217,7 +217,7 @@ public class OGameState {
 				energyPC = theRules.getEnergyProductionConsumption(this);
 			}
 			double requiredEnergy = energyPC[1] - energyPC[0];
-			theSatellites = (int) Math.ceil(requiredEnergy / theSatEnergy);
+			theSatellites = Math.max(0, (int) Math.ceil(requiredEnergy / theSatEnergy));
 		}
 		return new Upgrade() {
 			@Override
