@@ -20,6 +20,8 @@ import javax.swing.table.DefaultTableCellRenderer;
 
 import org.observe.Observable;
 import org.observe.ObservableValueEvent;
+import org.observe.SettableValue;
+import org.observe.SimpleSettableValue;
 import org.observe.collect.ObservableCollection;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.CategoryRenderStrategy;
@@ -40,10 +42,14 @@ public class OGameRoiGui extends JPanel {
 	private final ObservableCollection<OGameImprovement> theSequence;
 	private OGameROI.ROIComputation theComputation;
 
+	private final SettableValue<Integer> theFieldOffset;
+
 	public OGameRoiGui(OGameROI roi) {
 		super(new BorderLayout());
 		theROI = roi;
 		theSequence = ObservableCollection.create(TypeToken.of(OGameImprovement.class));
+		theFieldOffset = new SimpleSettableValue<>(int.class, false);
+		theFieldOffset.set(12, null);
 
 		JPanel configPanel = new JPanel(new MigLayout("fillx", "[shrink][grow, fill]"));
 		add(configPanel, BorderLayout.NORTH);
@@ -77,6 +83,12 @@ public class OGameRoiGui extends JPanel {
 			Format.doubleFormat("0.0"), null)
 				.withToolTip("The amount of energy that should be supplied by fusion instead of solar satellites"));
 		configPanel.add(new JLabel("%"), "wrap");
+		configPanel.add(new JLabel("Other Buildings:"), "align right");
+		configPanel.add(new ObservableTextField<>(theFieldOffset, //
+			Format.validate(Format.INT, i -> i < 0 ? "Other Buildings cannot be negative" : null), null)
+				.withToolTip("The total level of other buildings on your planet(s), e.g. Shipyard, Silo, Terraformer, etc."),
+			"wrap");
+
 		JPanel buttonPanel = new JPanel(new MigLayout("fillx"));
 		configPanel.add(buttonPanel, "span, grow");
 		JButton computeButton = new JButton("Compute");
@@ -145,6 +157,8 @@ public class OGameRoiGui extends JPanel {
 						.withIdentifier(OGameImprovementType.ResearchLab).withRenderer(upgradeRenderer), //
 					new CategoryRenderStrategy<OGameImprovement, Integer>("IRN", TypeTokens.get().INT, imp -> imp.irn)
 						.withIdentifier(OGameImprovementType.IRN).withRenderer(upgradeRenderer), //
+					new CategoryRenderStrategy<OGameImprovement, Integer>("Fields", TypeTokens.get().INT,
+						imp -> theFieldOffset.get() + imp.buildings), //
 					new CategoryRenderStrategy<>("Economy Value", TypeTokens.get().DOUBLE,
 						imp -> imp.accountValue.getValue(theROI.getMetalTradeRate().get(), theROI.getCrystalTradeRate().get(),
 							theROI.getDeutTradeRate().get())), //
@@ -223,7 +237,8 @@ public class OGameRoiGui extends JPanel {
 				computeButton.setText("Compute");
 			});
 
-		ObservableTableModel<OGameImprovement> tableModel = new ObservableTableModel<>(theSequence, columns[0]);
+		ObservableTableModel<OGameImprovement> tableModel = new ObservableTableModel<>(
+			theSequence.flow().refresh(theFieldOffset.noInitChanges()).collect(), columns[0]);
 		JTable table = new JTable(tableModel);
 		ObservableTableModel.hookUp(table, tableModel);
 		JScrollPane scroll = new JScrollPane(table);

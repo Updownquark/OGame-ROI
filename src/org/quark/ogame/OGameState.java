@@ -103,6 +103,14 @@ public class OGameState {
 		throw new IllegalArgumentException("No such building type: " + buildingType);
 	}
 
+	public int getTotalBuildingCount() {
+		int buildings = 0;
+		for (OGameBuildingType building : OGameBuildingType.values()) {
+			buildings += getBuildingLevel(building);
+		}
+		return buildings;
+	}
+
 	public double getUtilization(int type) {
 		return theUtilizations[type] / 100.0;
 	}
