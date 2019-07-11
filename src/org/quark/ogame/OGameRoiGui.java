@@ -59,9 +59,12 @@ public class OGameRoiGui extends JPanel {
 			Format.validate(Format.doubleFormat("0.00"), v -> v <= 0 ? "Trade rate must be >0" : null), null), "wrap");
 		configPanel.add(new JLabel("Avg. Planet Temp:"), "align right");
 		configPanel.add(new ObservableTextField<>(theROI.getPlanetTemp(), Format.INT, null), "wrap");
-		configPanel.add(new JLabel("Universe Speed:"), "align right");
-		configPanel.add(new ObservableTextField<>(theROI.getUniSpeed(),
-			Format.validate(Format.INT, i -> i <= 0 ? "Universe speed must be >0" : null), null), "wrap");
+		configPanel.add(new JLabel("Economy Speed:"), "align right");
+		configPanel.add(new ObservableTextField<>(theROI.getEconomySpeed(),
+			Format.validate(Format.INT, i -> i <= 0 ? "Economy speed must be >0" : null), null), "wrap");
+		configPanel.add(new JLabel("Research Speed:"), "align right");
+		configPanel.add(new ObservableTextField<>(theROI.getResearchSpeed(),
+			Format.validate(Format.INT, i -> i <= 0 ? "Economy speed must be >0" : null), null), "wrap");
 		configPanel.add(new JLabel("Aggressive Helpers:"), "align right");
 		JCheckBox aggHelperCheck = new JCheckBox();
 		ObservableSwingUtils.checkFor(aggHelperCheck, "Whether to upgrade speed-improvement buildings/techs aggressively",
@@ -214,7 +217,7 @@ public class OGameRoiGui extends JPanel {
 			theROI.getPlanetTemp().noInitChanges(), //
 			theROI.getFusionContribution().noInitChanges(), //
 			theROI.isWithAggressiveHelpers().noInitChanges(), //
-			theROI.getUniSpeed().noInitChanges()).act(v -> {
+			theROI.getEconomySpeed().noInitChanges()).act(v -> {
 				theComputation = null;
 				theSequence.clear();
 				computeButton.setText("Compute");

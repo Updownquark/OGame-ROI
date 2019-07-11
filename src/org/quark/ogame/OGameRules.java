@@ -37,10 +37,10 @@ public class OGameRules {
 			double upgradeHours;
 			if (isResearch) {
 				int joinedLabs = Math.min(1 + initState.getIRN(), initState.getPlanets());
-				upgradeHours = (cost[0] + cost[1]) / 1000.0 / initState.getUniSpeed()
+				upgradeHours = (cost[0] + cost[1]) / 1000.0 / initState.getResearchSpeed()
 						/ (1 + initState.getBuildingLevel(OGameBuildingType.ResearchLab) * joinedLabs);
 			} else {
-				upgradeHours = (cost[0] + cost[1]) / 2500.0 / initState.getUniSpeed()
+				upgradeHours = (cost[0] + cost[1]) / 2500.0 / initState.getEconomySpeed()
 						/ (1 + initState.getBuildingLevel(OGameBuildingType.Robotics))
 						/ pow2(initState.getBuildingLevel(OGameBuildingType.Nanite));
 			}
@@ -113,7 +113,7 @@ public class OGameRules {
 			p *= (1 + thePlasmaBonus / 100 * state.getPlasmaTech());// Plasma adjustment
 			p *= state.getUtilization(theResourceType.ordinal());
 			p *= energyFactor;
-			p *= state.getUniSpeed();
+			p *= state.getEconomySpeed();
 			p *= state.getPlanets();
 			production[theResourceType.ordinal()] += p;
 		}
@@ -131,7 +131,7 @@ public class OGameRules {
 			double deutUsage = 10 * state.getBuildingLevel(OGameBuildingType.Fusion)
 				* Math.pow(1.1, state.getBuildingLevel(OGameBuildingType.Fusion));
 			deutUsage *= state.getUtilization(OGameBuildingType.Fusion.ordinal());
-			deutUsage *= state.getUniSpeed();
+			deutUsage *= state.getEconomySpeed();
 			deutUsage *= state.getPlanets();
 			production[2] -= deutUsage;
 		}

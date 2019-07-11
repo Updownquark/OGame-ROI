@@ -12,7 +12,8 @@ import org.observe.SettableValue;
 import org.observe.SimpleSettableValue;
 
 public class OGameROI {
-	private final SettableValue<Integer> theUniSpeed;
+	private final SettableValue<Integer> theEconomySpeed;
+	private final SettableValue<Integer> theResearchSpeed;
 	private final SettableValue<Integer> thePlanetTemp;
 	private final SettableValue<Double> theMetalTradeRate;
 	private final SettableValue<Double> theCrystalTradeRate;
@@ -21,8 +22,10 @@ public class OGameROI {
 	private final SettableValue<Boolean> withAggressiveHelpers;
 
 	public OGameROI() {
-		theUniSpeed = new SimpleSettableValue<>(int.class, false);
-		theUniSpeed.set(7, null);
+		theEconomySpeed = new SimpleSettableValue<>(int.class, false);
+		theEconomySpeed.set(7, null);
+		theResearchSpeed = new SimpleSettableValue<>(int.class, false);
+		theResearchSpeed.set(7, null);
 		thePlanetTemp = new SimpleSettableValue<>(int.class, false);
 		thePlanetTemp.set(30, null);
 		theMetalTradeRate = new SimpleSettableValue<>(double.class, false);
@@ -38,8 +41,12 @@ public class OGameROI {
 		withAggressiveHelpers.set(false, null);
 	}
 
-	public SettableValue<Integer> getUniSpeed() {
-		return theUniSpeed;
+	public SettableValue<Integer> getEconomySpeed() {
+		return theEconomySpeed;
+	}
+
+	public SettableValue<Integer> getResearchSpeed() {
+		return theResearchSpeed;
 	}
 
 	public SettableValue<Integer> getPlanetTemp() {
@@ -67,7 +74,8 @@ public class OGameROI {
 	}
 
 	public ROIComputation compute() {
-		return new ROIComputation(theUniSpeed.get(), thePlanetTemp.get(), theFusionContribution.get(), withAggressiveHelpers.get(), //
+		return new ROIComputation(theEconomySpeed.get(), theResearchSpeed.get(), thePlanetTemp.get(), //
+			theFusionContribution.get(), withAggressiveHelpers.get(), //
 			theMetalTradeRate.get(), theCrystalTradeRate.get(), theDeutTradeRate.get());
 	}
 
@@ -82,12 +90,12 @@ public class OGameROI {
 		private final boolean isWithAggressiveHelpers;
 		private int theImprovementCounter; // Just debugging
 
-		ROIComputation(int uniSpeed, int planetTemp, double fusionContribution, boolean aggressiveHelpers, //
+		ROIComputation(int ecoSpeed, int researchSpeed, int planetTemp, double fusionContribution, boolean aggressiveHelpers, //
 			double metalTradeRate, double crystalTradeRate, double deutTradeRate) {
 			theTradeRates = new double[] { metalTradeRate, crystalTradeRate, deutTradeRate };
 			isWithAggressiveHelpers = aggressiveHelpers;
 			theFusionContribution = fusionContribution;
-			theState = new OGameState(new OGameRules(), uniSpeed, planetTemp);
+			theState = new OGameState(new OGameRules(), ecoSpeed, researchSpeed, planetTemp);
 			for (int i = 0; i < 12; i++) {
 				theState.upgrade(OGameImprovementType.Energy).effect();
 			}

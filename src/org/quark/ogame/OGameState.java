@@ -10,7 +10,8 @@ public class OGameState {
 	}
 
 	private final OGameRules theRules;
-	private final int theUniSpeed;
+	private final int theEconomySpeed;
+	private final int theResearchSpeed;
 	private final int theAvgPlanetTemp;
 	private final int theSatEnergy;
 
@@ -33,9 +34,10 @@ public class OGameState {
 	private final int[] thePreviousUtilizations;
 	private OGameCost theAccountValue;
 
-	public OGameState(OGameRules rules, int uniSpeed, int planetTemp) {
+	public OGameState(OGameRules rules, int ecoSpeed, int researchSpeed, int planetTemp) {
 		theRules = rules;
-		theUniSpeed = uniSpeed;
+		theEconomySpeed = ecoSpeed;
+		theResearchSpeed = researchSpeed;
 		theAvgPlanetTemp = planetTemp;
 		theSatEnergy = (int) Math.floor((theAvgPlanetTemp + 160) / 6);
 		theUtilizations = new int[] { 100, 100, 100, 100 };
@@ -45,8 +47,12 @@ public class OGameState {
 		planets = 1;
 	}
 
-	public int getUniSpeed() {
-		return theUniSpeed;
+	public int getEconomySpeed() {
+		return theEconomySpeed;
+	}
+
+	public int getResearchSpeed() {
+		return theResearchSpeed;
 	}
 
 	public int getAvgPlanetTemp() {
