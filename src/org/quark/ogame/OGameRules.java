@@ -6,7 +6,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.qommons.collect.BetterCollections;
+import org.qommons.collect.BetterSortedSet;
+import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
+import org.qommons.tree.BetterTreeSet;
+
 public class OGameRules {
+	/** Storage amount per storage building level, starting at level 0 */
+	private static final BetterSortedSet<Integer> STORAGE = BetterCollections.unmodifiableSortedSet(//
+		new BetterTreeSet<>(false, Integer::compareTo).with(//
+			10, 20, 40, 75, 140, 255, 470, 865, 1_590, 2_920, //
+			5_355, 9_820, 18_005, 33_005, 60_510, 110_925, 203_350, 372_785, 683_385, 1_252_785, //
+			2_296_600, 4_210_115, 7_717_970, 14_148_545, 25_937_050, 47_547_690, 87_164_210, 159_789_040, 292_924_545, 536_987_950, //
+			984_403_885, 1_804_604_750));
+
 	private static abstract class ImprovementScheme {
 		private final double theInitialMetalCost;
 		private final double theInitialCrystalCost;
@@ -159,6 +172,9 @@ public class OGameRules {
 		theImprovementSchemes.put(OGameImprovementType.Nanite, new BuildingImprovementScheme(1000000, 500000, 100000, 2));
 		theImprovementSchemes.put(OGameImprovementType.IRN, new TechImprovementScheme(240000, 400000, 160000, 2));
 		theImprovementSchemes.put(OGameImprovementType.ResearchLab, new BuildingImprovementScheme(200, 400, 200, 2));
+		theImprovementSchemes.put(OGameImprovementType.MetalStorage, new BuildingImprovementScheme(1000, 0, 0, 2));
+		theImprovementSchemes.put(OGameImprovementType.CrystalStorage, new BuildingImprovementScheme(1000, 500, 0, 2));
+		theImprovementSchemes.put(OGameImprovementType.DeutStorage, new BuildingImprovementScheme(1000, 1000, 0, 2));
 
 		theProductionSchemes = new ArrayList<>();
 		theProductionSchemes.add(new MineProductionScheme(OGameBuildingType.Metal, 30, 30, 1, 1, 0, 10));
@@ -193,6 +209,26 @@ public class OGameRules {
 			scheme.addProduction(state, production, energyFactor);
 		}
 		return production;
+	}
+
+	public int getStorageLevel(double amount) {
+		if (amount >= STORAGE.getLast() * 1000) {
+			return STORAGE.size() - 1;
+		} else if (amount < STORAGE.getFirst() * 1000) {
+			return 0;
+		}
+		int div1K = (int) Math.ceil(amount / 1000);
+		return STORAGE.getElementsBefore(STORAGE.search(v -> Double.compare(div1K, v), SortedSearchFilter.Less).getElementId());
+	}
+
+	public double getStorageAmount(int level) {
+		if (level < 0) {
+			throw new IndexOutOfBoundsException(level + "<0");
+		}
+		if (level >= STORAGE.size()) {
+			return STORAGE.getLast() * 1000;
+		}
+		return STORAGE.get(level) * 1000;
 	}
 
 	private static final int[] POW_2 = new int[100];

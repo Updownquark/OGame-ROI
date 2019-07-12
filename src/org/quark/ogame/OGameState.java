@@ -29,6 +29,10 @@ public class OGameState {
 	private int theResearchLab;
 	private int theIRN;
 
+	private int theMetalStorage;
+	private int theCrystalStorage;
+	private int theDeutStorage;
+
 	/** Metal/crystal/deut/fusion %usage */
 	private final int[] theUtilizations;
 	private final int[] thePreviousUtilizations;
@@ -99,8 +103,18 @@ public class OGameState {
 			return theNanites;
 		case ResearchLab:
 			return theResearchLab;
+		case MetalStorage:
+			return theMetalStorage;
+		case CrystalStorage:
+			return theCrystalStorage;
+		case DeutStorage:
+			return theDeutStorage;
 		}
 		throw new IllegalArgumentException("No such building type: " + buildingType);
+	}
+
+	public double getStorageCapacity(int resourceType) {
+		return theRules.getStorageAmount(getBuildingLevel(OGameBuildingType.getStorage(resourceType)));
 	}
 
 	public int getTotalBuildingCount() {
@@ -159,6 +173,15 @@ public class OGameState {
 		case IRN:
 			prevLevel = theIRN;
 			break;
+		case MetalStorage:
+			prevLevel = theMetalStorage;
+			break;
+		case CrystalStorage:
+			prevLevel = theCrystalStorage;
+			break;
+		case DeutStorage:
+			prevLevel = theDeutStorage;
+			break;
 		}
 		if (prevLevel < 0) {
 			throw new IllegalStateException("Unrecognized improvement type: " + improvement);
@@ -206,6 +229,15 @@ public class OGameState {
 		case IRN:
 			return testUpgrade(//
 					() -> theIRN++, () -> theIRN--, improvement, theIRN + 1, false);
+		case MetalStorage:
+			return testUpgrade(//
+				() -> theMetalStorage++, () -> theMetalStorage--, improvement, theMetalStorage + 1, true);
+		case CrystalStorage:
+			return testUpgrade(//
+				() -> theCrystalStorage++, () -> theCrystalStorage--, improvement, theCrystalStorage + 1, true);
+		case DeutStorage:
+			return testUpgrade(//
+				() -> theDeutStorage++, () -> theDeutStorage--, improvement, theDeutStorage + 1, true);
 		}
 		throw new IllegalStateException("Unrecognized improvement type: " + improvement);
 	}

@@ -14,6 +14,9 @@ public class OGameImprovement {
 	public final int nanites;
 	public final int researchLab;
 	public final int irn;
+	public final int metalStorage;
+	public final int crystalStorage;
+	public final int deutStorage;
 	public final int buildings;
 
 	public final OGameImprovementType type;
@@ -34,6 +37,9 @@ public class OGameImprovement {
 		nanites = state.getBuildingLevel(OGameBuildingType.Nanite);
 		researchLab = state.getBuildingLevel(OGameBuildingType.ResearchLab);
 		irn = state.getIRN();
+		metalStorage = state.getBuildingLevel(OGameBuildingType.MetalStorage);
+		crystalStorage = state.getBuildingLevel(OGameBuildingType.CrystalStorage);
+		deutStorage = state.getBuildingLevel(OGameBuildingType.DeutStorage);
 		buildings = state.getTotalBuildingCount();
 
 		this.type = type;

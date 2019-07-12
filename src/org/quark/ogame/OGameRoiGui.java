@@ -83,6 +83,10 @@ public class OGameRoiGui extends JPanel {
 			Format.doubleFormat("0.0"), null)
 				.withToolTip("The amount of energy that should be supplied by fusion instead of solar satellites"));
 		configPanel.add(new JLabel("%"), "wrap");
+		configPanel.add(new JLabel("Production Storage:"), "align right");
+		configPanel.add(new ObservableTextField<>(//
+			theROI.getDailyProductionStorageRequired(), Format.doubleFormat("0.00"), null));
+		configPanel.add(new JLabel("days"), "wrap");
 		configPanel.add(new JLabel("Other Buildings:"), "align right");
 		configPanel.add(new ObservableTextField<>(theFieldOffset, //
 			Format.validate(Format.INT, i -> i < 0 ? "Other Buildings cannot be negative" : null), null)
@@ -157,6 +161,12 @@ public class OGameRoiGui extends JPanel {
 						.withIdentifier(OGameImprovementType.ResearchLab).withRenderer(upgradeRenderer), //
 					new CategoryRenderStrategy<OGameImprovement, Integer>("IRN", TypeTokens.get().INT, imp -> imp.irn)
 						.withIdentifier(OGameImprovementType.IRN).withRenderer(upgradeRenderer), //
+					new CategoryRenderStrategy<OGameImprovement, Integer>("Metal St.", TypeTokens.get().INT, imp -> imp.metalStorage)
+						.withIdentifier(OGameImprovementType.MetalStorage).withRenderer(upgradeRenderer), //
+					new CategoryRenderStrategy<OGameImprovement, Integer>("Crystal St.", TypeTokens.get().INT, imp -> imp.crystalStorage)
+						.withIdentifier(OGameImprovementType.CrystalStorage).withRenderer(upgradeRenderer), //
+					new CategoryRenderStrategy<OGameImprovement, Integer>("Deut St.", TypeTokens.get().INT, imp -> imp.deutStorage)
+						.withIdentifier(OGameImprovementType.DeutStorage).withRenderer(upgradeRenderer), //
 					new CategoryRenderStrategy<OGameImprovement, Integer>("Fields", TypeTokens.get().INT,
 						imp -> theFieldOffset.get() + imp.buildings), //
 					new CategoryRenderStrategy<>("Economy Value", TypeTokens.get().DOUBLE,
@@ -231,7 +241,10 @@ public class OGameRoiGui extends JPanel {
 			theROI.getPlanetTemp().noInitChanges(), //
 			theROI.getFusionContribution().noInitChanges(), //
 			theROI.isWithAggressiveHelpers().noInitChanges(), //
-			theROI.getEconomySpeed().noInitChanges()).act(v -> {
+			theROI.getEconomySpeed().noInitChanges(), //
+			theROI.getResearchSpeed().noInitChanges(), //
+			theROI.getDailyProductionStorageRequired().noInitChanges()//
+		).act(v -> {
 				theComputation = null;
 				theSequence.clear();
 				computeButton.setText("Compute");

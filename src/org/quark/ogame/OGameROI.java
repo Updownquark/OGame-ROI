@@ -19,24 +19,33 @@ public class OGameROI {
 	private final SettableValue<Double> theCrystalTradeRate;
 	private final SettableValue<Double> theDeutTradeRate;
 	private final SettableValue<Double> theFusionContribution;
+	private final SettableValue<Double> theDailyProductionStorageRequired;
 	private final SettableValue<Boolean> withAggressiveHelpers;
 
 	public OGameROI() {
-		theEconomySpeed = new SimpleSettableValue<>(int.class, false);
+		theEconomySpeed = new SimpleSettableValue<>(int.class, false)//
+			.filterAccept(v -> v <= 0 ? "Economy speed must be > 0" : null);
 		theEconomySpeed.set(7, null);
-		theResearchSpeed = new SimpleSettableValue<>(int.class, false);
+		theResearchSpeed = new SimpleSettableValue<>(int.class, false)//
+			.filterAccept(v -> v <= 0 ? "Resarch speed must be > 0" : null);
 		theResearchSpeed.set(7, null);
 		thePlanetTemp = new SimpleSettableValue<>(int.class, false);
 		thePlanetTemp.set(30, null);
-		theMetalTradeRate = new SimpleSettableValue<>(double.class, false);
+		theMetalTradeRate = new SimpleSettableValue<>(double.class, false)//
+			.filterAccept(v -> v <= 0 ? "Trade rates must be > 0" : null);
 		theMetalTradeRate.set(2.5, null);
-		theCrystalTradeRate = new SimpleSettableValue<>(double.class, false);
+		theCrystalTradeRate = new SimpleSettableValue<>(double.class, false)//
+			.filterAccept(v -> v <= 0 ? "Trade rates must be > 0" : null);
 		theCrystalTradeRate.set(1.5, null);
-		theDeutTradeRate = new SimpleSettableValue<>(double.class, false);
+		theDeutTradeRate = new SimpleSettableValue<>(double.class, false)//
+			.filterAccept(v -> v <= 0 ? "Trade rates must be > 0" : null);
 		theDeutTradeRate.set(1.0, null);
 		theFusionContribution = new SimpleSettableValue<>(double.class, false)//
 			.filterAccept(v -> (v < 0.0 || v > 1.0) ? "Fusion contribution must be between 0 and 1" : null);
 		theFusionContribution.set(0.0, null);
+		theDailyProductionStorageRequired = new SimpleSettableValue<>(double.class, false)//
+			.filterAccept(v -> v < 0 ? "Daily storage requirement cannot be negative" : null);
+		theDailyProductionStorageRequired.set(1.0, null);
 		withAggressiveHelpers = new SimpleSettableValue<>(boolean.class, false);
 		withAggressiveHelpers.set(false, null);
 	}
@@ -69,13 +78,17 @@ public class OGameROI {
 		return theFusionContribution;
 	}
 
+	public SettableValue<Double> getDailyProductionStorageRequired() {
+		return theDailyProductionStorageRequired;
+	}
+
 	public SettableValue<Boolean> isWithAggressiveHelpers() {
 		return withAggressiveHelpers;
 	}
 
 	public ROIComputation compute() {
 		return new ROIComputation(theEconomySpeed.get(), theResearchSpeed.get(), thePlanetTemp.get(), //
-			theFusionContribution.get(), withAggressiveHelpers.get(), //
+			theFusionContribution.get(), theDailyProductionStorageRequired.get(), withAggressiveHelpers.get(), //
 			theMetalTradeRate.get(), theCrystalTradeRate.get(), theDeutTradeRate.get());
 	}
 
@@ -87,12 +100,15 @@ public class OGameROI {
 		private final double[] theTradeRates;
 		private final double theFusionContribution;
 		private double[] theCurrentProduction;
+		private double theDailyStorageRequirement;
 		private final boolean isWithAggressiveHelpers;
 		private int theImprovementCounter; // Just debugging
 
-		ROIComputation(int ecoSpeed, int researchSpeed, int planetTemp, double fusionContribution, boolean aggressiveHelpers, //
+		ROIComputation(int ecoSpeed, int researchSpeed, int planetTemp, double fusionContribution, double dailyStorage,
+			boolean aggressiveHelpers, //
 			double metalTradeRate, double crystalTradeRate, double deutTradeRate) {
 			theTradeRates = new double[] { metalTradeRate, crystalTradeRate, deutTradeRate };
+			theDailyStorageRequirement = dailyStorage;
 			isWithAggressiveHelpers = aggressiveHelpers;
 			theFusionContribution = fusionContribution;
 			theState = new OGameState(new OGameRules(), ecoSpeed, researchSpeed, planetTemp);
@@ -118,7 +134,7 @@ public class OGameROI {
 			double[] postUpgradeProduction = null;
 			List<OGameState.Upgrade> tempUpgrades = new ArrayList<>();
 			for (OGameImprovementType type : OGameImprovementType.values()) {
-				if (type.energyType || type.helpers.isEmpty()) {
+				if (type.energyType || type.helpers.isEmpty() || type.isStorage() >= 0) {
 					continue; // No upgrade benefit by itself
 				}
 				OGameCost cost = theState.getImprovementCost(type);
@@ -254,6 +270,21 @@ public class OGameROI {
 					System.out.println(OGameImprovementType.Fusion + " " + newFusion);
 					action.accept(new OGameImprovement(theState, OGameImprovementType.Energy, newEnergy, null));
 					System.out.println(OGameImprovementType.Energy + " " + newEnergy);
+				}
+			}
+			// See if we need to upgrade storage
+			if (theDailyStorageRequirement > 0) {
+				int resType = bestType.get(0).isMine();
+				if (resType >= 0) {
+					double storageAmount = theState.getStorageCapacity(resType);
+					// No way a single mine upgrade would cause the need for 2 storage levels, but this is for completeness
+					while (storageAmount < theDailyStorageRequirement / theState.getPlanets() * 24 * theCurrentProduction[resType]) {
+						OGameImprovementType upgradeType = OGameImprovementType.getStorageImprovement(resType);
+						int level = theState.upgrade(upgradeType).effect();
+						action.accept(new OGameImprovement(theState, upgradeType, level, null));
+						System.out.println(upgradeType + " " + level);
+						storageAmount = theState.getStorageCapacity(resType);
+					}
 				}
 			}
 			return true;
