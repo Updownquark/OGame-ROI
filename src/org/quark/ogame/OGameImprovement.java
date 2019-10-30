@@ -17,6 +17,7 @@ public class OGameImprovement {
 	public final int metalStorage;
 	public final int crystalStorage;
 	public final int deutStorage;
+	public final int crawlers;
 	public final int buildings;
 
 	public final OGameImprovementType type;
@@ -40,6 +41,7 @@ public class OGameImprovement {
 		metalStorage = state.getBuildingLevel(OGameBuildingType.MetalStorage);
 		crystalStorage = state.getBuildingLevel(OGameBuildingType.CrystalStorage);
 		deutStorage = state.getBuildingLevel(OGameBuildingType.DeutStorage);
+		crawlers = state.getCrawlers();
 		buildings = state.getTotalBuildingCount();
 
 		this.type = type;

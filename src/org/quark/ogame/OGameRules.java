@@ -16,14 +16,14 @@ public class OGameRules {
 	private static final BetterSortedSet<Integer> STORAGE2 = new BetterTreeSet<>(false, Integer::compareTo).with(10);
 
 	private static abstract class ImprovementScheme {
-		private final double theInitialMetalCost;
-		private final double theInitialCrystalCost;
-		private final double theInitialDeutCost;
-		private final double theLevelExponent;
-		private final boolean isResearch;
+		final double theInitialMetalCost;
+		final double theInitialCrystalCost;
+		final double theInitialDeutCost;
+		final double theLevelExponent;
+		final boolean isResearch;
 
 		public ImprovementScheme(double initialMetalCost, double initialCrystalCost, double initialDeutCost, double levelExponent,
-				boolean research) {
+			boolean research) {
 			theInitialMetalCost = initialMetalCost;
 			theInitialCrystalCost = initialCrystalCost;
 			theInitialDeutCost = initialDeutCost;
@@ -38,7 +38,7 @@ public class OGameRules {
 			}
 			// POW(exp, preLevel)*((1-POW(exp, ABS(postLevel-preLevel)))/(1-exp))
 			double levelUp = Math.pow(theLevelExponent, preLevel)
-					* ((1 - Math.pow(theLevelExponent, postLevel - preLevel)) / (1 - theLevelExponent));
+				* ((1 - Math.pow(theLevelExponent, postLevel - preLevel)) / (1 - theLevelExponent));
 			cost[0] = (long) Math.ceil(theInitialMetalCost * levelUp);
 			cost[1] = (long) Math.ceil(theInitialCrystalCost * levelUp);
 			cost[2] = (long) Math.ceil(theInitialDeutCost * levelUp);
@@ -46,15 +46,15 @@ public class OGameRules {
 			if (isResearch) {
 				int joinedLabs = Math.min(1 + initState.getIRN(), initState.getPlanets());
 				upgradeHours = (cost[0] + cost[1]) / 1000.0 / initState.getResearchSpeed()
-						/ (1 + initState.getBuildingLevel(OGameBuildingType.ResearchLab) * joinedLabs);
+					/ (1 + initState.getBuildingLevel(OGameBuildingType.ResearchLab) * joinedLabs);
 			} else {
 				upgradeHours = (cost[0] + cost[1]) / 2500.0 / initState.getEconomySpeed()
-						/ (1 + initState.getBuildingLevel(OGameBuildingType.Robotics))
-						/ pow2(initState.getBuildingLevel(OGameBuildingType.Nanite));
+					/ (1 + initState.getBuildingLevel(OGameBuildingType.Robotics))
+					/ pow2(initState.getBuildingLevel(OGameBuildingType.Nanite));
 			}
 			Duration upgradeTime = Duration.ofSeconds(Math.round(upgradeHours * 3600));
 			return new OGameCost(isResearch ? null : cost, isResearch ? cost : null, //
-					isResearch ? null : upgradeTime, isResearch ? upgradeTime : null);
+				isResearch ? null : upgradeTime, isResearch ? upgradeTime : null);
 		}
 	}
 
@@ -83,7 +83,30 @@ public class OGameRules {
 		@Override
 		OGameCost getUpgradeCost(OGameState initState, int preLevel, int postLevel) {
 			return super.getUpgradeCost(initState, preLevel * 2 - 3, postLevel * 2 - 3)//
-					.plus(initState.getAccountValue().justBuildings().noTime().divide(initState.getPlanets()));
+				.plus(initState.getAccountValue().justBuildings().noTime().divide(initState.getPlanets()));
+		}
+	}
+
+	private static class LinearImprovementScheme extends ImprovementScheme {
+		private final int theCap;
+
+		public LinearImprovementScheme(double metalCost, double crystalCost, double deutCost, int cap) {
+			super(metalCost, crystalCost, deutCost, 0, false);
+			theCap = cap;
+		}
+
+		@Override
+		OGameCost getUpgradeCost(OGameState initState, int preLevel, int postLevel) {
+			if (!initState.isUsingCrawlers() || postLevel > theCap) {
+				return new OGameCost(new long[] { 1_000_000_000_000_000L, 1_000_000_000_000_000L, 1_000_000_000_000_000L },
+					new long[] { 0, 0, 0 }, Duration.ZERO, Duration.ZERO);
+			} else {
+				return new OGameCost(new long[] { //
+					(long) theInitialMetalCost * (postLevel - preLevel) * initState.getPlanets(), //
+					(long) theInitialCrystalCost * (postLevel - preLevel) * initState.getPlanets(), //
+					(long) theInitialDeutCost * (postLevel - preLevel) * initState.getPlanets()//
+				}, new long[] { 0, 0, 0 }, Duration.ZERO, Duration.ZERO);
+			}
 		}
 	}
 
@@ -103,7 +126,7 @@ public class OGameRules {
 		private final int theEnergyMult;
 
 		MineProductionScheme(OGameBuildingType resourceType, double baseProduction, double productionFactor, double plasmaBonus,
-				double tempBonusOffset, double tempBonusMult, int energyMult) {
+			double tempBonusOffset, double tempBonusMult, int energyMult) {
 			theResourceType = resourceType;
 			theBaseProduction = baseProduction;
 			theProductionFactor = productionFactor;
@@ -147,7 +170,45 @@ public class OGameRules {
 		@Override
 		public double getEnergyConsumption(OGameState state) {
 			return 30 * state.getBuildingLevel(OGameBuildingType.Fusion) * state.getUtilization(OGameBuildingType.Fusion.ordinal())
-					* Math.pow(1.05 + (0.01 * state.getEnergyTech()), state.getBuildingLevel(OGameBuildingType.Fusion));
+				* Math.pow(1.05 + (0.01 * state.getEnergyTech()), state.getBuildingLevel(OGameBuildingType.Fusion));
+		}
+	}
+
+	private static class CrawlerProductionScheme implements ProductionScheme {
+		private final double theClassMetalBump;
+		private final double theClassCrystalBump;
+		private final double theClassDeuteriumBump;
+		private final double theMetalBump;
+		private final double theCrystalBump;
+		private final double theDeuteriumBump;
+		private final int theEnergyUsage;
+
+		CrawlerProductionScheme(double classMetalBump, double classCrystalBump, double classDeuteriumBump, //
+			double metalBump, double crystalBump, double deuteriumBump, int energyUsage) {
+			theClassMetalBump = classMetalBump;
+			theClassCrystalBump = classCrystalBump;
+			theClassDeuteriumBump = classDeuteriumBump;
+			theMetalBump = metalBump;
+			theCrystalBump = crystalBump;
+			theDeuteriumBump = deuteriumBump;
+			theEnergyUsage = energyUsage;
+		}
+
+		@Override
+		public void addProduction(OGameState state, double[] production, double energyFactor) {
+			if (state.isMiningClass()) {
+				production[0] *= 1 + theClassMetalBump;
+				production[1] *= 1 + theClassCrystalBump;
+				production[2] *= 1 + theClassDeuteriumBump;
+			}
+			production[0] *= 1 + state.getCrawlers() * theMetalBump;
+			production[1] *= 1 + state.getCrawlers() * theCrystalBump;
+			production[2] *= 1 + state.getCrawlers() * theDeuteriumBump;
+		}
+
+		@Override
+		public double getEnergyConsumption(OGameState state) {
+			return -theEnergyUsage * state.getCrawlers();
 		}
 	}
 
@@ -171,12 +232,14 @@ public class OGameRules {
 		theImprovementSchemes.put(OGameImprovementType.MetalStorage, new BuildingImprovementScheme(1000, 0, 0, 2));
 		theImprovementSchemes.put(OGameImprovementType.CrystalStorage, new BuildingImprovementScheme(1000, 500, 0, 2));
 		theImprovementSchemes.put(OGameImprovementType.DeutStorage, new BuildingImprovementScheme(1000, 1000, 0, 2));
+		theImprovementSchemes.put(OGameImprovementType.Crawler, new LinearImprovementScheme(2000, 2000, 1000, 1667));
 
 		theProductionSchemes = new ArrayList<>();
 		theProductionSchemes.add(new MineProductionScheme(OGameBuildingType.Metal, 30, 30, 1, 1, 0, 10));
 		theProductionSchemes.add(new MineProductionScheme(OGameBuildingType.Crystal, 15, 20, .66, 1, 0, 10));
 		theProductionSchemes.add(new MineProductionScheme(OGameBuildingType.Deuterium, 0, 10, .33, 1.36, 0.004, 20));
 		theProductionSchemes.add(new FusionProductionScheme());
+		theProductionSchemes.add(new CrawlerProductionScheme(.25, .25, .25, .0003, .0003, .0003, 50));
 	}
 
 	public OGameCost getUpgradeCost(OGameState initState, OGameImprovementType improvement, int preLevel, int postLevel) {

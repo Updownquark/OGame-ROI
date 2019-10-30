@@ -6,18 +6,22 @@ import java.util.List;
 
 public enum OGameImprovementType {
 	// Helper improvements
-	Robotics(false), Nanite(false), ResearchLab(false), IRN(false), //
+	Robotics(true, false), Nanite(true, false), ResearchLab(true, false), IRN(true, false), //
 	// Buildings
-	Metal(false, Robotics, Nanite), Crystal(false, Robotics, Nanite), Deut(false, Robotics, Nanite), Fusion(true, Robotics, Nanite), //
+	Metal(false, false, Robotics, Nanite), Crystal(false, false, Robotics, Nanite), Deut(false, false, Robotics, Nanite), Fusion(false, true, Robotics, Nanite), //
 	// Research
-	Energy(true, ResearchLab, IRN), Plasma(false, ResearchLab, IRN), Planet(false, ResearchLab, IRN),//
+	Energy(false, true, ResearchLab, IRN), Plasma(false, false, ResearchLab, IRN), Planet(false, false, ResearchLab, IRN),//
 	//Storage
-	MetalStorage(false), CrystalStorage(false), DeutStorage(false);
+	MetalStorage(false, false), CrystalStorage(false, false), DeutStorage(false, false),//
+	
+	Crawler(false, false);
 
+	public final boolean isHelper;
 	public final boolean energyType;
 	public final List<OGameImprovementType> helpers;
 
-	private OGameImprovementType(boolean energyType, OGameImprovementType... helpers) {
+	private OGameImprovementType(boolean helper, boolean energyType, OGameImprovementType... helpers) {
+		isHelper=helper;
 		this.energyType=energyType;
 		this.helpers = Collections.unmodifiableList(Arrays.asList(helpers));
 	}

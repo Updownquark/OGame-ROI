@@ -13,6 +13,8 @@ public class OGameState {
 	private final int theEconomySpeed;
 	private final int theResearchSpeed;
 	private final int theAvgPlanetTemp;
+	private final boolean isMiningClass;
+	private final boolean isUsingCrawlers;
 	private final int theSatEnergy;
 
 	private int metal;
@@ -23,6 +25,7 @@ public class OGameState {
 	private int plasma;
 	private int planets;
 	private int theSatellites;
+	private int theCrawlers;
 
 	private int theRobotics;
 	private int theNanites;
@@ -38,17 +41,27 @@ public class OGameState {
 	private final int[] thePreviousUtilizations;
 	private OGameCost theAccountValue;
 
-	public OGameState(OGameRules rules, int ecoSpeed, int researchSpeed, int planetTemp) {
+	public OGameState(OGameRules rules, int ecoSpeed, int researchSpeed, int planetTemp, boolean miningClass, boolean useCrawlers) {
 		theRules = rules;
 		theEconomySpeed = ecoSpeed;
 		theResearchSpeed = researchSpeed;
 		theAvgPlanetTemp = planetTemp;
+		isMiningClass = miningClass;
+		isUsingCrawlers = useCrawlers;
 		theSatEnergy = (int) Math.floor((theAvgPlanetTemp + 160) / 6);
 		theUtilizations = new int[] { 100, 100, 100, 100 };
 		thePreviousUtilizations = theUtilizations.clone();
 		theAccountValue = OGameCost.ZERO;
 
 		planets = 1;
+	}
+
+	public boolean isMiningClass() {
+		return isMiningClass;
+	}
+
+	public boolean isUsingCrawlers() {
+		return isUsingCrawlers;
 	}
 
 	public int getEconomySpeed() {
@@ -65,6 +78,10 @@ public class OGameState {
 
 	public double getSatelliteEnergy() {
 		return theSatellites * 1.0 * theSatEnergy;
+	}
+
+	public int getCrawlers() {
+		return theCrawlers;
 	}
 
 	public int getPlanets() {
@@ -182,6 +199,9 @@ public class OGameState {
 		case DeutStorage:
 			prevLevel = theDeutStorage;
 			break;
+		case Crawler:
+			prevLevel = theCrawlers;
+			break;
 		}
 		if (prevLevel < 0) {
 			throw new IllegalStateException("Unrecognized improvement type: " + improvement);
@@ -238,6 +258,9 @@ public class OGameState {
 		case DeutStorage:
 			return testUpgrade(//
 				() -> theDeutStorage++, () -> theDeutStorage--, improvement, theDeutStorage + 1, true);
+		case Crawler:
+			return testUpgrade(//
+				() -> theCrawlers++, () -> theCrawlers--, improvement, theCrawlers + 1, true);
 		}
 		throw new IllegalStateException("Unrecognized improvement type: " + improvement);
 	}
