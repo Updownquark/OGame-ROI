@@ -220,7 +220,7 @@ public class OGameRoiGui extends JPanel {
 			})//
 			.addTextField(null, theUpgradeFilter, ListFilter.FORMAT,
 				f -> f.withTooltip("Filter the view by an improvement type").modifyEditor(tf -> {
-					tf.setIcon(ObservableSwingUtils.getFixedIcon(ObservableSwingUtils.class, "icons/search.png", 16, 16))
+					tf.setIcon(ObservableSwingUtils.getFixedIcon(ObservableSwingUtils.class, "/icons/search.png", 16, 16))
 						.setEmptyText("Search...").withColumns(25);
 				}))//
 			.addTable(theSequence.flow().refresh(theFieldOffset.noInitChanges()).collect(), table -> table//
