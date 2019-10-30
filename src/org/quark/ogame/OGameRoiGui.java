@@ -34,8 +34,6 @@ import org.qommons.io.Format;
 
 import com.google.common.reflect.TypeToken;
 
-import net.miginfocom.swing.MigLayout;
-
 public class OGameRoiGui extends JPanel {
 	private final OGameROI theROI;
 	private final ObservableCollection<OGameImprovement> theSequence;
@@ -47,7 +45,6 @@ public class OGameRoiGui extends JPanel {
 	private boolean isCanceled;
 
 	public OGameRoiGui(OGameROI roi) {
-		super(new MigLayout("fillx, hidemode 3"));
 		theROI = roi;
 		theSequence = ObservableCollection.create(TypeToken.of(OGameImprovement.class));
 		theFieldOffset = new SimpleSettableValue<>(int.class, false)//
