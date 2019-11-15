@@ -223,7 +223,7 @@ public class OGameRoiGui extends JPanel {
 					tf.setIcon(ObservableSwingUtils.getFixedIcon(ObservableSwingUtils.class, "/icons/search.png", 16, 16))
 						.setEmptyText("Search...").withColumns(25);
 				}))//
-			.addTable(theSequence.flow().refresh(theFieldOffset.noInitChanges()).collect(), table -> table//
+			.addTable(theSequence.flow().refresh(theFieldOffset.noInitChanges()).collect(), table -> table.fillV()//
 				.fill().withColumns(columns[0]).withFiltering(theUpgradeFilter))
 		;
 
