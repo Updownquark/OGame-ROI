@@ -6,8 +6,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.qommons.collect.BetterSortedList;
+import org.qommons.collect.BetterSortedList.SortedSearchFilter;
 import org.qommons.collect.BetterSortedSet;
-import org.qommons.collect.BetterSortedSet.SortedSearchFilter;
 import org.qommons.tree.BetterTreeSet;
 
 /** Contains methods that emulate the economy rules of OGame */
@@ -278,7 +279,7 @@ public class OGameRules {
 			STORAGE2.add(5 * (int) Math.floor(2.5 * Math.exp(20.0 / 33 * STORAGE2.size())));
 		}
 		int div1K = (int) Math.ceil(amount / 1000);
-		return STORAGE2.getElementsBefore(STORAGE2.search(v -> Double.compare(div1K, v), SortedSearchFilter.Less).getElementId());
+		return STORAGE2.getElementsBefore(STORAGE2.search(v -> Double.compare(div1K, v), BetterSortedList.SortedSearchFilter.Less).getElementId());
 	}
 
 	public double getStorageAmount(int level) {

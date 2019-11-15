@@ -23,10 +23,10 @@ import org.observe.collect.ObservableCollection;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.CategoryRenderStrategy;
 import org.observe.util.swing.JustifiedBoxLayout;
-import org.observe.util.swing.ListFilter;
 import org.observe.util.swing.ObservableCellRenderer;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.PanelPopulation;
+import org.observe.util.swing.TableContentControl;
 import org.qommons.BiTuple;
 import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
@@ -40,7 +40,7 @@ public class OGameRoiGui extends JPanel {
 	private OGameROI.ROIComputation theComputation;
 
 	private final SettableValue<Integer> theFieldOffset;
-	private final SettableValue<ListFilter> theUpgradeFilter;
+	private final SettableValue<TableContentControl> theUpgradeFilter;
 	private final SettableValue<Boolean> isComputing;
 	private boolean isCanceled;
 
@@ -50,7 +50,7 @@ public class OGameRoiGui extends JPanel {
 		theFieldOffset = new SimpleSettableValue<>(int.class, false)//
 			.filterAccept(offset -> offset < 0 ? "Other Buildings cannot be negative" : null)//
 			.withValue(12, null);
-		theUpgradeFilter = new SimpleSettableValue<>(ListFilter.class, false).withValue(ListFilter.INCLUDE_ALL, null);
+		theUpgradeFilter = new SimpleSettableValue<>(TableContentControl.class, false).withValue(TableContentControl.DEFAULT, null);
 		isComputing = new SimpleSettableValue<>(boolean.class, false).withValue(false, null);
 
 		ObservableValue<String> computingText = isComputing.map(c -> c ? "Currently computing build sequence..." : null);
@@ -218,7 +218,7 @@ public class OGameRoiGui extends JPanel {
 						}
 					}, button -> button.withTooltip("Copy the currently displayed build sequence as CSV text to the clipboard"));
 			})//
-			.addTextField(null, theUpgradeFilter, ListFilter.FORMAT,
+			.addTextField(null, theUpgradeFilter, TableContentControl.FORMAT,
 				f -> f.withTooltip("Filter the view by an improvement type").modifyEditor(tf -> {
 					tf.setIcon(ObservableSwingUtils.getFixedIcon(ObservableSwingUtils.class, "/icons/search.png", 16, 16))
 						.setEmptyText("Search...").withColumns(25);
