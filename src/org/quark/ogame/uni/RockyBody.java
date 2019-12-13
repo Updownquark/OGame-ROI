@@ -1,6 +1,8 @@
 package org.quark.ogame.uni;
 
-public interface RockyBody {
+import org.qommons.Nameable;
+
+public interface RockyBody extends Nameable {
 	// Facilities
 	int getRoboticsFactory();
 	void setRoboticsFactory(int roboticsFactory);
@@ -8,7 +10,11 @@ public interface RockyBody {
 	int getShipyard();
 	void setShipyard(int shipyard);
 
-	int getTotalFields();
+	int getBuildingLevel(BuildingType type);
+	int getStationedShips(ShipyardItemType type);
+
+	int getFieldBonus();
+	void setFieldBonus(int fieldBonus);
 
 	default int getUsedFields() {
 		return getRoboticsFactory() + getShipyard();

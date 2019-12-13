@@ -1,9 +1,7 @@
 package org.quark.ogame.uni;
 
-public interface OGameRuleSet {
-	long getProduction(Planet planet, ResourceType resourceType);
-	long getStorage(Planet planet, ResourceType resourceType);
+import org.qommons.Named;
 
-	int getFields(Planet planet);
-	int getFields(Moon moon);
+public interface OGameRuleSet extends Named {
+	OGameEconomyRuleSet economy();
 }

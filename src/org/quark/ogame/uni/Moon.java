@@ -3,7 +3,7 @@ package org.quark.ogame.uni;
 public interface Moon extends RockyBody {
 	// Facilities
 	int getLunarBase();
-	void setLunaryBase(int lunarBase);
+	void setLunarBase(int lunarBase);
 
 	int getSensorPhalanx();
 	void setSensorPhalanx(int sensorPhalanx);
@@ -12,8 +12,26 @@ public interface Moon extends RockyBody {
 	void setJumpGate(int jumpGate);
 
 	@Override
-	default int getTotalFields() {
-		return 1 + getLunarBase() * 3;
+	default int getBuildingLevel(BuildingType type) {
+		switch (type) {
+		case RoboticsFactory:
+			return getRoboticsFactory();
+		case Shipyard:
+			return getShipyard();
+		case LunarBase:
+			return getLunarBase();
+		case SensorPhalanx:
+			return getSensorPhalanx();
+		case JumpGate:
+			return getJumpGate();
+		default:
+			return 0;
+		}
+	}
+
+	@Override
+	default int getStationedShips(ShipyardItemType type) {
+		return 0;
 	}
 
 	@Override

@@ -1,9 +1,23 @@
 package org.quark.ogame.uni;
 
-import org.observe.collect.ObservableCollection;
+import org.observe.config.ObservableValueSet;
+import org.qommons.Nameable;
 
-public interface Account {
+public interface Account extends Nameable {
+	int getId();
+	void setId(int id);
+
+	Universe getUniverse();
+
+	int getReferenceAccount();
+	void setReferenceAccount(int referenceAccount);
+
+	AccountClass getGameClass();
+	void setGameClass(AccountClass clazz);
+
+	Officers getOfficers();
+
 	Research getResearch();
 
-	ObservableCollection<Planet> getPlanets();
+	ObservableValueSet<Planet> getPlanets();
 }
