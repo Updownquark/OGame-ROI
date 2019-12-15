@@ -1,10 +1,6 @@
 package org.quark.ogame.uni.ui;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.text.DecimalFormat;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -25,17 +21,12 @@ import org.observe.util.swing.PanelPopulation;
 import org.qommons.StringUtils;
 import org.qommons.TimeUtils;
 import org.qommons.Transaction;
+import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
-import org.quark.ogame.uni.Account;
-import org.quark.ogame.uni.AccountClass;
-import org.quark.ogame.uni.AccountUpgrade;
+import org.quark.ogame.uni.*;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
-import org.quark.ogame.uni.OGameRuleSet;
-import org.quark.ogame.uni.Planet;
-import org.quark.ogame.uni.ResourceType;
-import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.versions.OGameRuleSet710;
 import org.xml.sax.SAXException;
 
@@ -53,7 +44,7 @@ public class OGameUniGui extends JPanel {
 		theConfig = config;
 		theRuleSets = ruleSets;
 		theAccounts = accounts;
-		theSelectedRuleSet = config.observeValue("selected-account").map(TypeTokens.get().of(OGameRuleSet.class), name -> {
+		theSelectedRuleSet = config.observeValue("selected-rule-set").map(TypeTokens.get().of(OGameRuleSet.class), name -> {
 			for (OGameRuleSet ruleSet : theRuleSets) {
 				if (ruleSet.getName().equals(name)) {
 					return ruleSet;
@@ -70,7 +61,7 @@ public class OGameUniGui extends JPanel {
 				}
 			}
 			return null;
-		}, Account::getName, null);
+		}, account -> "" + account.getId(), null);
 		theReferenceAccount = theSelectedAccount.refresh(theAccounts.getValues().simpleChanges()).map(TypeTokens.get().of(Account.class),
 			this::getReferenceAccount, (selectedAccount, referenceAccount) -> {
 				selectedAccount.setReferenceAccount(referenceAccount == null ? 0 : referenceAccount.getId());
@@ -90,8 +81,8 @@ public class OGameUniGui extends JPanel {
 		ObservableCollection<Account> referenceAccounts = ObservableCollection.flattenCollections(TypeTokens.get().of(Account.class), //
 			ObservableCollection.of(TypeTokens.get().of(Account.class), (Account) null), //
 			theAccounts.getValues().flow().refresh(theSelectedAccount.noInitChanges())
-				.filter(account -> account == theSelectedAccount.get() ? "Selected" : null).collect()//
-		).collect();
+			.filter(account -> account == theSelectedAccount.get() ? "Selected" : null).collect()//
+			).collect();
 
 		TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>> planetColumnType = new TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>>() {};
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> basicPlanetColumns = ObservableCollection
@@ -112,79 +103,79 @@ public class OGameUniGui extends JPanel {
 
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> tempColumns = ObservableCollection.of(planetColumnType,
 			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Min T", TypeTokens.get().INT, p -> p.planet.getMinimumTemperature())
-				.filterable(false)//
-				.withMutation(m -> m.mutateAttribute((p, level) -> {
-					p.planet.setMinimumTemperature(level);
-					p.planet.setMaximumTemperature(level + 40);
-					return level;
-				}).withRowUpdate(true).asText(SpinnerFormat.INT).clicks(1)), //
+			.filterable(false)//
+			.withMutation(m -> m.mutateAttribute((p, level) -> {
+				p.planet.setMinimumTemperature(level);
+				p.planet.setMaximumTemperature(level + 40);
+				return level;
+			}).withRowUpdate(true).asText(SpinnerFormat.INT).clicks(1)), //
 			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Max T", TypeTokens.get().INT, p -> p.planet.getMaximumTemperature())
-				.filterable(false)//
-				.withMutation(m -> m.mutateAttribute((p, level) -> {
-					p.planet.setMaximumTemperature(level);
-					p.planet.setMinimumTemperature(level - 40);
-					return level;
-				}).withRowUpdate(true).asText(SpinnerFormat.INT).clicks(1)) //
-		);
+			.filterable(false)//
+			.withMutation(m -> m.mutateAttribute((p, level) -> {
+				p.planet.setMaximumTemperature(level);
+				p.planet.setMinimumTemperature(level - 40);
+				return level;
+			}).withRowUpdate(true).asText(SpinnerFormat.INT).clicks(1)) //
+			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mineColumns = ObservableCollection.of(planetColumnType,
 			new CategoryRenderStrategy<PlanetWithProduction, Integer>("M Mine", TypeTokens.get().INT, p -> p.planet.getMetalMine())
-				.filterable(false)//
-				.withMutation(m -> m.mutateAttribute((p, level) -> {
-					p.planet.setMetalMine(level);
-					return level;
-				}).withRowUpdate(true).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT)
-					.clicks(1)), //
+			.filterable(false)//
+			.withMutation(m -> m.mutateAttribute((p, level) -> {
+				p.planet.setMetalMine(level);
+				return level;
+			}).withRowUpdate(true).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT)
+				.clicks(1)), //
 			new CategoryRenderStrategy<PlanetWithProduction, Integer>("C Mine", TypeTokens.get().INT, p -> p.planet.getCrystalMine())
-				.filterable(false)//
-				.withMutation(m -> m.mutateAttribute((p, level) -> {
-					p.planet.setCrystalMine(level);
-					return level;
-				}).withRowUpdate(true).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT)
-					.clicks(1)), //
+			.filterable(false)//
+			.withMutation(m -> m.mutateAttribute((p, level) -> {
+				p.planet.setCrystalMine(level);
+				return level;
+			}).withRowUpdate(true).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT)
+				.clicks(1)), //
 			new CategoryRenderStrategy<PlanetWithProduction, Integer>("D Synth", TypeTokens.get().INT,
 				p -> p.planet.getDeuteriumSynthesizer()).filterable(false)//
-					.withMutation(m -> m.mutateAttribute((p, level) -> {
-						p.planet.setDeuteriumSynthesizer(level);
-						return level;
-					}).withRowUpdate(true).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT)
-						.clicks(1))//
-		);
+			.withMutation(m -> m.mutateAttribute((p, level) -> {
+				p.planet.setDeuteriumSynthesizer(level);
+				return level;
+			}).withRowUpdate(true).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT)
+				.clicks(1))//
+			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> resourceBldgs = ObservableCollection.of(planetColumnType,
 			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Solar", TypeTokens.get().INT, p -> p.planet.getSolarPlant())
-				.filterable(false)//
-				.withMutation(m -> m.mutateAttribute((p, level) -> {
-					p.planet.setSolarPlant(level);
-					return level;
-				}).withRowUpdate(true).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT)
-					.clicks(1)), //
+			.filterable(false)//
+			.withMutation(m -> m.mutateAttribute((p, level) -> {
+				p.planet.setSolarPlant(level);
+				return level;
+			}).withRowUpdate(true).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT)
+				.clicks(1)), //
 			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Fusion", TypeTokens.get().INT, p -> p.planet.getFusionReactor())
-				.filterable(false)//
-				.withMutation(m -> m.mutateAttribute((p, level) -> {
-					p.planet.setFusionReactor(level);
-					return level;
-				}).withRowUpdate(true).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT)
-					.clicks(1)) //
-		);
+			.filterable(false)//
+			.withMutation(m -> m.mutateAttribute((p, level) -> {
+				p.planet.setFusionReactor(level);
+				return level;
+			}).withRowUpdate(true).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT)
+				.clicks(1)) //
+			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> storageColumns = ObservableCollection.of(planetColumnType,
 			new CategoryRenderStrategy<PlanetWithProduction, Integer>("M Stor", TypeTokens.get().INT, p -> p.planet.getMetalStorage())
-				.filterable(false)//
-				.withMutation(m -> m.mutateAttribute((p, level) -> {
-					p.planet.setMetalStorage(level);
-					return level;
-				}).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT).clicks(1)), //
+			.filterable(false)//
+			.withMutation(m -> m.mutateAttribute((p, level) -> {
+				p.planet.setMetalStorage(level);
+				return level;
+			}).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT).clicks(1)), //
 			new CategoryRenderStrategy<PlanetWithProduction, Integer>("C Stor", TypeTokens.get().INT, p -> p.planet.getCrystalStorage())
-				.filterable(false)//
-				.withMutation(m -> m.mutateAttribute((p, level) -> {
-					p.planet.setCrystalStorage(level);
-					return level;
-				}).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT).clicks(1)), //
+			.filterable(false)//
+			.withMutation(m -> m.mutateAttribute((p, level) -> {
+				p.planet.setCrystalStorage(level);
+				return level;
+			}).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT).clicks(1)), //
 			new CategoryRenderStrategy<PlanetWithProduction, Integer>("D Stor", TypeTokens.get().INT, p -> p.planet.getDeuteriumStorage())
-				.filterable(false)//
-				.withMutation(m -> m.mutateAttribute((p, level) -> {
-					p.planet.setDeuteriumStorage(level);
-					return level;
-				}).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT).clicks(1)) //
-		);
+			.filterable(false)//
+			.withMutation(m -> m.mutateAttribute((p, level) -> {
+				p.planet.setDeuteriumStorage(level);
+				return level;
+			}).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT).clicks(1)) //
+			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> productionColumns = ObservableCollection
 			.of(planetColumnType,
 				new CategoryRenderStrategy<>("M Production", TypeTokens.get().STRING,
@@ -208,14 +199,14 @@ public class OGameUniGui extends JPanel {
 				p -> printProduction(p.energy.byType.getOrDefault(ProductionSource.Fusion, 0), productionType.get())), //
 			new CategoryRenderStrategy<>("Sat Energy", TypeTokens.get().STRING,
 				p -> printProduction(p.energy.byType.getOrDefault(ProductionSource.Satellite, 0), productionType.get())) //
-		);
+			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> basicEColumns = ObservableCollection.of(planetColumnType,
 			new CategoryRenderStrategy<>("E Production", TypeTokens.get().STRING,
 				p -> printProduction(p.energy.totalProduction, productionType.get())), //
 			new CategoryRenderStrategy<>("E Consumption", TypeTokens.get().STRING,
 				p -> printProduction(p.energy.totalConsumption, productionType.get())), //
 			new CategoryRenderStrategy<>("E Total", TypeTokens.get().STRING, p -> printProduction(p.energy.totalNet, productionType.get())) //
-		);
+			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> emptyColumns = ObservableCollection.of(planetColumnType);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> planetColumns = ObservableCollection
 			.flattenCollections(planetColumnType, //
@@ -227,73 +218,77 @@ public class OGameUniGui extends JPanel {
 				ObservableCollection.flattenValue(showAdvancedEnergy.map(show -> show ? advancedEColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(showBasicEnergy.map(show -> show ? basicEColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(productionType.map(type -> type == null ? emptyColumns : productionColumns))//
-			).collect();
+				).collect();
 		PanelPopulation.populateVPanel(this, Observable.empty())//
-			.addSplit(true,
-				mainSplit -> mainSplit//
-					.firstV(accountSelectPanel -> accountSelectPanel//
-						.addTable((ObservableCollection<Account>) theAccounts.getValues(),
-							accountTable -> accountTable//
-								.fill().withItemName("account")//
-								.withNameColumn(Account::getName, Account::setName, true,
-									nameColumn -> nameColumn//
-										.withMutation(nameMutator -> nameMutator.asText(SpinnerFormat.NUMERICAL_TEXT)))//
-								.withColumn("Universe", String.class, account -> account.getUniverse().getName(), uniColumn -> uniColumn//
-									.withMutation(uniMutator -> uniMutator.mutateAttribute((account, uniName) -> {
-										account.getUniverse().setName(uniName);
-										return uniName;
-									}).asText(Format.TEXT)))//
-								.withColumn("Planets", Integer.class, account -> account.getPlanets().getValues().size(), null)//
-								.withColumn("Reference", Account.class, this::getReferenceAccount,
-									refColumn -> refColumn//
-										.formatText(account -> account == null ? "" : account.getName()))//
-								.withColumn("Eco Points", String.class, account -> OGameUniGui.this.printPoints(account), null)//
-								.withSelection(theSelectedAccount, false)//
-								.withAdd(() -> theAccounts.create()//
-									.with("name",
-										StringUtils.getNewItemName(theAccounts.getValues(), Account::getName, "New Account",
-											StringUtils.PAREN_DUPLICATES))//
-									.with("id", getNewId())//
-									.create().get(), null)//
+		.addSplit(true,
+			mainSplit -> mainSplit//
+			.fill().fillV().firstV(accountSelectPanel -> accountSelectPanel//
+				.fill().addTable((ObservableCollection<Account>) theAccounts.getValues(),
+					accountTable -> accountTable//
+					.fill().withItemName("account")//
+					.withNameColumn(Account::getName, Account::setName, true,
+						nameColumn -> nameColumn.withWidth("pref", 100)//
+						.withMutation(nameMutator -> nameMutator.asText(SpinnerFormat.NUMERICAL_TEXT)))//
+					.withColumn("Universe", String.class, account -> account.getUniverse().getName(), uniColumn -> uniColumn//
+						.withWidth("pref", 100)//
+						.withMutation(uniMutator -> uniMutator.mutateAttribute((account, uniName) -> {
+							account.getUniverse().setName(uniName);
+							return uniName;
+						}).asText(Format.TEXT)))//
+					.withColumn("Planets", Integer.class, account -> account.getPlanets().getValues().size(), //
+						planetColumn -> planetColumn.withWidth("pref", 50))//
+					.withColumn("Reference", Account.class, this::getReferenceAccount,
+						refColumn -> refColumn//
+						.formatText(account -> account == null ? "" : account.getName()))//
+					.withColumn("Eco Points", String.class, account -> OGameUniGui.this.printPoints(account), //
+						pointsColumn -> pointsColumn.withWidth("pref", 75))//
+					.withSelection(theSelectedAccount, false)//
+					.withAdd(() -> theAccounts.create()//
+						.with("name",
+							StringUtils.getNewItemName(theAccounts.getValues(), Account::getName, "New Account",
+								StringUtils.PAREN_DUPLICATES))//
+						.with("id", getNewId())//
+						.create().get(), null)//
 					)//
-					).lastV(selectedAccountPanel -> selectedAccountPanel//
-						.visibleWhen(theSelectedAccount.map(account -> account != null))//
-						.addTextField("Name:",
-							theSelectedAccount.asFieldEditor(TypeTokens.get().STRING, Account::getName, Account::setName, null),
-							SpinnerFormat.NUMERICAL_TEXT, f -> f.fill())//
-						.addComboField("Compare To:",
-							theSelectedAccount.asFieldEditor(TypeTokens.get().of(Account.class), this::getReferenceAccount,
-								(selectedAccount, refAccount) -> selectedAccount
-									.setReferenceAccount(refAccount == null ? 0 : refAccount.getId()),
-								null),
-							referenceAccounts, f -> f.fill())//
-						.addTextField("Universe Name:",
-							theSelectedAccount.asFieldEditor(TypeTokens.get().STRING, account -> account.getUniverse().getName(),
-								(account, name) -> account.getUniverse().setName(name), null),
-							Format.TEXT, f -> f.fill())//
-						.addTextField("Economy Speed:",
-							theSelectedAccount.asFieldEditor(TypeTokens.get().INT, account -> account.getUniverse().getEconomySpeed(),
-								(account, speed) -> account.getUniverse().setEconomySpeed(speed), null),
-							SpinnerFormat.INT, f -> f.fill())//
-						.addTextField("Research Speed:",
-							theSelectedAccount.asFieldEditor(TypeTokens.get().INT, account -> account.getUniverse().getResearchSpeed(),
-								(account, speed) -> account.getUniverse().setResearchSpeed(speed), null),
-							SpinnerFormat.INT, f -> f.fill())//
-						.addComboField("Account Class:",
-							theSelectedAccount.asFieldEditor(TypeTokens.get().of(AccountClass.class), Account::getGameClass,
-								Account::setGameClass, null),
-							ObservableCollection.of(TypeTokens.get().of(AccountClass.class), AccountClass.values()), //
-							classEditor -> classEditor.fill().withValueTooltip(clazz -> describeClass(clazz)))//
-						.addTable(selectedPlanets, planetTable -> planetTable//
-							.withColumns(basicPlanetColumns)// A little hacky, but the next line tells the column the item name function
-							.withNameColumn(p -> p.planet.getName(), (p, name) -> p.planet.setName(name), false, null)//
-							.withColumns(planetColumns)//
-							.withAdd(this::createPlanet, null)//
-							.withRemove(planets -> theSelectedAccount.get().getPlanets().getValues().removeAll(planets), action -> action//
-								.confirmForItems("Delete Planets?", "Are you sure you want to delete ", null, true))//
-				)//
-				)//
-		);
+				).lastV(selectedAccountPanel -> selectedAccountPanel//
+					.fill().visibleWhen(theSelectedAccount.map(account -> account != null))//
+					.addTextField("Name:",
+						theSelectedAccount.asFieldEditor(TypeTokens.get().STRING, Account::getName, Account::setName, null),
+						SpinnerFormat.NUMERICAL_TEXT, f -> f.fill())//
+					.addComboField("Compare To:",
+						theSelectedAccount.asFieldEditor(TypeTokens.get().of(Account.class), this::getReferenceAccount,
+							(selectedAccount, refAccount) -> selectedAccount
+							.setReferenceAccount(refAccount == null ? 0 : refAccount.getId()),
+							null),
+						referenceAccounts, f -> f.fill())//
+					.addTextField("Universe Name:",
+						theSelectedAccount.asFieldEditor(TypeTokens.get().STRING, account -> account.getUniverse().getName(),
+							(account, name) -> account.getUniverse().setName(name), null),
+						Format.TEXT, f -> f.fill())//
+					.addTextField("Economy Speed:",
+						theSelectedAccount.asFieldEditor(TypeTokens.get().INT, account -> account.getUniverse().getEconomySpeed(),
+							(account, speed) -> account.getUniverse().setEconomySpeed(speed), null),
+						SpinnerFormat.INT, f -> f.fill())//
+					.addTextField("Research Speed:",
+						theSelectedAccount.asFieldEditor(TypeTokens.get().INT, account -> account.getUniverse().getResearchSpeed(),
+							(account, speed) -> account.getUniverse().setResearchSpeed(speed), null),
+						SpinnerFormat.INT, f -> f.fill())//
+					.addComboField("Account Class:",
+						theSelectedAccount.asFieldEditor(TypeTokens.get().of(AccountClass.class), Account::getGameClass,
+							Account::setGameClass, null),
+						ObservableCollection.of(TypeTokens.get().of(AccountClass.class), AccountClass.values()), //
+						classEditor -> classEditor.fill().withValueTooltip(clazz -> describeClass(clazz)))//
+					.addTable(selectedPlanets, planetTable -> planetTable//
+						.fill().withColumns(basicPlanetColumns)// A little hacky, but the next line tells the column the item name
+						// function
+						.withNameColumn(p -> p.planet.getName(), (p, name) -> p.planet.setName(name), false, null)//
+						.withColumns(planetColumns)//
+							.withAdd(() -> createPlanet(selectedPlanets), null)//
+						.withRemove(planets -> theSelectedAccount.get().getPlanets().getValues().removeAll(planets), action -> action//
+							.confirmForItems("Delete Planets?", "Are you sure you want to delete ", null, true))//
+						)//
+					)//
+			);
 	}
 
 	Account getReferenceAccount(Account account) {
@@ -372,19 +367,19 @@ public class OGameUniGui extends JPanel {
 			return "No class bonuses";
 		case Collector:
 			return "<ul>" + "<li>Can produce crawlers</li>" + "<li>+25% mine production</li>" + "<li>+10% energy production</li>"
-				+ "<li>+100% speed for Transporters</li>" + "<li>+25% cargo bay for Transporters</li>" + "<li>+2 offers</li>"
-				+ "<li>Lower Market Fees</li>" + "<li>+50% Crawler bonus</li>" + "</ul>";
+			+ "<li>+100% speed for Transporters</li>" + "<li>+25% cargo bay for Transporters</li>" + "<li>+2 offers</li>"
+			+ "<li>Lower Market Fees</li>" + "<li>+50% Crawler bonus</li>" + "</ul>";
 		case General:
 			return "<ul>" + "<li>Can produce reapers</li>" + "<li>+100% speed for combat ships</li>" + "<li>+100% speed for Recyclers</li>"
-				+ "<li>-25% deuterium consumption for all ships</li>" + "<li>-25% deuterium consumption for Recyclers</li>"
-				+ "<li>A small chance to immediately destroy a Deathstar once in a battle using a light fighter.</li>"
-				+ "<li>Wreckage at attack (transport to starting planet)</li>" + "<li>+2 combat research levels</li>"
-				+ "<li>+2 fleet slots</li></li>" + "</ul>";
+			+ "<li>-25% deuterium consumption for all ships</li>" + "<li>-25% deuterium consumption for Recyclers</li>"
+			+ "<li>A small chance to immediately destroy a Deathstar once in a battle using a light fighter.</li>"
+			+ "<li>Wreckage at attack (transport to starting planet)</li>" + "<li>+2 combat research levels</li>"
+			+ "<li>+2 fleet slots</li></li>" + "</ul>";
 		case Discoverer:
 			return "<ul>" + "<li>Can produce pathfinders</li>" + "<li>-25% research time</li>"
-				+ "<li>+2% gain on successful expeditions</li>" + "<li>+10% larger planets on colonisation</li>"
-				+ "<li>Debris fields created on expeditions will be visible in the Galaxy view.</li>" + "<li>+2 expeditions</li>"
-				+ "<li>+20% phalanx range</li>" + "<li>75% loot from inactive players</li>" + "</ul>";
+			+ "<li>+2% gain on successful expeditions</li>" + "<li>+10% larger planets on colonisation</li>"
+			+ "<li>Debris fields created on expeditions will be visible in the Galaxy view.</li>" + "<li>+2 expeditions</li>"
+			+ "<li>+20% phalanx range</li>" + "<li>75% loot from inactive players</li>" + "</ul>";
 		}
 		return null;
 	}
@@ -435,12 +430,12 @@ public class OGameUniGui extends JPanel {
 		return new PlanetWithProduction(planet, metal, crystal, deuterium, energy);
 	}
 
-	PlanetWithProduction createPlanet() {
-		Planet newPlanet = theSelectedAccount.get().getPlanets().create()//
+	PlanetWithProduction createPlanet(ObservableCollection<PlanetWithProduction> planets) {
+		CollectionElement<Planet> newPlanet = theSelectedAccount.get().getPlanets().create()//
 			.with(Planet::getName, StringUtils.getNewItemName(theSelectedAccount.get().getPlanets().getValues(), Planet::getName,
 				"New Planet", StringUtils.SIMPLE_DUPLICATES))
-			.create().get();
-		return productionFor(newPlanet);
+			.create();
+		return planets.getElementsBySource(newPlanet.getElementId()).getFirst().get();
 	}
 
 	static class PlanetWithProduction {
@@ -484,7 +479,7 @@ public class OGameUniGui extends JPanel {
 		List<OGameRuleSet> ruleSets = new ArrayList<>();
 		ruleSets.add(new OGameRuleSet710());
 		OGameUniGui ui = new OGameUniGui(config, ruleSets,
-			config.asValue(TypeTokens.get().of(Account.class)).at("accounts").buildEntitySet());
+			config.asValue(TypeTokens.get().of(Account.class)).at("accounts/account").buildEntitySet());
 		JFrame frame = new JFrame("OneSAF Runner");
 		frame.setContentPane(ui);
 		frame.setVisible(true);
