@@ -26,6 +26,10 @@ public class UpgradeCost {
 		return new UpgradeCost(metal * mult, crystal * mult, deuterium * mult, energy, upgradeTime.multipliedBy(mult));
 	}
 
+	public long getTotal() {
+		return metal + crystal + deuterium;
+	}
+
 	public long getMetalValue(TradeRatios tradeRate) {
 		long value = metal;
 		value += Math.round(crystal * tradeRate.getMetal() / tradeRate.getCrystal());

@@ -20,6 +20,7 @@ import org.observe.SettableValue;
 import org.observe.collect.CollectionChangeType;
 import org.observe.collect.ObservableCollection;
 import org.observe.config.ObservableConfig;
+import org.observe.config.ObservableConfigFormat;
 import org.observe.config.ObservableValueSet;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.CategoryRenderStrategy;
@@ -37,11 +38,11 @@ import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.AccountUpgrade;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
-import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
 import org.quark.ogame.uni.OGameRuleSet;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.Research;
 import org.quark.ogame.uni.ResourceType;
+import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.versions.OGameRuleSet710;
 import org.xml.sax.SAXException;
@@ -102,23 +103,6 @@ public class OGameUniGui extends JPanel {
 	}
 
 	void initComponents() {
-		ObservableCollection<Research> researchColl = ObservableCollection.flattenValue(
-			theSelectedAccount.<ObservableCollection<Research>> map(account -> ObservableCollection.of(TypeTokens.get().of(Research.class),
-				account == null ? Collections.emptyList() : Arrays.asList(account.getResearch()))));
-		ObservableCollection<PlanetWithProduction> selectedPlanets = ObservableCollection
-			.flattenValue(theSelectedAccount.map(
-				account -> account == null ? ObservableCollection.of(TypeTokens.get().of(Planet.class)) : account.getPlanets().getValues()))
-			.flow().refresh(researchColl.simpleChanges())//
-			.map(TypeTokens.get().of(PlanetWithProduction.class), this::productionFor, opts -> opts.cache(true).reEvalOnUpdate(false))
-			.collect();
-		selectedPlanets.changes().act(evt -> {
-			if (evt.type == CollectionChangeType.set) {
-				for (PlanetWithProduction p : evt.getValues()) {
-					updateProduction(p);
-				}
-			}
-		});
-
 		ObservableCollection<Account> referenceAccounts = ObservableCollection.flattenCollections(TypeTokens.get().of(Account.class), //
 			ObservableCollection.of(TypeTokens.get().of(Account.class), (Account) null), //
 			theAccounts.getValues().flow().refresh(theSelectedAccount.noInitChanges())
@@ -128,19 +112,24 @@ public class OGameUniGui extends JPanel {
 		TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>> planetColumnType = new TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>>() {};
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> basicPlanetColumns = ObservableCollection
 			.create(planetColumnType);
-		SettableValue<Boolean> showTemps = SettableValue.build(boolean.class).safe(false).withValue(true).build();
-		SettableValue<Boolean> showMines = SettableValue.build(boolean.class).safe(false).withValue(true).build();
-		SettableValue<Boolean> showResourceBldgs = SettableValue.build(boolean.class).safe(false).withValue(true).build();
-		SettableValue<Boolean> showStorage = SettableValue.build(boolean.class).safe(false).withValue(false).build();
-		SettableValue<Boolean> showMainFacilities = SettableValue.build(boolean.class).safe(false).withValue(false).build();
-		SettableValue<Boolean> showOtherFacilities = SettableValue.build(boolean.class).safe(false).withValue(false).build();
-		SettableValue<Boolean> showMoonBuildings = SettableValue.build(boolean.class).safe(false).withValue(false).build();
+		SettableValue<Boolean> showTemps = theConfig.asValue(boolean.class).at("planet-categories/temps")
+			.withFormat(Format.BOOLEAN, () -> true).buildValue();
+		SettableValue<Boolean> showMines = theConfig.asValue(boolean.class).at("planet-categories/mines")
+			.withFormat(Format.BOOLEAN, () -> true).buildValue();
+		SettableValue<Boolean> showResourceBldgs = theConfig.asValue(boolean.class).at("planet-categories/resources")
+			.withFormat(Format.BOOLEAN, () -> false).buildValue();
+		SettableValue<Boolean> showStorage = theConfig.asValue(boolean.class).at("planet-categories/storage")
+			.withFormat(Format.BOOLEAN, () -> false).buildValue();
+		SettableValue<Boolean> showMainFacilities = theConfig.asValue(boolean.class).at("planet-categories/main-facilities")
+			.withFormat(Format.BOOLEAN, () -> false).buildValue();
+		SettableValue<Boolean> showOtherFacilities = theConfig.asValue(boolean.class).at("planet-categories/other-facilities")
+			.withFormat(Format.BOOLEAN, () -> false).buildValue();
+		SettableValue<Boolean> showMoonBuildings = theConfig.asValue(boolean.class).at("planet-categories/moon-buildings")
+			.withFormat(Format.BOOLEAN, () -> false).buildValue();
 
-		SettableValue<Boolean> showBasicEnergy = SettableValue.build(boolean.class).safe(false).withValue(false).build();
-		SettableValue<Boolean> showAdvancedEnergy = SettableValue.build(boolean.class).safe(false).withValue(false).build();
-
-		SettableValue<ProductionDisplayType> productionType = SettableValue.build(ProductionDisplayType.class).safe(false)
-			.withValue(ProductionDisplayType.Hourly).build();
+		SettableValue<ProductionDisplayType> productionType = theConfig.asValue(ProductionDisplayType.class)
+			.at("planet-categories/production")
+			.withFormat(ObservableConfigFormat.enumFormat(ProductionDisplayType.class, () -> ProductionDisplayType.Hourly)).buildValue();
 
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> tempColumns = ObservableCollection.of(planetColumnType,
 			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Min T", TypeTokens.get().INT, p -> p.planet.getMinimumTemperature())
@@ -224,43 +213,56 @@ public class OGameUniGui extends JPanel {
 					return level;
 				}).filterAccept((p, level) -> level >= 0 ? null : "No negative buildings").asText(SpinnerFormat.INT).clicks(1)) //
 		);
-		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> productionColumns = ObservableCollection
-			.of(planetColumnType,
-				new CategoryRenderStrategy<PlanetWithProduction, String>("M Production", TypeTokens.get().STRING,
-					planet -> printProduction(planet.metal.totalNet, productionType.get())).withWidths(80, 80, 80), //
-				new CategoryRenderStrategy<PlanetWithProduction, String>("C Production", TypeTokens.get().STRING,
-					planet -> printProduction(planet.crystal.totalNet, productionType.get())).withWidths(80, 80, 80), //
-				new CategoryRenderStrategy<PlanetWithProduction, String>("D Production", TypeTokens.get().STRING,
-					planet -> printProduction(planet.deuterium.totalNet, productionType.get())).withWidths(80, 80, 80))
-			.flow().refresh(productionType.noInitChanges()).collect();
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> productionColumns = ObservableCollection.of(planetColumnType,
+			new CategoryRenderStrategy<PlanetWithProduction, String>("M Production", TypeTokens.get().STRING,
+				planet -> printProduction(planet.metal.totalNet, productionType.get())).withWidths(80, 80, 80), //
+			new CategoryRenderStrategy<PlanetWithProduction, String>("C Production", TypeTokens.get().STRING,
+				planet -> printProduction(planet.crystal.totalNet, productionType.get())).withWidths(80, 80, 80), //
+			new CategoryRenderStrategy<PlanetWithProduction, String>("D Production", TypeTokens.get().STRING,
+				planet -> printProduction(planet.deuterium.totalNet, productionType.get())).withWidths(80, 80, 80), //
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Cargoes", TypeTokens.get().INT,
+				planet -> getCargoes(planet, false, productionType.get())).withWidths(80, 80, 80), //
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("SS Cargoes", TypeTokens.get().INT,
+				planet -> getCargoes(planet, true, productionType.get())).withWidths(80, 80, 80)//
+		).flow().refresh(productionType.noInitChanges()).collect();
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mainFacilities = ObservableCollection.of(planetColumnType,
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Robotics", TypeTokens.get().INT, p -> p.planet.getRoboticsFactory())
+				.withWidths(55, 55, 55).withMutation(m -> m.mutateAttribute((p, r) -> p.planet.setRoboticsFactory(r))), //
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Shipyard", TypeTokens.get().INT, p -> p.planet.getShipyard())
+				.withWidths(55, 55, 55).withMutation(m -> m.mutateAttribute((p, r) -> p.planet.setShipyard(r))), //
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Lab", TypeTokens.get().INT, p -> p.planet.getResearchLab())
+				.withWidths(35, 35, 35).withMutation(m -> m.mutateAttribute((p, r) -> p.planet.setResearchLab(r))), //
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Nanite", TypeTokens.get().INT, p -> p.planet.getNaniteFactory())
+				.withWidths(55, 55, 55).withMutation(m -> m.mutateAttribute((p, r) -> p.planet.setNaniteFactory(r))) //
+		);
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> otherFacilities = ObservableCollection.of(planetColumnType,
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Ally Depot", TypeTokens.get().INT, p -> p.planet.getAllianceDepot())
+				.withWidths(55, 55, 55).withMutation(m -> m.mutateAttribute((p, r) -> p.planet.setAllianceDepot(r))), //
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Silo", TypeTokens.get().INT, p -> p.planet.getMissileSilo())
+				.withWidths(35, 35, 35).withMutation(m -> m.mutateAttribute((p, r) -> p.planet.setMissileSilo(r))), //
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Terraformer", TypeTokens.get().INT, p -> p.planet.getTerraformer())
+				.withWidths(55, 55, 55).withMutation(m -> m.mutateAttribute((p, r) -> p.planet.setTerraformer(r))), //
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Space Dock", TypeTokens.get().INT, p -> p.planet.getSpaceDock())
+				.withWidths(55, 55, 55).withMutation(m -> m.mutateAttribute((p, r) -> p.planet.setSpaceDock(r)))//
+		);
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonBuildings = ObservableCollection.of(planetColumnType,
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Lunar Base", TypeTokens.get().INT,
+				p -> p.planet.getMoon().getLunarBase()).withWidths(55, 55, 55)
+					.withMutation(m -> m.mutateAttribute((p, r) -> p.planet.getMoon().setLunarBase(r))), //
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Phalanx", TypeTokens.get().INT,
+				p -> p.planet.getMoon().getSensorPhalanx()).withWidths(55, 55, 55)
+					.withMutation(m -> m.mutateAttribute((p, r) -> p.planet.getMoon().setSensorPhalanx(r))), //
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Jump Gate", TypeTokens.get().INT,
+				p -> p.planet.getMoon().getJumpGate()).withWidths(55, 55, 55)
+					.withMutation(m -> m.mutateAttribute((p, r) -> p.planet.getMoon().setJumpGate(r))), //
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Shipyard", TypeTokens.get().INT,
+				p -> p.planet.getMoon().getShipyard()).withWidths(55, 55, 55)
+					.withMutation(m -> m.mutateAttribute((p, r) -> p.planet.getMoon().setShipyard(r))), //
+			new CategoryRenderStrategy<PlanetWithProduction, Integer>("Robotics", TypeTokens.get().INT,
+				p -> p.planet.getMoon().getRoboticsFactory()).withWidths(55, 55, 55)
+					.withMutation(m -> m.mutateAttribute((p, r) -> p.planet.getMoon().setRoboticsFactory(r))) //
+		);
 
-		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> advancedEColumns = ObservableCollection.of(planetColumnType,
-			new CategoryRenderStrategy<PlanetWithProduction, String>("M Energy", TypeTokens.get().STRING,
-				p -> printProduction(p.energy.byType.getOrDefault(ProductionSource.MetalMine, 0), productionType.get())).withWidths(65, 65,
-					65), //
-			new CategoryRenderStrategy<PlanetWithProduction, String>("C Energy", TypeTokens.get().STRING,
-				p -> printProduction(p.energy.byType.getOrDefault(ProductionSource.CrystalMine, 0), productionType.get())).withWidths(65,
-					65, 65), //
-			new CategoryRenderStrategy<PlanetWithProduction, String>("D Energy", TypeTokens.get().STRING,
-				p -> printProduction(p.energy.byType.getOrDefault(ProductionSource.DeuteriumSynthesizer, 0), productionType.get()))
-					.withWidths(65, 65, 65), //
-			new CategoryRenderStrategy<PlanetWithProduction, String>("S Energy", TypeTokens.get().STRING,
-				p -> printProduction(p.energy.byType.getOrDefault(ProductionSource.Solar, 0), productionType.get())).withWidths(65, 65, 65), //
-			new CategoryRenderStrategy<PlanetWithProduction, String>("F Energy", TypeTokens.get().STRING,
-				p -> printProduction(p.energy.byType.getOrDefault(ProductionSource.Fusion, 0), productionType.get())).withWidths(65, 65,
-					65), //
-			new CategoryRenderStrategy<PlanetWithProduction, String>("Sat Energy", TypeTokens.get().STRING,
-				p -> printProduction(p.energy.byType.getOrDefault(ProductionSource.Satellite, 0), productionType.get())).withWidths(65, 65,
-					65) //
-		);
-		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> basicEColumns = ObservableCollection.of(planetColumnType,
-			new CategoryRenderStrategy<PlanetWithProduction, String>("+E", TypeTokens.get().STRING,
-				p -> printProduction(p.energy.totalProduction, productionType.get())).withWidths(60, 60, 60), //
-			new CategoryRenderStrategy<PlanetWithProduction, String>("-E", TypeTokens.get().STRING,
-				p -> printProduction(p.energy.totalConsumption, productionType.get())).withWidths(60, 60, 60), //
-			new CategoryRenderStrategy<PlanetWithProduction, String>("Total E", TypeTokens.get().STRING,
-				p -> printProduction(p.energy.totalNet, productionType.get())).withWidths(60, 60, 60) //
-		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> emptyColumns = ObservableCollection.of(planetColumnType);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> planetColumns = ObservableCollection
 			.flattenCollections(planetColumnType, //
@@ -269,10 +271,28 @@ public class OGameUniGui extends JPanel {
 				ObservableCollection.flattenValue(showMines.map(show -> show ? mineColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(showResourceBldgs.map(show -> show ? resourceBldgs : emptyColumns)), //
 				ObservableCollection.flattenValue(showStorage.map(show -> show ? storageColumns : emptyColumns)), //
-				ObservableCollection.flattenValue(showAdvancedEnergy.map(show -> show ? advancedEColumns : emptyColumns)), //
-				ObservableCollection.flattenValue(showBasicEnergy.map(show -> show ? basicEColumns : emptyColumns)), //
-				ObservableCollection.flattenValue(productionType.map(type -> type.type == null ? emptyColumns : productionColumns))//
+				ObservableCollection.flattenValue(productionType.map(type -> type.type == null ? emptyColumns : productionColumns)), //
+				ObservableCollection.flattenValue(showMainFacilities.map(show -> show ? mainFacilities : emptyColumns)), //
+				ObservableCollection.flattenValue(showOtherFacilities.map(show -> show ? otherFacilities : emptyColumns)), //
+				ObservableCollection.flattenValue(showMoonBuildings.map(show -> show ? moonBuildings : emptyColumns))//
 			).collect();
+
+		ObservableCollection<Research> researchColl = ObservableCollection.flattenValue(
+			theSelectedAccount.<ObservableCollection<Research>> map(account -> ObservableCollection.of(TypeTokens.get().of(Research.class),
+				account == null ? Collections.emptyList() : Arrays.asList(account.getResearch()))));
+		ObservableCollection<PlanetWithProduction> selectedPlanets = ObservableCollection
+			.flattenValue(theSelectedAccount.map(
+				account -> account == null ? ObservableCollection.of(TypeTokens.get().of(Planet.class)) : account.getPlanets().getValues()))
+			.flow().refresh(Observable.or(researchColl.simpleChanges(), productionType.noInitChanges()))//
+			.map(TypeTokens.get().of(PlanetWithProduction.class), this::productionFor, opts -> opts.cache(true).reEvalOnUpdate(false))
+			.collect();
+		selectedPlanets.changes().act(evt -> {
+			if (evt.type == CollectionChangeType.set) {
+				for (PlanetWithProduction p : evt.getValues()) {
+					updateProduction(p);
+				}
+			}
+		});
 		PanelPopulation.populateVPanel(this, Observable.empty())//
 			.addSplit(true,
 				mainSplit -> mainSplit.withSplitLocation(250).fill().fillV()//
@@ -341,8 +361,6 @@ public class OGameUniGui extends JPanel {
 								.addCheckField("Mines:", showMines, null).spacer(3)//
 								.addCheckField("Resource Buildings:", showResourceBldgs, null).spacer(3)//
 								.addCheckField("Storage:", showStorage, null).spacer(3)//
-								.addCheckField("Basic Energy:", showBasicEnergy, null).spacer(3)//
-								.addCheckField("Advanced Energy:", showAdvancedEnergy, null).spacer(3)//
 								.addComboField("Production", productionType, null, ProductionDisplayType.values())//
 						)//
 						.addTable(selectedPlanets, planetTable -> planetTable//
@@ -534,6 +552,33 @@ public class OGameUniGui extends JPanel {
 			str.append(TWO_DIGIT_FORMAT.format(production / 1E12)).append('T');
 		}
 		return str.toString();
+	}
+
+	int getCargoes(PlanetWithProduction planet, boolean subtractCargoCost, ProductionDisplayType time) {
+		double production = planet.metal.totalNet * 1.0 + planet.crystal.totalNet + planet.deuterium.totalNet;
+		switch (time.type) {
+		case Year:
+			production *= TimeUtils.getDaysInYears(1) * 24;
+			break;
+		case Month:
+			production *= TimeUtils.getDaysInMonths(1) * 24;
+			break;
+		case Week:
+			production *= 7 * 24;
+			break;
+		case Day:
+			production *= 24;
+			break;
+		default:
+			break;
+		}
+		long capacity = theSelectedRuleSet.get().fleet().getCargoSpace(//
+			ShipyardItemType.LargeCargo, theSelectedAccount.get());
+		if (subtractCargoCost) {
+			capacity += theSelectedRuleSet.get().economy()
+				.getUpgradeCost(theSelectedAccount.get(), planet.planet, AccountUpgrade.LargeCargo, 0, 1).getTotal();
+		}
+		return (int) Math.ceil(production / capacity);
 	}
 
 	PlanetWithProduction productionFor(Planet planet) {
