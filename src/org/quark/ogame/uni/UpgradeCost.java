@@ -19,7 +19,7 @@ public class UpgradeCost {
 
 	public UpgradeCost plus(UpgradeCost other) {
 		return new UpgradeCost(metal + other.metal, crystal + other.crystal, deuterium + other.deuterium, Math.max(energy, other.energy),
-			upgradeTime.plus(other.upgradeTime));
+			add(upgradeTime, other.upgradeTime));
 	}
 
 	public UpgradeCost times(int mult) {
@@ -31,5 +31,16 @@ public class UpgradeCost {
 		value += Math.round(crystal * tradeRate.getMetal() / tradeRate.getCrystal());
 		value += Math.round(deuterium * tradeRate.getMetal() / tradeRate.getDeuterium());
 		return value;
+	}
+
+	private Duration add(Duration d1, Duration d2) {
+		if (d1 == null || d2 == null) {
+			return null;
+		}
+		try {
+			return d1.plus(d2);
+		} catch (ArithmeticException e) {
+			return null;
+		}
 	}
 }
