@@ -9,8 +9,11 @@ public interface Universe extends Nameable {
 	int getResearchSpeed();
 	void setResearchSpeed(int researchSpeed);
 
-	int getCollectorBonus();
-	void setCollectorBonus(int collectorBonus);
+	int getCollectorProductionBonus();
+	void setCollectorProductionBonus(int collectorBonus);
+
+	int getCollectorEnergyBonus();
+	void setCollectorEnergyBonus(int collectorEnergyBonus);
 
 	double getHyperspaceCargoBonus();
 	void setHyperspaceCargoBonus(double cargoBonus);

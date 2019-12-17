@@ -30,8 +30,36 @@ public interface Moon extends RockyBody {
 	}
 
 	@Override
+	default void setBuildingLevel(BuildingType type, int buildingLevel) {
+		switch (type) {
+		case RoboticsFactory:
+			setRoboticsFactory(buildingLevel);
+		case Shipyard:
+			setShipyard(buildingLevel);
+		case LunarBase:
+			setLunarBase(buildingLevel);
+		case SensorPhalanx:
+			setSensorPhalanx(buildingLevel);
+		case JumpGate:
+			setJumpGate(buildingLevel);
+		default:
+			if (buildingLevel != 0) {
+				throw new IllegalArgumentException();
+			}
+		}
+	}
+
+	int getFieldBonus();
+
+	void setFieldBonus(int fieldBonus);
+
+	@Override
 	default int getStationedShips(ShipyardItemType type) {
 		return 0;
+	}
+
+	@Override
+	default void setStationedShips(ShipyardItemType type, int count) {
 	}
 
 	@Override

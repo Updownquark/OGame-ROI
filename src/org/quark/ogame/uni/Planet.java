@@ -100,6 +100,66 @@ public interface Planet extends RockyBody {
 		throw new IllegalStateException("Unrecognized building type " + type);
 	}
 
+	@Override
+	default void setBuildingLevel(BuildingType type, int buildingLevel) {
+		switch (type) {
+		case MetalMine:
+			setMetalMine(buildingLevel);
+			break;
+		case CrystalMine:
+			setCrystalMine(buildingLevel);
+			break;
+		case DeuteriumSynthesizer:
+			setDeuteriumSynthesizer(buildingLevel);
+			break;
+		case SolarPlant:
+			setSolarPlant(buildingLevel);
+			break;
+		case FusionReactor:
+			setFusionReactor(buildingLevel);
+			break;
+		case MetalStorage:
+			setMetalStorage(buildingLevel);
+			break;
+		case CrystalStorage:
+			setCrystalStorage(buildingLevel);
+			break;
+		case DeuteriumStorage:
+			setDeuteriumStorage(buildingLevel);
+			break;
+		case RoboticsFactory:
+			setRoboticsFactory(buildingLevel);
+			break;
+		case Shipyard:
+			setShipyard(buildingLevel);
+			break;
+		case ResearchLab:
+			setResearchLab(buildingLevel);
+			break;
+		case AllianceDepot:
+			setAllianceDepot(buildingLevel);
+			break;
+		case MissileSilo:
+			setMetalStorage(buildingLevel);
+			break;
+		case NaniteFactory:
+			setNaniteFactory(buildingLevel);
+			break;
+		case Terraformer:
+			setTerraformer(buildingLevel);
+			break;
+		case SpaceDock:
+			setSpaceDock(buildingLevel);
+			break;
+		case LunarBase:
+		case SensorPhalanx:
+		case JumpGate:
+			if (buildingLevel != 0) {
+				throw new IllegalArgumentException();
+			}
+		}
+	}
+
 	// Stationary Ships
 	int getSolarSatellites();
 	void setSolarSatellites(int satellites);
@@ -118,6 +178,20 @@ public interface Planet extends RockyBody {
 			return getCrawlers();
 		default:
 			return 0;
+		}
+	}
+
+	@Override
+	default void setStationedShips(ShipyardItemType type, int count) {
+		switch (type) {
+		case SolarSatellite:
+			setSolarSatellites(count);
+			break;
+		case Crawler:
+			setCrawlers(count);
+			break;
+		default:
+			break;
 		}
 	}
 

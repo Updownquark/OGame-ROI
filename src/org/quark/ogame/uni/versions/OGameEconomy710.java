@@ -241,8 +241,8 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		COST_DESCRIPS = Collections.unmodifiableMap(costs);
 
 		NavigableMap<Integer, Double> deutMultipliers = new TreeMap<>();
-		deutMultipliers.put(-136, 1.8);
-		deutMultipliers.put(-106, 1.7);
+		deutMultipliers.put(-136, 1.9);
+		deutMultipliers.put(-110, 1.8);
 		deutMultipliers.put(-76, 1.6);
 		deutMultipliers.put(-46, 1.5);
 		deutMultipliers.put(-16, 1.4);
@@ -404,7 +404,9 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 
 			// Class bonus
 			if (account.getGameClass() == AccountClass.Collector) {
-				typeAmount = (int) Math.round(mineProduction * 1.0 * account.getUniverse().getCollectorBonus() / 100.0);
+				int collectorBonus = resourceType == ResourceType.Energy ? account.getUniverse().getCollectorEnergyBonus()
+					: account.getUniverse().getCollectorProductionBonus();
+				typeAmount = (int) Math.round(mineProduction * 1.0 * collectorBonus / 100.0);
 			} else {
 				typeAmount = 0;
 			}
@@ -557,7 +559,6 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		int fields = planet.getBaseFields();
 		int terraformer = planet.getTerraformer();
 		fields += getTerraformerFields(terraformer);
-		fields += planet.getFieldBonus();
 		return fields;
 	}
 
