@@ -1,6 +1,12 @@
 package org.quark.ogame.uni.ui;
 
-import java.io.*;
+import java.awt.Color;
+import java.awt.Component;
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.text.DecimalFormat;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -10,10 +16,12 @@ import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.IntFunction;
 
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.border.LineBorder;
 
 import org.observe.Observable;
 import org.observe.SettableValue;
@@ -25,6 +33,8 @@ import org.observe.config.ObservableValueSet;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.CategoryRenderStrategy;
 import org.observe.util.swing.JustifiedBoxLayout;
+import org.observe.util.swing.ModelCell;
+import org.observe.util.swing.ObservableCellRenderer;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.PanelPopulation;
 import org.qommons.StringUtils;
@@ -34,9 +44,19 @@ import org.qommons.Transaction;
 import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
-import org.quark.ogame.uni.*;
+import org.quark.ogame.uni.Account;
+import org.quark.ogame.uni.AccountClass;
+import org.quark.ogame.uni.AccountUpgrade;
+import org.quark.ogame.uni.BuildingType;
+import org.quark.ogame.uni.Moon;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
+import org.quark.ogame.uni.OGameRuleSet;
+import org.quark.ogame.uni.Planet;
+import org.quark.ogame.uni.Research;
+import org.quark.ogame.uni.ResourceType;
+import org.quark.ogame.uni.ShipyardItemType;
+import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.versions.OGameRuleSet710;
 import org.xml.sax.SAXException;
 
@@ -138,6 +158,15 @@ public class OGameUniGui extends JPanel {
 	}
 
 	void initComponents() {
+		/* TODO
+		 * ROI sequence
+		 * Costs
+		 * Production value in account table
+		 * Total Upgrade Cost
+		 * Trading
+		 * Spitballing (general upgrade costs without reference to an account)
+		 * Hyperspace tech guide
+		 */
 		ObservableCollection<Account> referenceAccounts = ObservableCollection.flattenCollections(TypeTokens.get().of(Account.class), //
 			ObservableCollection.of(TypeTokens.get().of(Account.class), (Account) null), //
 			theAccounts.getValues().flow().refresh(theSelectedAccount.noInitChanges())
@@ -188,12 +217,16 @@ public class OGameUniGui extends JPanel {
 				}
 				return null;
 			})), //
-			intPlanetColumn("Used Fields", Planet::getUsedFields, null, 80)//
+			intPlanetColumn("Free Fields", planet -> {
+				return theSelectedRuleSet.get().economy().getFields(planet) - planet.getUsedFields();
+			}, null, 80)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonFieldColumns = ObservableCollection.of(planetColumnType,
 			intMoonColumn("Moon Fields", moon -> theSelectedRuleSet.get().economy().getFields(moon), null, 80), //
 			intMoonColumn("Bonus Fields", Moon::getFieldBonus, Moon::setFieldBonus, 80), //
-			intMoonColumn("Used Fields", Moon::getUsedFields, null, 80)//
+			intMoonColumn("Free Fields", moon -> {
+				return theSelectedRuleSet.get().economy().getFields(moon) - moon.getUsedFields();
+			}, null, 80)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> tempColumns = ObservableCollection.of(planetColumnType,
 			intPlanetColumn("Min T", Planet::getMinimumTemperature, (planet, t) -> {
@@ -206,19 +239,19 @@ public class OGameUniGui extends JPanel {
 			}, 40)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mineColumns = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("M Mine", Planet::getMetalMine, Planet::setMetalMine, 45), //
-			intPlanetColumn("C Mine", Planet::getCrystalMine, Planet::setCrystalMine, 45), //
+			intPlanetColumn("M Mine", Planet::getMetalMine, Planet::setMetalMine, 55), //
+			intPlanetColumn("C Mine", Planet::getCrystalMine, Planet::setCrystalMine, 55), //
 			intPlanetColumn("D Synth", Planet::getDeuteriumSynthesizer, Planet::setDeuteriumSynthesizer, 50), //
 			intPlanetColumn("Crawlers", Planet::getCrawlers, Planet::setCrawlers, 60) //
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> energyBldgs = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("Sats", Planet::getSolarSatellites, Planet::setSolarSatellites, 35), //
-			intPlanetColumn("Solar", Planet::getSolarPlant, Planet::setSolarPlant, 45), //
-			intPlanetColumn("Fusion", Planet::getFusionReactor, Planet::setFusionReactor, 45));
+			intPlanetColumn("Sats", Planet::getSolarSatellites, Planet::setSolarSatellites, 75), //
+			intPlanetColumn("Solar", Planet::getSolarPlant, Planet::setSolarPlant, 55), //
+			intPlanetColumn("Fusion", Planet::getFusionReactor, Planet::setFusionReactor, 55));
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> storageColumns = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("M Stor", Planet::getMetalStorage, Planet::setMetalStorage, 45), //
-			intPlanetColumn("C Stor", Planet::getCrystalStorage, Planet::setCrystalStorage, 45), //
-			intPlanetColumn("D Stor", Planet::getDeuteriumStorage, Planet::setDeuteriumStorage, 45)//
+			intPlanetColumn("M Stor", Planet::getMetalStorage, Planet::setMetalStorage, 55), //
+			intPlanetColumn("C Stor", Planet::getCrystalStorage, Planet::setCrystalStorage, 55), //
+			intPlanetColumn("D Stor", Planet::getDeuteriumStorage, Planet::setDeuteriumStorage, 55)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> productionColumns = ObservableCollection.of(planetColumnType,
 			planetColumn("M Prod", String.class, planet -> printProduction(planet.metal.totalNet, productionType.get()), null, 80), //
@@ -230,19 +263,19 @@ public class OGameUniGui extends JPanel {
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mainFacilities = ObservableCollection.of(planetColumnType,
 			intPlanetColumn("Robotics", Planet::getRoboticsFactory, Planet::setRoboticsFactory, 60), //
 			intPlanetColumn("Shipyard", Planet::getShipyard, Planet::setShipyard, 60), //
-			intPlanetColumn("Lab", Planet::getResearchLab, Planet::setResearchLab, 35), //
+			intPlanetColumn("Lab", Planet::getResearchLab, Planet::setResearchLab, 55), //
 			intPlanetColumn("Nanite", Planet::getNaniteFactory, Planet::setNaniteFactory, 55)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> otherFacilities = ObservableCollection.of(planetColumnType,
 			intPlanetColumn("Ally Depot", Planet::getAllianceDepot, Planet::setAllianceDepot, 65), //
-			intPlanetColumn("Silo", Planet::getMissileSilo, Planet::setMissileSilo, 35), //
+			intPlanetColumn("Silo", Planet::getMissileSilo, Planet::setMissileSilo, 45), //
 			intPlanetColumn("Terraformer", Planet::getTerraformer, Planet::setTerraformer, 65), //
 			intPlanetColumn("Space Dock", Planet::getSpaceDock, Planet::setSpaceDock, 65)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonBuildings = ObservableCollection.of(planetColumnType,
-			intMoonColumn("Lunar Base", Moon::getLunarBase, Moon::setLunarBase, 55), //
+			intMoonColumn("Lunar Base", Moon::getLunarBase, Moon::setLunarBase, 60), //
 			intMoonColumn("Phalanx", Moon::getSensorPhalanx, Moon::setSensorPhalanx, 55), //
-			intMoonColumn("Jump Gate", Moon::getJumpGate, Moon::setJumpGate, 55), //
+			intMoonColumn("Jump Gate", Moon::getJumpGate, Moon::setJumpGate, 60), //
 			intMoonColumn("Shipyard", Moon::getShipyard, Moon::setShipyard, 55), //
 			intMoonColumn("Robotics", Moon::getRoboticsFactory, Moon::setRoboticsFactory, 55)//
 			);
@@ -318,14 +351,8 @@ public class OGameUniGui extends JPanel {
 						copy.setId(getNewId());
 						copy.setName(StringUtils.getNewItemName(theAccounts.getValues(), Account::getName, account.getName(),
 							StringUtils.PAREN_DUPLICATES));
+									copy.setReferenceAccount(account.getId());
 						return copy;
-									// return copy(account,
-									// theAccounts.create()//
-									// .with("name",
-									// StringUtils.getNewItemName(theAccounts.getValues(), Account::getName, account.getName(),
-									// StringUtils.PAREN_DUPLICATES))//
-									// .with("id", getNewId())//
-									// .create().get());
 					}, null)//
 					)//
 				).lastV(selectedAccountPanel -> selectedAccountPanel.visibleWhen(theSelectedAccount.map(account -> account != null))//
@@ -472,7 +499,7 @@ public class OGameUniGui extends JPanel {
 								.addCheckField("Moon Buildings:", showMoonBuildings, null).spacer(3)//
 								)//
 							.addTable(selectedPlanets,
-								planetTable -> planetTable.fill()//
+											planetTable -> planetTable.fill().withItemName("planet")//
 								// This is a little hacky, but the next line tells the column the item name
 								.withColumns(basicPlanetColumns)
 								// function
@@ -490,7 +517,7 @@ public class OGameUniGui extends JPanel {
 								ObservableCollection.of(TypeTokens.get().of(ResourceRow.class), ResourceRow.values()).flow()
 								.refresh(selectedPlanet.noInitChanges()).collect(),
 								resTable -> resTable.fill().visibleWhen(selectedPlanet.map(p -> p != null))//
-								.withColumn("Type", ResourceRow.class, t -> t, typeCol -> typeCol.withWidths(90, 90, 90))//
+												.withColumn("Type", ResourceRow.class, t -> t, typeCol -> typeCol.withWidths(100, 100, 100))//
 								.withColumn(
 									resourceColumn("", int.class, this::getPSValue, this::setPSValue, selectedPlanet, 0, 35)
 									.formatText((row, v) -> renderResourceRow(row, v))//
@@ -546,6 +573,70 @@ public class OGameUniGui extends JPanel {
 			);
 	}
 
+	static class SimpleLineBorder extends LineBorder {
+		public SimpleLineBorder(Color color, int thickness) {
+			super(color, thickness);
+		}
+
+		void setColor(Color color) {
+			lineColor = color;
+		}
+	}
+
+	static <M> void decorateDiffColumn(CategoryRenderStrategy<M, Integer> column, IntFunction<Integer> reference) {
+		column.withRenderer(new ObservableCellRenderer.DefaultObservableCellRenderer<M, Integer>((m, c) -> String.valueOf(c)) {
+			@Override
+			public Component getCellRendererComponent(Component parent, ModelCell<M, Integer> cell, CellRenderContext ctx) {
+				Component c = super.getCellRendererComponent(parent, cell, ctx);
+				Integer value = cell.getCellValue();
+				if (value == null) {
+					return c;
+				}
+				Integer refValue = reference.apply(cell.getRowIndex());
+				if (refValue != null && !value.equals(refValue)) {
+					StringBuilder str = new StringBuilder().append(value);
+					str.append(" (");
+					if (value > refValue) {
+						str.append('+');
+					} else {
+						str.append('-');
+					}
+					str.append(Math.abs(value - refValue));
+					str.append(')');
+					((JLabel) c).setText(str.toString());
+				}
+				return c;
+			}
+		}).decorate((cell, decorator) -> {
+			Integer value = cell.getCellValue();
+			if (value == null) {
+				return;
+			}
+			Integer refValue = reference.apply(cell.getRowIndex());
+			if (refValue == null || value.equals(refValue)) {
+				return;
+			}
+			int diff = value - refValue;
+			Color fg;
+			if (diff < 0) {
+				if (cell.isSelected() || diff < -3) {
+					fg = Color.red;
+				} else {
+					int gb = 255 - (int) Math.round((4.0 + diff) * 255 / 4);
+					fg = new Color(gb, 0, 0);
+				}
+			} else {
+				if (cell.isSelected() || diff > 3) {
+					fg = Color.green;
+				} else {
+					int rb = 255 - (int) Math.round((4.0 - diff) * 255 / 4);
+					fg = new Color(0, rb, 0);
+				}
+			}
+			decorator.withForeground(fg).bold();
+		});
+	}
+
 	static <T> CategoryRenderStrategy<Account, T> accountColumn(String name, Class<T> type, Function<Account, T> getter,
 		BiConsumer<Account, T> setter, int width) {
 		CategoryRenderStrategy<Account, T> column = new CategoryRenderStrategy<Account, T>(name, TypeTokens.get().of(type), getter);
@@ -577,10 +668,19 @@ public class OGameUniGui extends JPanel {
 		return column;
 	}
 
-	static CategoryRenderStrategy<PlanetWithProduction, Integer> intPlanetColumn(String name, Function<Planet, Integer> getter,
+	CategoryRenderStrategy<PlanetWithProduction, Integer> intPlanetColumn(String name, Function<Planet, Integer> getter,
 		BiConsumer<Planet, Integer> setter, int width) {
 		CategoryRenderStrategy<PlanetWithProduction, Integer> column = planetColumn(name, int.class, p -> getter.apply(p.planet), setter,
 			width);
+		decorateDiffColumn(column, planetIdx -> {
+			Account refAccount = theReferenceAccount.get();
+			if (refAccount == null) {
+				return null;
+			} else if (refAccount.getPlanets().getValues().size() <= planetIdx) {
+				return 0;
+			}
+			return getter.apply(refAccount.getPlanets().getValues().get(planetIdx));
+		});
 		if (setter != null) {
 			column.withMutation(
 				m -> m.asText(SpinnerFormat.INT).clicks(1).filterAccept((p, value) -> value >= 0 ? null : "Must not be negative"));
@@ -588,10 +688,19 @@ public class OGameUniGui extends JPanel {
 		return column;
 	}
 
-	static CategoryRenderStrategy<PlanetWithProduction, Integer> intMoonColumn(String name, Function<Moon, Integer> getter,
+	CategoryRenderStrategy<PlanetWithProduction, Integer> intMoonColumn(String name, Function<Moon, Integer> getter,
 		BiConsumer<Moon, Integer> setter, int width) {
 		CategoryRenderStrategy<PlanetWithProduction, Integer> column = planetColumn(name, int.class, p -> getter.apply(p.planet.getMoon()),
 			(p, v) -> setter.accept(p.getMoon(), v), width);
+		decorateDiffColumn(column, planetIdx -> {
+			Account refAccount = theReferenceAccount.get();
+			if (refAccount == null) {
+				return null;
+			} else if (refAccount.getPlanets().getValues().size() <= planetIdx) {
+				return 0;
+			}
+			return getter.apply(refAccount.getPlanets().getValues().get(planetIdx).getMoon());
+		});
 		if (setter != null) {
 			column.withMutation(
 				m -> m.asText(SpinnerFormat.INT).clicks(1).filterAccept((p, value) -> value >= 0 ? null : "Must not be negative"));
@@ -637,6 +746,13 @@ public class OGameUniGui extends JPanel {
 	CategoryRenderStrategy<Research, Integer> intResearchColumn(String name, Function<Research, Integer> getter,
 		BiConsumer<Research, Integer> setter, int width) {
 		CategoryRenderStrategy<Research, Integer> column = researchColumn(name, int.class, getter, setter, width);
+		decorateDiffColumn(column, __ -> {
+			Account refAccount = theReferenceAccount.get();
+			if (refAccount == null) {
+				return null;
+			}
+			return getter.apply(refAccount.getResearch());
+		});
 		if (setter != null) {
 			column.withMutation(
 				m -> m.asText(SpinnerFormat.INT).clicks(1).filterAccept((p, value) -> value >= 0 ? null : "Must not be negative"));
@@ -864,14 +980,13 @@ public class OGameUniGui extends JPanel {
 		case Satellite:
 		case Crawler:
 		case Plasma:
-			return String.valueOf(value);
 		case Items:
-			return value + " active";
+			return String.valueOf(value);
 		case Geologist:
 		case Engineer:
 		case CommandingStaff:
 		case Collector:
-			return value == 0 ? "N/A" : "Active";
+			return value == 0 ? "" : "Active";
 		case Storage:
 			return "";
 		case Divider:
@@ -1093,6 +1208,7 @@ public class OGameUniGui extends JPanel {
 	}
 
 	static Account initAccount(Account account) {
+		account.getUniverse().setName("");
 		account.getUniverse().setCollectorProductionBonus(25);
 		account.getUniverse().setCollectorEnergyBonus(10);
 		account.getUniverse().setCrawlerCap(8);
