@@ -40,6 +40,7 @@ import org.observe.util.swing.PanelPopulation;
 import org.qommons.StringUtils;
 import org.qommons.TimeUtils;
 import org.qommons.TimeUtils.DurationComponentType;
+import org.qommons.ValueHolder;
 import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
@@ -81,10 +82,8 @@ public class OGameUniGui extends JPanel {
 			}
 			return theRuleSets.get(theRuleSets.size() - 1);
 		}, OGameRuleSet::getName, null);
-		theSelectedAccount = config.asValue(Account.class)
-			.withFormat(ObservableConfigFormat.<Account> buildReferenceFormat(fv -> accounts.getValues()),
-				() -> accounts.getValues().peekFirst(), null)
-			.getValue();
+		theSelectedAccount = config.asValue(Account.class).withFormat(ObservableConfigFormat
+			.<Account> buildReferenceFormat(fv -> accounts.getValues(), () -> accounts.getValues().peekFirst()).build()).buildValue(null);
 		theReferenceAccount = theSelectedAccount.refresh(theAccounts.getValues().simpleChanges()).map(TypeTokens.get().of(Account.class),
 			Account::getReferenceAccount, Account::getReferenceAccount, null);
 
@@ -163,25 +162,26 @@ public class OGameUniGui extends JPanel {
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> basicPlanetColumns = ObservableCollection
 			.create(planetColumnType);
 		SettableValue<Boolean> showFields = theConfig.asValue(boolean.class).at("planet-categories/fields")
-			.withFormat(Format.BOOLEAN, () -> false).buildValue();
+			.withFormat(Format.BOOLEAN, () -> false).buildValue(null);
 		SettableValue<Boolean> showTemps = theConfig.asValue(boolean.class).at("planet-categories/temps")
-			.withFormat(Format.BOOLEAN, () -> true).buildValue();
+			.withFormat(Format.BOOLEAN, () -> true).buildValue(null);
 		SettableValue<Boolean> showMines = theConfig.asValue(boolean.class).at("planet-categories/mines")
-			.withFormat(Format.BOOLEAN, () -> true).buildValue();
+			.withFormat(Format.BOOLEAN, () -> true).buildValue(null);
 		SettableValue<Boolean> showEnergy = theConfig.asValue(boolean.class).at("planet-categories/energy")
-			.withFormat(Format.BOOLEAN, () -> false).buildValue();
+			.withFormat(Format.BOOLEAN, () -> false).buildValue(null);
 		SettableValue<Boolean> showStorage = theConfig.asValue(boolean.class).at("planet-categories/storage")
-			.withFormat(Format.BOOLEAN, () -> false).buildValue();
+			.withFormat(Format.BOOLEAN, () -> false).buildValue(null);
 		SettableValue<Boolean> showMainFacilities = theConfig.asValue(boolean.class).at("planet-categories/main-facilities")
-			.withFormat(Format.BOOLEAN, () -> false).buildValue();
+			.withFormat(Format.BOOLEAN, () -> false).buildValue(null);
 		SettableValue<Boolean> showOtherFacilities = theConfig.asValue(boolean.class).at("planet-categories/other-facilities")
-			.withFormat(Format.BOOLEAN, () -> false).buildValue();
+			.withFormat(Format.BOOLEAN, () -> false).buildValue(null);
 		SettableValue<Boolean> showMoonBuildings = theConfig.asValue(boolean.class).at("planet-categories/moon-buildings")
-			.withFormat(Format.BOOLEAN, () -> false).buildValue();
+			.withFormat(Format.BOOLEAN, () -> false).buildValue(null);
 
 		SettableValue<ProductionDisplayType> productionType = theConfig.asValue(ProductionDisplayType.class)
 			.at("planet-categories/production")
-			.withFormat(ObservableConfigFormat.enumFormat(ProductionDisplayType.class, () -> ProductionDisplayType.Hourly)).buildValue();
+			.withFormat(ObservableConfigFormat.enumFormat(ProductionDisplayType.class, () -> ProductionDisplayType.Hourly))
+			.buildValue(null);
 
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> fieldColumns = ObservableCollection.of(planetColumnType,
 			intPlanetColumn("Total Fields", p -> theSelectedRuleSet.get().economy().getFields(p), (p, f) -> {
@@ -1326,15 +1326,15 @@ public class OGameUniGui extends JPanel {
 		List<OGameRuleSet> ruleSets = new ArrayList<>();
 		ruleSets.add(new OGameRuleSet710());
 		ObservableSwingUtils.systemLandF();
-		ObservableValueSet<Account>[] accounts = new ObservableValueSet[1];
+		ValueHolder<ObservableValueSet<Account>> accounts = new ValueHolder<>();
 		ObservableConfigFormat<Account> accountRefFormat = ObservableConfigFormat
-			.<Account> buildReferenceFormat(fv -> accounts[0].getValues(), null)//
+			.<Account> buildReferenceFormat(fv -> accounts.get().getValues(), null)//
 			.withField("id", Account::getId, ObservableConfigFormat.INT).build();
-		accounts[0] = config.asValue(TypeTokens.get().of(Account.class))
+		config.asValue(TypeTokens.get().of(Account.class))
 			.asEntity(efb -> efb//
 				.withFieldFormat(Account::getReferenceAccount, accountRefFormat))//
-			.at("accounts/account").buildEntitySet();
-		OGameUniGui ui = new OGameUniGui(config, ruleSets, accounts[0]);
+			.at("accounts/account").buildEntitySet(accounts);
+		OGameUniGui ui = new OGameUniGui(config, ruleSets, accounts.get());
 		JFrame frame = new JFrame("OGame Account Helper");
 		// frame.setContentPane(ui);
 		frame.getContentPane().add(ui);

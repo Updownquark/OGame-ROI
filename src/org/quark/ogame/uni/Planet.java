@@ -1,6 +1,13 @@
 package org.quark.ogame.uni;
 
+import org.observe.util.ObjectMethodOverride;
+import org.observe.util.ObjectMethodOverride.ObjectMethod;
+
 public interface Planet extends RockyBody {
+	@Override
+	@ObjectMethodOverride(ObjectMethod.toString)
+	String getName();
+
 	// Planet properties
 	int getBaseFields();
 	void setBaseFields(int baseFields);

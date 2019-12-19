@@ -1,6 +1,13 @@
 package org.quark.ogame.uni;
 
+import org.observe.util.ObjectMethodOverride;
+import org.observe.util.ObjectMethodOverride.ObjectMethod;
+
 public interface Moon extends RockyBody {
+	@Override
+	@ObjectMethodOverride(ObjectMethod.toString)
+	String getName();
+
 	// Facilities
 	int getLunarBase();
 	void setLunarBase(int lunarBase);
