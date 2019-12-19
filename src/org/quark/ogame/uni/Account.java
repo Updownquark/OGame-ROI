@@ -9,8 +9,8 @@ public interface Account extends Nameable {
 
 	Universe getUniverse();
 
-	int getReferenceAccount();
-	void setReferenceAccount(int referenceAccount);
+	Account getReferenceAccount();
+	void setReferenceAccount(Account referenceAccount);
 
 	AccountClass getGameClass();
 	void setGameClass(AccountClass clazz);

@@ -97,10 +97,7 @@ public class OGameUniGui extends JPanel {
 			}
 		}, account -> account == null ? "" : "" + account.getId(), null);
 		theReferenceAccount = theSelectedAccount.refresh(theAccounts.getValues().simpleChanges()).map(TypeTokens.get().of(Account.class),
-			this::getReferenceAccount, (selectedAccount, referenceAccount) -> {
-				selectedAccount.setReferenceAccount(referenceAccount == null ? 0 : referenceAccount.getId());
-				return selectedAccount;
-			}, null);
+			Account::getReferenceAccount, Account::getReferenceAccount, null);
 
 		initComponents();
 	}
@@ -332,7 +329,7 @@ public class OGameUniGui extends JPanel {
 						}).asText(Format.TEXT)))//
 					.withColumn("Planets", Integer.class, account -> account.getPlanets().getValues().size(), //
 						planetColumn -> planetColumn.withWidths(50, 50, 50))//
-					.withColumn("Reference", Account.class, this::getReferenceAccount,
+								.withColumn("Reference", Account.class, Account::getReferenceAccount,
 						refColumn -> refColumn.withWidths(50, 100, 300)//
 						.formatText(account -> account == null ? "" : account.getName()))//
 					.withColumn("Eco Points", String.class, account -> OGameUniGui.this.printPoints(account), //
@@ -351,7 +348,7 @@ public class OGameUniGui extends JPanel {
 						copy.setId(getNewId());
 						copy.setName(StringUtils.getNewItemName(theAccounts.getValues(), Account::getName, account.getName(),
 							StringUtils.PAREN_DUPLICATES));
-									copy.setReferenceAccount(account.getId());
+									copy.setReferenceAccount(account);
 						return copy;
 					}, null)//
 					)//
@@ -366,10 +363,8 @@ public class OGameUniGui extends JPanel {
 									null),
 								SpinnerFormat.NUMERICAL_TEXT, f -> f.fill())//
 							.addComboField("Compare To:",
-								theSelectedAccount.asFieldEditor(TypeTokens.get().of(Account.class), this::getReferenceAccount,
-									(selectedAccount, refAccount) -> selectedAccount
-									.setReferenceAccount(refAccount == null ? 0 : refAccount.getId()),
-									null),
+											theSelectedAccount.asFieldEditor(TypeTokens.get().of(Account.class),
+												Account::getReferenceAccount, Account::setReferenceAccount, null),
 								referenceAccounts, f -> f.fill().renderAs(account -> account == null ? "" : account.getName()))//
 							.addTextField("Universe Name:",
 								theSelectedAccount.asFieldEditor(TypeTokens.get().STRING,
@@ -758,18 +753,6 @@ public class OGameUniGui extends JPanel {
 				m -> m.asText(SpinnerFormat.INT).clicks(1).filterAccept((p, value) -> value >= 0 ? null : "Must not be negative"));
 		}
 		return column;
-	}
-
-	Account getReferenceAccount(Account account) {
-		if (account.getReferenceAccount() <= 0) {
-			return null;
-		}
-		for (Account a : theAccounts.getValues()) {
-			if (a.getId() == account.getReferenceAccount()) {
-				return a;
-			}
-		}
-		return null;
 	}
 
 	private static final DecimalFormat WHOLE_FORMAT = new DecimalFormat("#,##0");
@@ -1224,7 +1207,7 @@ public class OGameUniGui extends JPanel {
 
 	static Account copy(Account source, Account dest) {
 		dest.setGameClass(source.getGameClass());
-		dest.setReferenceAccount(source.getId());
+		dest.setReferenceAccount(source);
 
 		dest.getUniverse().setName(source.getUniverse().getName());
 		dest.getUniverse().setCollectorProductionBonus(source.getUniverse().getCollectorProductionBonus());
@@ -1354,8 +1337,15 @@ public class OGameUniGui extends JPanel {
 		List<OGameRuleSet> ruleSets = new ArrayList<>();
 		ruleSets.add(new OGameRuleSet710());
 		ObservableSwingUtils.systemLandF();
-		OGameUniGui ui = new OGameUniGui(config, ruleSets,
-			config.asValue(TypeTokens.get().of(Account.class)).at("accounts/account").buildEntitySet());
+		ObservableValueSet<Account>[] accounts = new ObservableValueSet[1];
+		ObservableConfigFormat<Account> accountRefFormat = ObservableConfigFormat
+			.<Account> buildReferenceFormat(fv -> accounts[0].getValues(), null)//
+			.withField("id", Account::getId, ObservableConfigFormat.INT).build();
+		accounts[0] = config.asValue(TypeTokens.get().of(Account.class))
+			.asEntity(efb -> efb//
+				.withFieldFormat(Account::getReferenceAccount, accountRefFormat))//
+			.at("accounts/account").buildEntitySet();
+		OGameUniGui ui = new OGameUniGui(config, ruleSets, accounts[0]);
 		JFrame frame = new JFrame("OGame Account Helper");
 		// frame.setContentPane(ui);
 		frame.getContentPane().add(ui);
