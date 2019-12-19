@@ -40,7 +40,6 @@ import org.observe.util.swing.PanelPopulation;
 import org.qommons.StringUtils;
 import org.qommons.TimeUtils;
 import org.qommons.TimeUtils.DurationComponentType;
-import org.qommons.Transaction;
 import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
@@ -82,20 +81,10 @@ public class OGameUniGui extends JPanel {
 			}
 			return theRuleSets.get(theRuleSets.size() - 1);
 		}, OGameRuleSet::getName, null);
-		theSelectedAccount = config.observeValue("selected-account").map(TypeTokens.get().of(Account.class), name -> {
-			try (Transaction t = theAccounts.getValues().lock(false, null)) {
-				for (Account account : theAccounts.getValues()) {
-					if (("" + account.getId()).equals(name)) {
-						return account;
-					}
-				}
-			}
-			if (!theAccounts.getValues().isEmpty()) {
-				return theAccounts.getValues().getFirst();
-			} else {
-				return null;
-			}
-		}, account -> account == null ? "" : "" + account.getId(), null);
+		theSelectedAccount = config.asValue(Account.class)
+			.withFormat(ObservableConfigFormat.<Account> buildReferenceFormat(fv -> accounts.getValues()),
+				() -> accounts.getValues().peekFirst(), null)
+			.getValue();
 		theReferenceAccount = theSelectedAccount.refresh(theAccounts.getValues().simpleChanges()).map(TypeTokens.get().of(Account.class),
 			Account::getReferenceAccount, Account::getReferenceAccount, null);
 
