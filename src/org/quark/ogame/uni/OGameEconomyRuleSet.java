@@ -36,6 +36,7 @@ public interface OGameEconomyRuleSet {
 
 	Production getProduction(Account account, Planet planet, ResourceType resourceType, double energyFactor);
 	long getStorage(Planet planet, ResourceType resourceType);
+	int getMaxCrawlers(Account account, Planet planet);
 
 	UpgradeCost getUpgradeCost(Account account, RockyBody planetOrMoon, AccountUpgrade upgrade, int fromLevel, int toLevel);
 

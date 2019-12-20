@@ -82,8 +82,12 @@ public class OGameUniGui extends JPanel {
 			}
 			return theRuleSets.get(theRuleSets.size() - 1);
 		}, OGameRuleSet::getName, null);
-		theSelectedAccount = config.asValue(Account.class).withFormat(ObservableConfigFormat
-			.<Account> buildReferenceFormat(fv -> accounts.getValues(), () -> accounts.getValues().peekFirst()).build()).buildValue(null);
+		theSelectedAccount = config.asValue(Account.class).at("selected-account")
+			.withFormat(
+				ObservableConfigFormat
+			.<Account> buildReferenceFormat(fv -> accounts.getValues(), () -> accounts.getValues().peekFirst())//
+			.withField("id", Account::getId, ObservableConfigFormat.INT)//
+			.build()).buildValue(null);
 		theReferenceAccount = theSelectedAccount.refresh(theAccounts.getValues().simpleChanges()).map(TypeTokens.get().of(Account.class),
 			Account::getReferenceAccount, Account::getReferenceAccount, null);
 
@@ -184,7 +188,7 @@ public class OGameUniGui extends JPanel {
 			.buildValue(null);
 
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> fieldColumns = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("Total Fields", p -> theSelectedRuleSet.get().economy().getFields(p), (p, f) -> {
+			intPlanetColumn("Total Fields", false, p -> theSelectedRuleSet.get().economy().getFields(p), (p, f) -> {
 				int currentTotal = theSelectedRuleSet.get().economy().getFields(p);
 				int currentBase = p.getBaseFields();
 				int diff = f - currentTotal;
@@ -203,7 +207,7 @@ public class OGameUniGui extends JPanel {
 				}
 				return null;
 			})), //
-			intPlanetColumn("Free Fields", planet -> {
+			intPlanetColumn("Free Fields", false, planet -> {
 				return theSelectedRuleSet.get().economy().getFields(planet) - planet.getUsedFields();
 			}, null, 80)//
 			);
@@ -215,29 +219,34 @@ public class OGameUniGui extends JPanel {
 			}, null, 80)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> tempColumns = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("Min T", Planet::getMinimumTemperature, (planet, t) -> {
+			intPlanetColumn("Min T", true, Planet::getMinimumTemperature, (planet, t) -> {
 				planet.setMinimumTemperature(t);
 				planet.setMaximumTemperature(t + 40);
 			}, 40), //
-			intPlanetColumn("Max T", Planet::getMaximumTemperature, (planet, t) -> {
+			intPlanetColumn("Max T", true, Planet::getMaximumTemperature, (planet, t) -> {
 				planet.setMaximumTemperature(t);
 				planet.setMinimumTemperature(t - 40);
 			}, 40)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mineColumns = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("M Mine", Planet::getMetalMine, Planet::setMetalMine, 55), //
-			intPlanetColumn("C Mine", Planet::getCrystalMine, Planet::setCrystalMine, 55), //
-			intPlanetColumn("D Synth", Planet::getDeuteriumSynthesizer, Planet::setDeuteriumSynthesizer, 50), //
-			intPlanetColumn("Crawlers", Planet::getCrawlers, Planet::setCrawlers, 60) //
+			intPlanetColumn("M Mine", false, Planet::getMetalMine, Planet::setMetalMine, 55), //
+			intPlanetColumn("C Mine", false, Planet::getCrystalMine, Planet::setCrystalMine, 55), //
+			intPlanetColumn("D Synth", false, Planet::getDeuteriumSynthesizer, Planet::setDeuteriumSynthesizer, 50), //
+			intPlanetColumn("Crawlers", false, Planet::getCrawlers, Planet::setCrawlers, 60).formatText((planet, crawlers) -> {
+				StringBuilder str = new StringBuilder();
+				str.append(crawlers).append('/');
+				str.append(theSelectedRuleSet.get().economy().getMaxCrawlers(theSelectedAccount.get(), planet.planet));
+				return str.toString();
+			}) //
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> energyBldgs = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("Sats", Planet::getSolarSatellites, Planet::setSolarSatellites, 75), //
-			intPlanetColumn("Solar", Planet::getSolarPlant, Planet::setSolarPlant, 55), //
-			intPlanetColumn("Fusion", Planet::getFusionReactor, Planet::setFusionReactor, 55));
+			intPlanetColumn("Sats", false, Planet::getSolarSatellites, Planet::setSolarSatellites, 75), //
+			intPlanetColumn("Solar", false, Planet::getSolarPlant, Planet::setSolarPlant, 55), //
+			intPlanetColumn("Fusion", false, Planet::getFusionReactor, Planet::setFusionReactor, 55));
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> storageColumns = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("M Stor", Planet::getMetalStorage, Planet::setMetalStorage, 55), //
-			intPlanetColumn("C Stor", Planet::getCrystalStorage, Planet::setCrystalStorage, 55), //
-			intPlanetColumn("D Stor", Planet::getDeuteriumStorage, Planet::setDeuteriumStorage, 55)//
+			intPlanetColumn("M Stor", false, Planet::getMetalStorage, Planet::setMetalStorage, 55), //
+			intPlanetColumn("C Stor", false, Planet::getCrystalStorage, Planet::setCrystalStorage, 55), //
+			intPlanetColumn("D Stor", false, Planet::getDeuteriumStorage, Planet::setDeuteriumStorage, 55)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> productionColumns = ObservableCollection.of(planetColumnType,
 			planetColumn("M Prod", String.class, planet -> printProduction(planet.metal.totalNet, productionType.get()), null, 80), //
@@ -247,16 +256,16 @@ public class OGameUniGui extends JPanel {
 			planetColumn("SS Cargoes", int.class, planet -> getCargoes(planet, true, productionType.get()), null, 80)//
 			).flow().refresh(productionType.noInitChanges()).collect();
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mainFacilities = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("Robotics", Planet::getRoboticsFactory, Planet::setRoboticsFactory, 60), //
-			intPlanetColumn("Shipyard", Planet::getShipyard, Planet::setShipyard, 60), //
-			intPlanetColumn("Lab", Planet::getResearchLab, Planet::setResearchLab, 55), //
-			intPlanetColumn("Nanite", Planet::getNaniteFactory, Planet::setNaniteFactory, 55)//
+			intPlanetColumn("Robotics", false, Planet::getRoboticsFactory, Planet::setRoboticsFactory, 60), //
+			intPlanetColumn("Shipyard", false, Planet::getShipyard, Planet::setShipyard, 60), //
+			intPlanetColumn("Lab", false, Planet::getResearchLab, Planet::setResearchLab, 55), //
+			intPlanetColumn("Nanite", false, Planet::getNaniteFactory, Planet::setNaniteFactory, 55)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> otherFacilities = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("Ally Depot", Planet::getAllianceDepot, Planet::setAllianceDepot, 65), //
-			intPlanetColumn("Silo", Planet::getMissileSilo, Planet::setMissileSilo, 45), //
-			intPlanetColumn("Terraformer", Planet::getTerraformer, Planet::setTerraformer, 65), //
-			intPlanetColumn("Space Dock", Planet::getSpaceDock, Planet::setSpaceDock, 65)//
+			intPlanetColumn("Ally Depot", false, Planet::getAllianceDepot, Planet::setAllianceDepot, 65), //
+			intPlanetColumn("Silo", false, Planet::getMissileSilo, Planet::setMissileSilo, 45), //
+			intPlanetColumn("Terraformer", false, Planet::getTerraformer, Planet::setTerraformer, 65), //
+			intPlanetColumn("Space Dock", false, Planet::getSpaceDock, Planet::setSpaceDock, 65)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonBuildings = ObservableCollection.of(planetColumnType,
 			intMoonColumn("Lunar Base", Moon::getLunarBase, Moon::setLunarBase, 60), //
@@ -652,7 +661,8 @@ public class OGameUniGui extends JPanel {
 		return column;
 	}
 
-	CategoryRenderStrategy<PlanetWithProduction, Integer> intPlanetColumn(String name, Function<Planet, Integer> getter,
+	CategoryRenderStrategy<PlanetWithProduction, Integer> intPlanetColumn(String name, boolean allowNegative,
+		Function<Planet, Integer> getter,
 		BiConsumer<Planet, Integer> setter, int width) {
 		CategoryRenderStrategy<PlanetWithProduction, Integer> column = planetColumn(name, int.class, p -> getter.apply(p.planet), setter,
 			width);
@@ -666,8 +676,12 @@ public class OGameUniGui extends JPanel {
 			return getter.apply(refAccount.getPlanets().getValues().get(planetIdx));
 		});
 		if (setter != null) {
-			column.withMutation(
-				m -> m.asText(SpinnerFormat.INT).clicks(1).filterAccept((p, value) -> value >= 0 ? null : "Must not be negative"));
+			column.withMutation(m -> {
+				m.asText(SpinnerFormat.INT).clicks(1);
+				if (!allowNegative) {
+					m.filterAccept((p, value) -> value >= 0 ? null : "Must not be negative");
+				}
+			});
 		}
 		return column;
 	}

@@ -280,7 +280,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			byType.put(ProductionSource.DeuteriumSynthesizer, typeAmount);
 			totalConsumed += typeAmount;
 			// Crawlers
-			typeAmount = getUsableCrawlers(planet) * 50;
+			typeAmount = getUsableCrawlers(account, planet) * 50;
 			byType.put(ProductionSource.Crawler, typeAmount);
 			totalConsumed += typeAmount;
 
@@ -368,7 +368,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			}
 
 			// Crawler production
-			int crawlers = getUsableCrawlers(planet);
+			int crawlers = getUsableCrawlers(account, planet);
 			double crawlerBonus = production.crawlerBonus;
 			if (account.getGameClass() == AccountClass.Collector) {
 				crawlerBonus *= 1.5;
@@ -420,10 +420,15 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		return (int) Math.floor(production.energyMultiplier * level * utilization / 100.0 * Math.pow(1.1, level));
 	}
 
-	protected int getUsableCrawlers(Planet planet) {
+	protected int getUsableCrawlers(Account account, Planet planet) {
 		int crawlers = planet.getCrawlers();
-		int crawlerCap = (planet.getMetalMine() + planet.getCrystalMine() + planet.getDeuteriumSynthesizer()) * 8;
+		int crawlerCap = getMaxCrawlers(account, planet);
 		return Math.min(crawlers, crawlerCap);
+	}
+
+	@Override
+	public int getMaxCrawlers(Account account, Planet planet) {
+		return (planet.getMetalMine() + planet.getCrystalMine() + planet.getDeuteriumSynthesizer()) * 8;
 	}
 
 	protected int getSatelliteEnergy(Account account, Planet planet) {
