@@ -15,6 +15,9 @@ public interface RockyBody extends Nameable {
 	int getStationedShips(ShipyardItemType type);
 	void setStationedShips(ShipyardItemType type, int count);
 
+	BuildingType getCurrentUpgrade();
+	void setCurrentUpgrade(BuildingType building);
+
 	default int getUsedFields() {
 		return getRoboticsFactory() + getShipyard();
 	}

@@ -2,11 +2,7 @@ package org.quark.ogame.uni.ui;
 
 import java.awt.Color;
 import java.awt.Component;
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.text.DecimalFormat;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -31,32 +27,18 @@ import org.observe.config.ObservableConfig;
 import org.observe.config.ObservableConfigFormat;
 import org.observe.config.ObservableValueSet;
 import org.observe.util.TypeTokens;
-import org.observe.util.swing.CategoryRenderStrategy;
-import org.observe.util.swing.JustifiedBoxLayout;
-import org.observe.util.swing.ModelCell;
-import org.observe.util.swing.ObservableCellRenderer;
-import org.observe.util.swing.ObservableSwingUtils;
-import org.observe.util.swing.PanelPopulation;
+import org.observe.util.swing.*;
 import org.qommons.StringUtils;
 import org.qommons.TimeUtils;
 import org.qommons.TimeUtils.DurationComponentType;
 import org.qommons.ValueHolder;
+import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
-import org.quark.ogame.uni.Account;
-import org.quark.ogame.uni.AccountClass;
-import org.quark.ogame.uni.AccountUpgrade;
-import org.quark.ogame.uni.BuildingType;
-import org.quark.ogame.uni.Moon;
+import org.quark.ogame.uni.*;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
-import org.quark.ogame.uni.OGameRuleSet;
-import org.quark.ogame.uni.Planet;
-import org.quark.ogame.uni.Research;
-import org.quark.ogame.uni.ResourceType;
-import org.quark.ogame.uni.ShipyardItemType;
-import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.versions.OGameRuleSet710;
 import org.xml.sax.SAXException;
 
@@ -85,9 +67,9 @@ public class OGameUniGui extends JPanel {
 		theSelectedAccount = config.asValue(Account.class).at("selected-account")
 			.withFormat(
 				ObservableConfigFormat
-			.<Account> buildReferenceFormat(fv -> accounts.getValues(), () -> accounts.getValues().peekFirst())//
-			.withField("id", Account::getId, ObservableConfigFormat.INT)//
-			.build()).buildValue(null);
+				.<Account> buildReferenceFormat(fv -> accounts.getValues(), () -> accounts.getValues().peekFirst())//
+				.withField("id", Account::getId, ObservableConfigFormat.INT)//
+				.build()).buildValue(null);
 		theReferenceAccount = theSelectedAccount.refresh(theAccounts.getValues().simpleChanges()).map(TypeTokens.get().of(Account.class),
 			Account::getReferenceAccount, Account::getReferenceAccount, null);
 
@@ -307,6 +289,14 @@ public class OGameUniGui extends JPanel {
 				}
 			}
 		});
+		List<Object> planetUpgradeList = new ArrayList<>();
+		planetUpgradeList.add("None");
+		for (BuildingType b : BuildingType.values())
+			if (b.isPlanetBuilding)
+				planetUpgradeList.add(b);
+		ObservableCollection<Object> planetUpgrades = ObservableCollection.build(Object.class)
+			.withBacking(BetterList.of(planetUpgradeList)).build();
+
 		SettableValue<PlanetWithProduction> selectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).build();
 		PanelPopulation.populateVPanel(this, Observable.empty())//
 		.addSplit(true,
@@ -327,7 +317,7 @@ public class OGameUniGui extends JPanel {
 						}).asText(Format.TEXT)))//
 					.withColumn("Planets", Integer.class, account -> account.getPlanets().getValues().size(), //
 						planetColumn -> planetColumn.withWidths(50, 50, 50))//
-								.withColumn("Reference", Account.class, Account::getReferenceAccount,
+					.withColumn("Reference", Account.class, Account::getReferenceAccount,
 						refColumn -> refColumn.withWidths(50, 100, 300)//
 						.formatText(account -> account == null ? "" : account.getName()))//
 					.withColumn("Eco Points", String.class, account -> OGameUniGui.this.printPoints(account), //
@@ -346,7 +336,7 @@ public class OGameUniGui extends JPanel {
 						copy.setId(getNewId());
 						copy.setName(StringUtils.getNewItemName(theAccounts.getValues(), Account::getName, account.getName(),
 							StringUtils.PAREN_DUPLICATES));
-									copy.setReferenceAccount(account);
+						copy.setReferenceAccount(account);
 						return copy;
 					}, null)//
 					)//
@@ -361,8 +351,8 @@ public class OGameUniGui extends JPanel {
 									null),
 								SpinnerFormat.NUMERICAL_TEXT, f -> f.fill())//
 							.addComboField("Compare To:",
-											theSelectedAccount.asFieldEditor(TypeTokens.get().of(Account.class),
-												Account::getReferenceAccount, Account::setReferenceAccount, null),
+								theSelectedAccount.asFieldEditor(TypeTokens.get().of(Account.class),
+									Account::getReferenceAccount, Account::setReferenceAccount, null),
 								referenceAccounts, f -> f.fill().renderAs(account -> account == null ? "" : account.getName()))//
 							.addTextField("Universe Name:",
 								theSelectedAccount.asFieldEditor(TypeTokens.get().STRING,
@@ -492,12 +482,26 @@ public class OGameUniGui extends JPanel {
 								.addCheckField("Moon Buildings:", showMoonBuildings, null).spacer(3)//
 								)//
 							.addTable(selectedPlanets,
-											planetTable -> planetTable.fill().withItemName("planet")//
+								planetTable -> planetTable.fill().withItemName("planet")//
 								// This is a little hacky, but the next line tells the column the item name
 								.withColumns(basicPlanetColumns)
 								// function
 								.withNameColumn(p -> p.planet.getName(), (p, name) -> p.planet.setName(name), false,
 									nameCol -> nameCol.withWidths(50, 100, 150))//
+								.withColumn("Upgrd", Object.class, p -> p.planet.getCurrentUpgrade(),
+									upgradeCol -> upgradeCol.withWidths(40, 40, 40)
+									.formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName)
+									.withMutation(m -> m.asCombo(bdg -> {
+															if (bdg instanceof BuildingType)
+																return ((BuildingType) bdg).shortName;
+															else
+											return "None";
+									}, planetUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
+										if (bdg instanceof BuildingType)
+											p.planet.setCurrentUpgrade((BuildingType) bdg);
+										else
+											p.planet.setCurrentUpgrade(null);
+									})))//
 								.withColumns(planetColumns)//
 								.withSelection(selectedPlanet, false)//
 								.withAdd(() -> createPlanet(selectedPlanets), null)//
@@ -510,7 +514,7 @@ public class OGameUniGui extends JPanel {
 								ObservableCollection.of(TypeTokens.get().of(ResourceRow.class), ResourceRow.values()).flow()
 								.refresh(selectedPlanet.noInitChanges()).collect(),
 								resTable -> resTable.fill().visibleWhen(selectedPlanet.map(p -> p != null))//
-												.withColumn("Type", ResourceRow.class, t -> t, typeCol -> typeCol.withWidths(100, 100, 100))//
+								.withColumn("Type", ResourceRow.class, t -> t, typeCol -> typeCol.withWidths(100, 100, 100))//
 								.withColumn(
 									resourceColumn("", int.class, this::getPSValue, this::setPSValue, selectedPlanet, 0, 35)
 									.formatText((row, v) -> renderResourceRow(row, v))//
@@ -1345,9 +1349,9 @@ public class OGameUniGui extends JPanel {
 			.<Account> buildReferenceFormat(fv -> accounts.get().getValues(), null)//
 			.withField("id", Account::getId, ObservableConfigFormat.INT).build();
 		config.asValue(TypeTokens.get().of(Account.class))
-			.asEntity(efb -> efb//
-				.withFieldFormat(Account::getReferenceAccount, accountRefFormat))//
-			.at("accounts/account").buildEntitySet(accounts);
+		.asEntity(efb -> efb//
+			.withFieldFormat(Account::getReferenceAccount, accountRefFormat))//
+		.at("accounts/account").buildEntitySet(accounts);
 		OGameUniGui ui = new OGameUniGui(config, ruleSets, accounts.get());
 		JFrame frame = new JFrame("OGame Account Helper");
 		// frame.setContentPane(ui);
