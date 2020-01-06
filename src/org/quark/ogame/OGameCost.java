@@ -61,7 +61,7 @@ public class OGameCost {
 		} else if (num == 1) {
 			return this;
 		} else {
-			return new OGameCost(multiply(theCosts, num), theUpgradeTime); // AccountUpgrade times are not affected by multiplication
+			return new OGameCost(multiply(theCosts, num), theUpgradeTime); // AccountUpgradeType times are not affected by multiplication
 		}
 	}
 
@@ -69,7 +69,7 @@ public class OGameCost {
 		if (num == 1) {
 			return this;
 		} else {
-			return new OGameCost(divide(theCosts, num), theUpgradeTime); // AccountUpgrade times are not affected by division
+			return new OGameCost(divide(theCosts, num), theUpgradeTime); // AccountUpgradeType times are not affected by division
 		}
 	}
 

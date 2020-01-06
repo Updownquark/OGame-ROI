@@ -12,7 +12,7 @@ import org.qommons.tree.BetterTreeSet;
 import org.qommons.tree.SortedTreeList;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountClass;
-import org.quark.ogame.uni.AccountUpgrade;
+import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
 import org.quark.ogame.uni.Moon;
 import org.quark.ogame.uni.OGameEconomyRuleSet;
@@ -72,11 +72,11 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 	private static final MineProduction DEUT_PRODUCTION = new MineProduction(0, 10, 1.1, .0002, .33, 20);
 	private static final NavigableMap<Integer, Double> DEUT_MULTIPLIERS;
 
-	private static final Map<AccountUpgrade, CostDescrip> COST_DESCRIPS;
+	private static final Map<AccountUpgradeType, CostDescrip> COST_DESCRIPS;
 
 	static {
-		Map<AccountUpgrade, CostDescrip> costs = new EnumMap<>(AccountUpgrade.class);
-		for (AccountUpgrade upgrade : AccountUpgrade.values()) {
+		Map<AccountUpgradeType, CostDescrip> costs = new EnumMap<>(AccountUpgradeType.class);
+		for (AccountUpgradeType upgrade : AccountUpgradeType.values()) {
 			switch (upgrade) {
 			case MetalMine:
 				costs.put(upgrade, new CostDescrip(60, 15, 0, 1.5));
@@ -167,7 +167,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				costs.put(upgrade, new CostDescrip(0, 400, 600, 2));
 				break;
 			case Astrophysics:
-				costs.put(upgrade, new CostDescrip(4000, 8000, 7000, 1.75));
+				costs.put(upgrade, new CostDescrip(4000, 8000, 4000, 1.75));
 				break;
 			case IntergalacticResearchNetwork:
 				costs.put(upgrade, new CostDescrip(240000, 400000, 160000, 2));
@@ -245,7 +245,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		deutMultipliers.put(-110, 1.8);
 		deutMultipliers.put(-76, 1.6);
 		deutMultipliers.put(-46, 1.5);
-		deutMultipliers.put(-16, 1.4);
+		deutMultipliers.put(-10, 1.4);
 		deutMultipliers.put(14, 1.3);
 		deutMultipliers.put(44, 1.2);
 		deutMultipliers.put(74, 1.1);
@@ -461,7 +461,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 	}
 
 	@Override
-	public UpgradeCost getUpgradeCost(Account account, RockyBody planetOrMoon, AccountUpgrade upgrade, int fromLevel, int toLevel) {
+	public UpgradeCost getUpgradeCost(Account account, RockyBody planetOrMoon, AccountUpgradeType upgrade, int fromLevel, int toLevel) {
 		if (fromLevel == toLevel) {
 			return new UpgradeCost(0, 0, 0, 0, Duration.ZERO);
 		}
@@ -471,7 +471,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		return new UpgradeCost(resAmounts[0], resAmounts[1], resAmounts[2], (int) resAmounts[3], Duration.ofSeconds(seconds));
 	}
 
-	protected long[] getCost(AccountUpgrade upgrade, int fromLevel, int toLevel, CostDescrip cost, Account account,
+	protected long[] getCost(AccountUpgradeType upgrade, int fromLevel, int toLevel, CostDescrip cost, Account account,
 		RockyBody planetOrMoon) {
 		long[] resAmounts = new long[4];
 		resAmounts[0] = cost.baseMetal;
@@ -506,7 +506,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		return resAmounts;
 	}
 
-	protected long getUpgradeTime(Account account, RockyBody planetOrMoon, AccountUpgrade upgrade, long [] resAmounts){
+	protected long getUpgradeTime(Account account, RockyBody planetOrMoon, AccountUpgradeType upgrade, long [] resAmounts){
 		double hours = 0;
 		switch (upgrade.type) {
 		case Building:
@@ -539,6 +539,9 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 	}
 
 	protected int getTotalLabLevels(Account account, RockyBody planetOrMoon) {
+		if (planetOrMoon == null) {
+			planetOrMoon=account.getPlanets().getValues().getFirst();
+		}
 		int levels = planetOrMoon.getBuildingLevel(BuildingType.ResearchLab);
 		int irn = account.getResearch().getIntergalacticResearchNetwork();
 		if (irn > 0) {

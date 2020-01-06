@@ -38,7 +38,7 @@ public interface OGameEconomyRuleSet {
 	long getStorage(Planet planet, ResourceType resourceType);
 	int getMaxCrawlers(Account account, Planet planet);
 
-	UpgradeCost getUpgradeCost(Account account, RockyBody planetOrMoon, AccountUpgrade upgrade, int fromLevel, int toLevel);
+	UpgradeCost getUpgradeCost(Account account, RockyBody planetOrMoon, AccountUpgradeType upgrade, int fromLevel, int toLevel);
 
 	int getFields(Planet planet);
 	int getFields(Moon moon);

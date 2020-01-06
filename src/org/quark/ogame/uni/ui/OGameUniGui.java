@@ -2,7 +2,11 @@ package org.quark.ogame.uni.ui;
 
 import java.awt.Color;
 import java.awt.Component;
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.text.DecimalFormat;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -25,12 +29,29 @@ import org.observe.config.ObservableConfig;
 import org.observe.config.ObservableConfigFormat;
 import org.observe.config.ObservableValueSet;
 import org.observe.util.TypeTokens;
-import org.observe.util.swing.*;
+import org.observe.util.swing.CategoryRenderStrategy;
+import org.observe.util.swing.JustifiedBoxLayout;
+import org.observe.util.swing.ModelCell;
+import org.observe.util.swing.ObservableCellRenderer;
+import org.observe.util.swing.ObservableSwingUtils;
+import org.observe.util.swing.PanelPopulation;
+import org.qommons.ArrayUtils;
+import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
 import org.qommons.ValueHolder;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
-import org.quark.ogame.uni.*;
+import org.quark.ogame.uni.Account;
+import org.quark.ogame.uni.AccountClass;
+import org.quark.ogame.uni.AccountUpgrade;
+import org.quark.ogame.uni.AccountUpgradeType;
+import org.quark.ogame.uni.BuildingType;
+import org.quark.ogame.uni.OGameRuleSet;
+import org.quark.ogame.uni.Planet;
+import org.quark.ogame.uni.Research;
+import org.quark.ogame.uni.ResearchType;
+import org.quark.ogame.uni.ShipyardItemType;
+import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.versions.OGameRuleSet710;
 import org.xml.sax.SAXException;
 
@@ -41,6 +62,8 @@ public class OGameUniGui extends JPanel {
 	private final SettableValue<OGameRuleSet> theSelectedRuleSet;
 	private final SettableValue<Account> theSelectedAccount;
 	private final SettableValue<Account> theReferenceAccount;
+
+	private final ObservableCollection<AccountUpgrade> theGlobalUpgrades;
 
 	public OGameUniGui(ObservableConfig config, List<OGameRuleSet> ruleSets, ObservableValueSet<Account> accounts) {
 		theConfig = config;
@@ -62,6 +85,48 @@ public class OGameUniGui extends JPanel {
 				.build()).buildValue(null);
 		theReferenceAccount = theSelectedAccount.refresh(theAccounts.getValues().simpleChanges()).map(TypeTokens.get().of(Account.class),
 			Account::getReferenceAccount, Account::getReferenceAccount, null);
+
+		theGlobalUpgrades = ObservableCollection.build(AccountUpgrade.class).safe(false).build();
+		Observable.or(theSelectedAccount.noInitChanges(), theReferenceAccount.noInitChanges()).act(__ -> {
+			Account account = theSelectedAccount.get();
+			Account refAcct = theReferenceAccount.get();
+			if (account == null || refAcct == null) {
+				theGlobalUpgrades.clear();
+				return;
+			}
+			List<AccountUpgrade> upgrades = new ArrayList<>();
+			for (ResearchType rsrch : ResearchType.values()) {
+				int fromLevel = refAcct.getResearch().getResearchLevel(rsrch);
+				int toLevel = account.getResearch().getResearchLevel(rsrch);
+				if (fromLevel != toLevel) {
+					AccountUpgradeType type = AccountUpgradeType.getResearchUpgrade(rsrch);
+					UpgradeCost cost = theSelectedRuleSet.get().economy().getUpgradeCost(account, null, type, fromLevel, toLevel);
+					upgrades.add(new AccountUpgrade(type, null, fromLevel, toLevel, cost));
+				}
+			}
+
+			ArrayUtils.adjust(theGlobalUpgrades, upgrades, new ArrayUtils.DifferenceListener<AccountUpgrade, AccountUpgrade>() {
+				@Override
+				public boolean identity(AccountUpgrade o1, AccountUpgrade o2) {
+					return o1.equals(o2);
+				}
+
+				@Override
+				public AccountUpgrade added(AccountUpgrade o, int mIdx, int retIdx) {
+					return o;
+				}
+
+				@Override
+				public AccountUpgrade removed(AccountUpgrade o, int oIdx, int incMod, int retIdx) {
+					return null;
+				}
+
+				@Override
+				public AccountUpgrade set(AccountUpgrade o1, int idx1, int incMod, AccountUpgrade o2, int idx2, int retIdx) {
+					return o1;
+				}
+			});
+		});
 
 		initComponents();
 	}
@@ -279,8 +344,23 @@ public class OGameUniGui extends JPanel {
 								.withColumn(intResearchColumn("Shielding", Research::getShielding, Research::setShielding, 65))//
 								.withColumn(intResearchColumn("Armor", Research::getArmor, Research::setArmor, 55))//
 								)//
+									.addComponent(null, ObservableSwingUtils.label("Upgrade Costs").bold().withFontSize(16).label, null)//
+									.addTable(theGlobalUpgrades,
+										upgradeTable -> upgradeTable.fill()//
+											.visibleWhen(theReferenceAccount.map(a -> a != null))//
+											.withColumn("Upgrade", AccountUpgradeType.class, upgrade -> upgrade.type, null)//
+											.withColumn("From", int.class, upgrade -> upgrade.fromLevel, null)//
+											.withColumn("To", int.class, upgrade -> upgrade.toLevel, null)//
+											.withColumn("Metal", String.class, upgrade -> printResourceAmount(upgrade.cost.metal), null)//
+											.withColumn("Crystal", String.class, upgrade -> printResourceAmount(upgrade.cost.crystal), null)//
+											.withColumn("Deut", String.class, upgrade -> printResourceAmount(upgrade.cost.deuterium), null)//
+											.withColumn("Time", String.class, upgrade -> printUpgradeTime(upgrade.cost.upgradeTime), null))//
 							, acctResearchTab -> acctResearchTab.setName("Research")//
-							)//
+								)//
+				// .withVTab("construction",
+				// constructionPanel -> new ConstructionPanel(theConfig, theSelectedRuleSet, theSelectedAccount)
+				// .addPanel(constructionPanel),
+				// constructionTab -> constructionTab.setName("Construction"))//
 						))//
 			);
 	}
@@ -408,7 +488,7 @@ public class OGameUniGui extends JPanel {
 		}
 		UpgradeCost cost = new UpgradeCost(0, 0, 0, 0, Duration.ZERO);
 		OGameRuleSet rules = theSelectedRuleSet.get();
-		for (AccountUpgrade upgrade : AccountUpgrade.values()) {
+		for (AccountUpgradeType upgrade : AccountUpgradeType.values()) {
 			switch (upgrade.type) {
 			case Building:
 				for (Planet planet : account.getPlanets().getValues()) {
@@ -437,6 +517,28 @@ public class OGameUniGui extends JPanel {
 		} else {
 			return THREE_DIGIT_FORMAT.format(value / 1E9) + "B";
 		}
+	}
+
+	static String printResourceAmount(double amount) {
+		StringBuilder str = new StringBuilder();
+		if (amount < 0) {
+			str.append('-');
+			amount = -amount;
+		}
+		if (amount < 1E6) {
+			str.append(OGameUniGui.WHOLE_FORMAT.format(amount));
+		} else if (amount < 1E9) {
+			str.append(OGameUniGui.THREE_DIGIT_FORMAT.format(amount / 1E6)).append('M');
+		} else if (amount < 1E12) {
+			str.append(OGameUniGui.THREE_DIGIT_FORMAT.format(amount / 1E9)).append('B');
+		} else {
+			str.append(OGameUniGui.THREE_DIGIT_FORMAT.format(amount / 1E12)).append('T');
+		}
+		return str.toString();
+	}
+
+	static String printUpgradeTime(Duration upgradeTime) {
+		return QommonsUtils.printDuration(upgradeTime, true);
 	}
 
 	int getNewId() {

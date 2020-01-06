@@ -20,6 +20,7 @@ import org.observe.util.swing.CategoryRenderStrategy;
 import org.observe.util.swing.JustifiedBoxLayout;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.PanelPopulation;
+import org.qommons.ArrayUtils;
 import org.qommons.StringUtils;
 import org.qommons.TimeUtils;
 import org.qommons.TimeUtils.DurationComponentType;
@@ -27,9 +28,20 @@ import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
-import org.quark.ogame.uni.*;
+import org.quark.ogame.uni.Account;
+import org.quark.ogame.uni.AccountClass;
+import org.quark.ogame.uni.AccountUpgrade;
+import org.quark.ogame.uni.AccountUpgradeType;
+import org.quark.ogame.uni.BuildingType;
+import org.quark.ogame.uni.Moon;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
+import org.quark.ogame.uni.OGameRuleSet;
+import org.quark.ogame.uni.Planet;
+import org.quark.ogame.uni.Research;
+import org.quark.ogame.uni.ResourceType;
+import org.quark.ogame.uni.ShipyardItemType;
+import org.quark.ogame.uni.UpgradeCost;
 
 import com.google.common.reflect.TypeToken;
 
@@ -50,6 +62,8 @@ public class PlanetTable {
 	private final SettableValue<Boolean> showMainFacilities;
 	private final SettableValue<Boolean> showOtherFacilities;
 	private final SettableValue<Boolean> showMoonBuildings;
+
+	private final ObservableCollection<AccountUpgrade> theSelectedPlanetUpgrades;
 
 	public PlanetTable(ObservableConfig config, ObservableValue<OGameRuleSet> ruleSet, SettableValue<Account> selectedAccount,
 		ObservableValue<Account> referenceAccount) {
@@ -94,14 +108,70 @@ public class PlanetTable {
 		});
 
 		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).build();
+		
+		theSelectedPlanetUpgrades=ObservableCollection.build(AccountUpgrade.class).safe(false).build();
+		Observable.or(theSelectedPlanet.noInitChanges(), theReferenceAccount.noInitChanges()).act(__->{
+			PlanetWithProduction p=theSelectedPlanet.get();
+			Account refAcct=theReferenceAccount.get();
+			if(p==null || refAcct==null){
+				theSelectedPlanetUpgrades.clear();
+				return;
+			}
+			Account account=theSelectedAccount.get();
+			int pIdx=account.getPlanets().getValues().indexOf(p.planet);
+			Planet refPlanet=refAcct.getPlanets().getValues().size()<=pIdx ? null : refAcct.getPlanets().getValues().get(pIdx);
+			List<AccountUpgrade> upgrades=new ArrayList<>();
+			for(BuildingType bdg : BuildingType.values()){
+				int fromLevel=refPlanet==null ? 0 : refPlanet.getBuildingLevel(bdg);
+				int toLevel=p.planet.getBuildingLevel(bdg);
+				if(fromLevel!=toLevel){
+					AccountUpgradeType type=AccountUpgradeType.getBuildingUpgrade(bdg);
+					UpgradeCost cost = theSelectedRuleSet.get().economy().getUpgradeCost(account, p.planet, type, fromLevel, toLevel);
+					upgrades.add(new AccountUpgrade(type, p.planet, fromLevel, toLevel, cost));
+				}
+			}
+			for (ShipyardItemType ship : ShipyardItemType.values()) {
+				int fromLevel = refPlanet == null ? 0 : refPlanet.getStationedShips(ship);
+				int toLevel = p.planet.getStationedShips(ship);
+				if (fromLevel != toLevel) {
+					AccountUpgradeType type = AccountUpgradeType.getShipyardItemUpgrade(ship);
+					UpgradeCost cost = theSelectedRuleSet.get().economy().getUpgradeCost(account, p.planet, type, fromLevel, toLevel);
+					upgrades.add(new AccountUpgrade(type, p.planet, fromLevel, toLevel, cost));
+				}
+			}
+			
+			ArrayUtils.adjust(theSelectedPlanetUpgrades, upgrades, new ArrayUtils.DifferenceListener<AccountUpgrade, AccountUpgrade>(){
+				@Override
+				public boolean identity(AccountUpgrade o1, AccountUpgrade o2) {
+					return o1.equals(o2);
+				}
+
+				@Override
+				public AccountUpgrade added(AccountUpgrade o, int mIdx, int retIdx) {
+					return o;
+				}
+
+				@Override
+				public AccountUpgrade removed(AccountUpgrade o, int oIdx, int incMod, int retIdx) {
+					return null;
+				}
+
+				@Override
+				public AccountUpgrade set(AccountUpgrade o1, int idx1, int incMod, AccountUpgrade o2, int idx2, int retIdx) {
+					return o1;
+				}
+			});
+		});
 	}
 
 	public void addPlanetTable(PanelPopulation.PanelPopulator<?, ?> panel) {
 		List<Object> planetUpgradeList = new ArrayList<>();
 		planetUpgradeList.add("None");
-		for (BuildingType b : BuildingType.values())
-			if (b.isPlanetBuilding)
+		for (BuildingType b : BuildingType.values()) {
+			if (b.isPlanetBuilding) {
 				planetUpgradeList.add(b);
+			}
+		}
 		ObservableCollection<Object> planetUpgrades = ObservableCollection.build(Object.class).withBacking(BetterList.of(planetUpgradeList))
 			.build();
 
@@ -226,7 +296,7 @@ public class PlanetTable {
 			.addCheckField("Moon Buildings:", showMoonBuildings, null).spacer(3)//
 			)//
 		.addTable(selectedPlanets,
-			planetTable -> planetTable.fill().withItemName("planet")//
+				planetTable -> planetTable.fill().withItemName("planet")//
 			// This is a little hacky, but the next line tells the column the item name
 			.withColumns(basicPlanetColumns)
 			// function
@@ -234,15 +304,17 @@ public class PlanetTable {
 				nameCol -> nameCol.withWidths(50, 100, 150))//
 			.withColumn("Upgrd", Object.class, p -> p.planet.getCurrentUpgrade(), upgradeCol -> upgradeCol.withWidths(40, 40, 40)
 				.formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName).withMutation(m -> m.asCombo(bdg -> {
-					if (bdg instanceof BuildingType)
+					if (bdg instanceof BuildingType) {
 						return ((BuildingType) bdg).shortName;
-					else
+					} else {
 						return "None";
+					}
 				}, planetUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
-					if (bdg instanceof BuildingType)
+					if (bdg instanceof BuildingType) {
 						p.planet.setCurrentUpgrade((BuildingType) bdg);
-					else
+					} else {
 						p.planet.setCurrentUpgrade(null);
+					}
 				})))//
 			.withColumns(planetColumns)//
 			.withSelection(theSelectedPlanet, false)//
@@ -250,29 +322,53 @@ public class PlanetTable {
 			.withRemove(planets -> theSelectedAccount.get().getPlanets().getValues().removeAll(planets), action -> action//
 				.confirmForItems("Delete Planets?", "Are you sure you want to delete ", null, true))//
 			)//
-		.addComponent(null, ObservableSwingUtils.label("Resources").bold().withFontSize(16).label, null)//
-		.addTable(
-			ObservableCollection.of(TypeTokens.get().of(ResourceRow.class), ResourceRow.values()).flow()
-			.refresh(theSelectedPlanet.noInitChanges()).collect(),
-			resTable -> resTable.fill().visibleWhen(theSelectedPlanet.map(p -> p != null))//
-			.withColumn("Type", ResourceRow.class, t -> t, typeCol -> typeCol.withWidths(100, 100, 100))//
-			.withColumn(resourceColumn("", int.class, this::getPSValue, this::setPSValue, theSelectedPlanet, 0, 35)
-				.formatText((row, v) -> renderResourceRow(row, v))//
-				.withMutation(m -> m.asText(SpinnerFormat.INT).editableIf((row, v) -> canEditPSValue(row))))
-			.withColumn(resourceColumn("Metal", String.class,
-				(planet, row) -> printProductionBySource(planet, row, ResourceType.Metal), null, theSelectedPlanet, "0", 45))//
-			.withColumn(resourceColumn("Crystal", String.class,
-				(planet, row) -> printProductionBySource(planet, row, ResourceType.Crystal), null, theSelectedPlanet, "0", 45))//
-			.withColumn(resourceColumn("Deuterium", String.class,
-				(planet, row) -> printProductionBySource(planet, row, ResourceType.Deuterium), null, theSelectedPlanet, "0", 65))//
-			.withColumn(resourceColumn("Energy", String.class,
-				(planet, row) -> printProductionBySource(planet, row, ResourceType.Energy), null, theSelectedPlanet, "0", 65))//
-			.withColumn("Utilization", String.class, row -> getUtilization(theSelectedPlanet.get(), row), utilColumn -> utilColumn
-				.withWidths(60, 60, 60)
-				.withMutation(m -> m.mutateAttribute((row, u) -> setUtilization(theSelectedPlanet.get(), row, u))
-					.editableIf((row, u) -> isUtilEditable(row)).asCombo(s -> s, ObservableCollection.of(TypeTokens.get().STRING,
-						"0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"))
-					.clicks(1)))//
+			.addHPanel(null, new JustifiedBoxLayout(false).mainJustified().crossJustified(),
+				bottomSplit -> bottomSplit.fill()//
+					.addVPanel(resPanel -> resPanel.fill().fillV()//
+						.addComponent(null, ObservableSwingUtils.label("Resources").bold().withFontSize(16).label, null)//
+						.addTable(
+							ObservableCollection.of(TypeTokens.get().of(ResourceRow.class), ResourceRow.values()).flow()
+								.refresh(theSelectedPlanet.noInitChanges()).collect(),
+							resTable -> resTable.fill().visibleWhen(theSelectedPlanet.map(p -> p != null))//
+								.withColumn("Type", ResourceRow.class, t -> t, typeCol -> typeCol.withWidths(100, 100, 100))//
+								.withColumn(resourceColumn("", int.class, this::getPSValue, this::setPSValue, theSelectedPlanet, 0, 35)
+									.formatText((row, v) -> renderResourceRow(row, v))//
+									.withMutation(m -> m.asText(SpinnerFormat.INT).editableIf((row, v) -> canEditPSValue(row))))
+								.withColumn(resourceColumn("Metal", String.class,
+									(planet, row) -> printProductionBySource(planet, row, ResourceType.Metal), null, theSelectedPlanet, "0",
+									45))//
+								.withColumn(resourceColumn("Crystal", String.class,
+									(planet, row) -> printProductionBySource(planet, row, ResourceType.Crystal), null, theSelectedPlanet,
+									"0", 45))//
+								.withColumn(resourceColumn("Deuterium", String.class,
+									(planet, row) -> printProductionBySource(planet, row, ResourceType.Deuterium), null, theSelectedPlanet,
+									"0", 65))//
+								.withColumn(resourceColumn("Energy", String.class,
+									(planet, row) -> printProductionBySource(planet, row, ResourceType.Energy), null, theSelectedPlanet,
+									"0", 65))//
+								.withColumn("Utilization", String.class, row -> getUtilization(theSelectedPlanet.get(), row),
+									utilColumn -> utilColumn.withWidths(60, 60, 60)
+										.withMutation(m -> m.mutateAttribute((row, u) -> setUtilization(theSelectedPlanet.get(), row, u))
+											.editableIf((row, u) -> isUtilEditable(row))
+											.asCombo(s -> s, ObservableCollection.of(TypeTokens.get().STRING, "0%", "10%", "20%", "30%",
+												"40%", "50%", "60%", "70%", "80%", "90%", "100%"))
+											.clicks(1)))//
+					)//
+					)//
+					.addVPanel(upgradePanel -> upgradePanel.fill().fillV()// ;
+						.addComponent(null, ObservableSwingUtils.label("Upgrade Costs").bold().withFontSize(16).label, null)//
+						.addTable(theSelectedPlanetUpgrades, upgradeTable -> upgradeTable.fill()//
+							.visibleWhen(theSelectedPlanet.combine((p, a) -> p != null && a != null, theReferenceAccount))//
+								.withColumn("Planet", String.class, upgrade -> upgrade.planet.getName(), null)//
+								.withColumn("Upgrade", AccountUpgradeType.class, upgrade -> upgrade.type, null)//
+								.withColumn("From", int.class, upgrade -> upgrade.fromLevel, null)//
+								.withColumn("To", int.class, upgrade -> upgrade.toLevel, null)//
+								.withColumn("Metal", String.class, upgrade -> OGameUniGui.printResourceAmount(upgrade.cost.metal), null)//
+								.withColumn("Crystal", String.class, upgrade -> OGameUniGui.printResourceAmount(upgrade.cost.crystal), null)//
+								.withColumn("Deut", String.class, upgrade -> OGameUniGui.printResourceAmount(upgrade.cost.deuterium), null)//
+								.withColumn("Time", String.class, upgrade -> OGameUniGui.printUpgradeTime(upgrade.cost.upgradeTime), null)//
+				)//
+				)//
 			);
 	}
 
@@ -406,11 +502,6 @@ public class PlanetTable {
 	}
 
 	static String printProduction(double production, ProductionDisplayType time) {
-		StringBuilder str = new StringBuilder();
-		if (production < 0) {
-			str.append('-');
-			production = -production;
-		}
 		switch (time.type) {
 		case Year:
 			production *= TimeUtils.getDaysInYears(1) * 24;
@@ -427,16 +518,7 @@ public class PlanetTable {
 		default:
 			break;
 		}
-		if (production < 1E6) {
-			str.append(OGameUniGui.WHOLE_FORMAT.format(production));
-		} else if (production < 1E9) {
-			str.append(OGameUniGui.THREE_DIGIT_FORMAT.format(production / 1E6)).append('M');
-		} else if (production < 1E12) {
-			str.append(OGameUniGui.THREE_DIGIT_FORMAT.format(production / 1E9)).append('B');
-		} else {
-			str.append(OGameUniGui.THREE_DIGIT_FORMAT.format(production / 1E12)).append('T');
-		}
-		return str.toString();
+		return OGameUniGui.printResourceAmount(production);
 	}
 
 	int getCargoes(PlanetWithProduction planet, boolean subtractCargoCost, ProductionDisplayType time) {
@@ -461,7 +543,7 @@ public class PlanetTable {
 			ShipyardItemType.LargeCargo, theSelectedAccount.get());
 		if (subtractCargoCost) {
 			capacity += theSelectedRuleSet.get().economy()
-				.getUpgradeCost(theSelectedAccount.get(), planet.planet, AccountUpgrade.LargeCargo, 0, 1).getTotal();
+				.getUpgradeCost(theSelectedAccount.get(), planet.planet, AccountUpgradeType.LargeCargo, 0, 1).getTotal();
 		}
 		return (int) Math.ceil(production / capacity);
 	}
