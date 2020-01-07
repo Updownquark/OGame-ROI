@@ -2,11 +2,11 @@ package org.quark.ogame.uni;
 
 public interface TradeRatios {
 	double getMetal();
-	void setMetal(double metal);
+	TradeRatios setMetal(double metal);
 
 	double getCrystal();
-	void setCrystal(double crystal);
+	TradeRatios setCrystal(double crystal);
 
 	double getDeuterium();
-	void setDeuterium(double deuterium);
+	TradeRatios setDeuterium(double deuterium);
 }

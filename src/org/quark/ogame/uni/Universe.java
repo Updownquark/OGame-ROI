@@ -4,25 +4,25 @@ import org.qommons.Nameable;
 
 public interface Universe extends Nameable {
 	int getEconomySpeed();
-	void setEconomySpeed(int economySpeed);
+	Universe setEconomySpeed(int economySpeed);
 
 	int getResearchSpeed();
-	void setResearchSpeed(int researchSpeed);
+	Universe setResearchSpeed(int researchSpeed);
 
 	int getCollectorProductionBonus();
-	void setCollectorProductionBonus(int collectorBonus);
+	Universe setCollectorProductionBonus(int collectorBonus);
 
 	int getCollectorEnergyBonus();
-	void setCollectorEnergyBonus(int collectorEnergyBonus);
+	Universe setCollectorEnergyBonus(int collectorEnergyBonus);
 
 	double getHyperspaceCargoBonus();
-	void setHyperspaceCargoBonus(double cargoBonus);
+	Universe setHyperspaceCargoBonus(double cargoBonus);
 
 	int getFleetSpeed();
-	void setFleetSpeed(int fleetSpeed);
+	Universe setFleetSpeed(int fleetSpeed);
 
 	int getCrawlerCap();
-	void setCrawlerCap(int crawlerCap);
+	Universe setCrawlerCap(int crawlerCap);
 
 	TradeRatios getTradeRatios();
 }

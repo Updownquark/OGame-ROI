@@ -10,13 +10,13 @@ public interface Planet extends RockyBody {
 
 	// Planet properties
 	int getBaseFields();
-	void setBaseFields(int baseFields);
+	Planet setBaseFields(int baseFields);
 
 	int getMinimumTemperature();
-	void setMinimumTemperature(int minTemp);
+	Planet setMinimumTemperature(int minTemp);
 
 	int getMaximumTemperature();
-	void setMaximumTemperature(int maxTemp);
+	Planet setMaximumTemperature(int maxTemp);
 
 	Moon getMoon();
 
@@ -92,7 +92,7 @@ public interface Planet extends RockyBody {
 		case AllianceDepot:
 			return getAllianceDepot();
 		case MissileSilo:
-			return getMetalStorage();
+			return getMissileSilo();
 		case NaniteFactory:
 			return getNaniteFactory();
 		case Terraformer:
@@ -214,25 +214,25 @@ public interface Planet extends RockyBody {
 	// Utilization Percentages
 
 	int getMetalUtilization();
-	void setMetalUtilization(int utilization);
+	Planet setMetalUtilization(int utilization);
 
 	int getCrystalUtilization();
-	void setCrystalUtilization(int utilization);
+	Planet setCrystalUtilization(int utilization);
 
 	int getDeuteriumUtilization();
-	void setDeuteriumUtilization(int utilization);
+	Planet setDeuteriumUtilization(int utilization);
 
 	int getSolarPlantUtilization();
-	void setSolarPlantUtilization(int utilization);
+	Planet setSolarPlantUtilization(int utilization);
 
 	int getFusionReactorUtilization();
-	void setFusionReactorUtilization(int utilization);
+	Planet setFusionReactorUtilization(int utilization);
 
 	int getSolarSatelliteUtilization();
-	void setSolarSatelliteUtilization(int utilization);
+	Planet setSolarSatelliteUtilization(int utilization);
 
 	int getCrawlerUtilization();
-	void setCrawlerUtilization(int utilization);
+	Planet setCrawlerUtilization(int utilization);
 
 	default int getBonus(ResourceType type) {
 		switch (type) {

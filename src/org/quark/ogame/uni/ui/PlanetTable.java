@@ -28,6 +28,7 @@ import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
+import org.quark.ogame.OGameUtils;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.AccountUpgrade;
@@ -110,7 +111,7 @@ public class PlanetTable {
 		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).build();
 		
 		theSelectedPlanetUpgrades=ObservableCollection.build(AccountUpgrade.class).safe(false).build();
-		Observable.or(theSelectedPlanet.noInitChanges(), theReferenceAccount.noInitChanges()).act(__->{
+		Observable.or(theSelectedPlanet.changes(), theReferenceAccount.noInitChanges()).act(__ -> {
 			PlanetWithProduction p=theSelectedPlanet.get();
 			Account refAcct=theReferenceAccount.get();
 			if(p==null || refAcct==null){
@@ -363,10 +364,10 @@ public class PlanetTable {
 								.withColumn("Upgrade", AccountUpgradeType.class, upgrade -> upgrade.type, null)//
 								.withColumn("From", int.class, upgrade -> upgrade.fromLevel, null)//
 								.withColumn("To", int.class, upgrade -> upgrade.toLevel, null)//
-								.withColumn("Metal", String.class, upgrade -> OGameUniGui.printResourceAmount(upgrade.cost.metal), null)//
-								.withColumn("Crystal", String.class, upgrade -> OGameUniGui.printResourceAmount(upgrade.cost.crystal), null)//
-								.withColumn("Deut", String.class, upgrade -> OGameUniGui.printResourceAmount(upgrade.cost.deuterium), null)//
-								.withColumn("Time", String.class, upgrade -> OGameUniGui.printUpgradeTime(upgrade.cost.upgradeTime), null)//
+							.withColumn("Metal", String.class, upgrade -> OGameUtils.printResourceAmount(upgrade.cost.getMetal()), null)//
+							.withColumn("Crystal", String.class, upgrade -> OGameUtils.printResourceAmount(upgrade.cost.getCrystal()), null)//
+							.withColumn("Deut", String.class, upgrade -> OGameUtils.printResourceAmount(upgrade.cost.getDeuterium()), null)//
+							.withColumn("Time", String.class, upgrade -> OGameUniGui.printUpgradeTime(upgrade.cost.getUpgradeTime()), null)//
 				)//
 				)//
 			);
@@ -518,7 +519,7 @@ public class PlanetTable {
 		default:
 			break;
 		}
-		return OGameUniGui.printResourceAmount(production);
+		return OGameUtils.printResourceAmount(production);
 	}
 
 	int getCargoes(PlanetWithProduction planet, boolean subtractCargoCost, ProductionDisplayType time) {

@@ -31,6 +31,7 @@ import org.qommons.BiTuple;
 import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
 import org.qommons.io.Format;
+import org.quark.ogame.uni.PointType;
 
 import com.google.common.reflect.TypeToken;
 
@@ -110,15 +111,14 @@ public class OGameRoiGui extends JPanel {
 					.withIdentifier(OGameImprovementType.DeutStorage).withRenderer(upgradeRenderer), //
 				new CategoryRenderStrategy<OGameImprovement, Integer>("Fields", TypeTokens.get().INT,
 					imp -> theFieldOffset.get() + imp.buildings), //
-				new CategoryRenderStrategy<>("Economy Value", TypeTokens.get().DOUBLE,
-					imp -> imp.accountValue.getValue(theROI.getMetalTradeRate().get(), theROI.getCrystalTradeRate().get(),
-						theROI.getDeutTradeRate().get())), //
+				new CategoryRenderStrategy<>("Eco Points", TypeTokens.get().STRING,
+					imp -> OGameUtils.printResourceAmount(imp.accountValue.getPoints(PointType.Economy))), //
 				new CategoryRenderStrategy<>("Metal Ratio", TypeTokens.get().DOUBLE,
-					imp -> imp.accountValue.getTotalCost(2) == 0 //
-						? imp.accountValue.getTotalCost(0) * 1.0 / imp.accountValue.getTotalCost(1)
-						: imp.accountValue.getTotalCost(0) * 1.0 / imp.accountValue.getTotalCost(2)), //
-				new CategoryRenderStrategy<>("Crystal Ratio", TypeTokens.get().DOUBLE, imp -> imp.accountValue.getTotalCost(2) == 0 //
-					? 1 : imp.accountValue.getTotalCost(1) * 1.0 / imp.accountValue.getTotalCost(2))//
+					imp -> imp.accountValue.getDeuterium() == 0 //
+						? imp.accountValue.getMetal() * 1.0 / imp.accountValue.getCrystal()
+						: imp.accountValue.getMetal() * 1.0 / imp.accountValue.getDeuterium()), //
+				new CategoryRenderStrategy<>("Crystal Ratio", TypeTokens.get().DOUBLE, imp -> imp.accountValue.getDeuterium() == 0 //
+					? 1 : imp.accountValue.getCrystal() * 1.0 / imp.accountValue.getDeuterium())//
 			));
 		columns[0] = ObservableCollection.flattenCollections(columnType, //
 			preVarColumns, variableColumns, postVarColumns).collect();
@@ -203,7 +203,16 @@ public class OGameRoiGui extends JPanel {
 										}
 										firstCol = false;
 									} else {
-										str.append(',').append(column.getCategoryValue(row));
+										str.append(',');
+										Object cv = column.getCategoryValue(row);
+										if (cv != null) {
+											String cvStr = cv.toString();
+											if (cvStr.indexOf(',') >= 0) {
+												str.append('"').append(cvStr).append('"');
+											} else {
+												str.append(cvStr);
+											}
+										}
 									}
 								}
 								str.append('\n');

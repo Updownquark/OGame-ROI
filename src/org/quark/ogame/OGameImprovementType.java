@@ -4,6 +4,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import org.quark.ogame.uni.ResourceType;
+
 public enum OGameImprovementType {
 	// Helper improvements
 	Robotics(true, false), Nanite(true, false), ResearchLab(true, false), IRN(true, false), //
@@ -26,55 +28,55 @@ public enum OGameImprovementType {
 		this.helpers = Collections.unmodifiableList(Arrays.asList(helpers));
 	}
 
-	public static OGameImprovementType getMineImprovement(int resourceType) {
+	public static OGameImprovementType getMineImprovement(ResourceType resourceType) {
 		switch (resourceType) {
-		case 0:
+		case Metal:
 			return Metal;
-		case 1:
+		case Crystal:
 			return Crystal;
-		case 2:
+		case Deuterium:
 			return Deut;
 		default:
 			throw new IllegalArgumentException("Unrecognized resource type: " + resourceType);
 		}
 	}
 
-	public static OGameImprovementType getStorageImprovement(int resourceType) {
+	public static OGameImprovementType getStorageImprovement(ResourceType resourceType) {
 		switch (resourceType) {
-		case 0:
+		case Metal:
 			return MetalStorage;
-		case 1:
+		case Crystal:
 			return CrystalStorage;
-		case 2:
+		case Deuterium:
 			return DeutStorage;
 		default:
 			throw new IllegalArgumentException("Unrecognized resource type: " + resourceType);
 		}
 	}
 
-	public int isMine() {
+	public ResourceType isMine() {
 		switch (this) {
 		case Metal:
-			return 0;
+			return ResourceType.Metal;
 		case Crystal:
-			return 1;
+			return ResourceType.Crystal;
 		case Deut:
-			return 2;
+			return ResourceType.Deuterium;
 		default:
-			return -1;
+			return null;
 		}
 	}
 
-	public int isStorage() {
+	public ResourceType isStorage() {
 		switch (this) {
 		case MetalStorage:
-			return 0;
+			return ResourceType.Metal;
 		case CrystalStorage:
-			return 1;
+			return ResourceType.Crystal;
 		case DeutStorage:
-			return 2;
+			return ResourceType.Deuterium;
 		default:
-			return -1;
+			return null;
 		}
 	}
 }

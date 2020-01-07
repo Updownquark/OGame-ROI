@@ -1,5 +1,6 @@
 package org.quark.ogame.uni;
 
+import java.util.List;
 import java.util.Map;
 
 public interface OGameEconomyRuleSet {
@@ -34,11 +35,23 @@ public interface OGameEconomyRuleSet {
 		}
 	}
 
+	public class Requirement {
+		public final AccountUpgradeType type;
+		public final int level;
+
+		public Requirement(AccountUpgradeType type, int level) {
+			this.type = type;
+			this.level = level;
+		}
+	}
+
 	Production getProduction(Account account, Planet planet, ResourceType resourceType, double energyFactor);
+	int getSatelliteEnergy(Account account, Planet planet);
 	long getStorage(Planet planet, ResourceType resourceType);
 	int getMaxCrawlers(Account account, Planet planet);
 
 	UpgradeCost getUpgradeCost(Account account, RockyBody planetOrMoon, AccountUpgradeType upgrade, int fromLevel, int toLevel);
+	List<Requirement> getRequirements(AccountUpgradeType target);
 
 	int getFields(Planet planet);
 	int getFields(Moon moon);

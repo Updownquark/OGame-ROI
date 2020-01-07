@@ -77,6 +77,16 @@ public class OGameCost {
 		return getTotalCost(0) * metalTradeRate + getTotalCost(1) * crystalTradeRate + getTotalCost(2) * deutTradeRate;
 	}
 
+	public long getTotalCost() {
+		long cost = 0;
+		for (int i = 0; i < theCosts.length; i++) {
+			for (int j = 0; j < theCosts[i].length; j++) {
+				cost += theCosts[i][j];
+			}
+		}
+		return cost;
+	}
+
 	private static long[][] copy(long[][] a) {
 		long[][] copy = new long[a.length][];
 		for (int i = 0; i < a.length; i++) {

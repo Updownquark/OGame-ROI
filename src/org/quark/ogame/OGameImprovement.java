@@ -2,6 +2,8 @@ package org.quark.ogame;
 
 import java.time.Duration;
 
+import org.quark.ogame.uni.UpgradeCost;
+
 public class OGameImprovement {
 	public final int metal;
 	public final int crystal;
@@ -24,25 +26,25 @@ public class OGameImprovement {
 	public final int level;
 	public final Duration roi;
 
-	public final OGameCost accountValue;
+	public final UpgradeCost accountValue;
 
-	public OGameImprovement(OGameState state, OGameImprovementType type, int level, Duration roi) {
-		metal = state.getBuildingLevel(OGameBuildingType.Metal);
-		crystal = state.getBuildingLevel(OGameBuildingType.Crystal);
-		deut = state.getBuildingLevel(OGameBuildingType.Deuterium);
-		fusion = state.getBuildingLevel(OGameBuildingType.Fusion);
-		energy = state.getEnergyTech();
-		plasma = state.getPlasmaTech();
-		planets = state.getPlanets();
-		robotics = state.getBuildingLevel(OGameBuildingType.Robotics);
-		nanites = state.getBuildingLevel(OGameBuildingType.Nanite);
-		researchLab = state.getBuildingLevel(OGameBuildingType.ResearchLab);
-		irn = state.getIRN();
-		metalStorage = state.getBuildingLevel(OGameBuildingType.MetalStorage);
-		crystalStorage = state.getBuildingLevel(OGameBuildingType.CrystalStorage);
-		deutStorage = state.getBuildingLevel(OGameBuildingType.DeutStorage);
-		crawlers = state.getCrawlers();
-		buildings = state.getTotalBuildingCount();
+	public OGameImprovement(OGameState2 state, OGameImprovementType type, int level, Duration roi) {
+		metal = state.getPlanet().getMetalMine();
+		crystal = state.getPlanet().getCrystalMine();
+		deut = state.getPlanet().getDeuteriumSynthesizer();
+		fusion = state.getPlanet().getFusionReactor();
+		energy = state.getAccount().getResearch().getEnergy();
+		plasma = state.getAccount().getResearch().getPlasma();
+		planets = state.getPlanetCount();
+		robotics = state.getPlanet().getRoboticsFactory();
+		nanites = state.getPlanet().getNaniteFactory();
+		researchLab = state.getPlanet().getResearchLab();
+		irn = state.getAccount().getResearch().getIntergalacticResearchNetwork();
+		metalStorage = state.getPlanet().getMetalStorage();
+		crystalStorage = state.getPlanet().getCrystalStorage();
+		deutStorage = state.getPlanet().getDeuteriumStorage();
+		crawlers = state.getPlanet().getCrawlers();
+		buildings = state.getPlanet().getUsedFields();
 
 		this.type = type;
 		this.level = level;

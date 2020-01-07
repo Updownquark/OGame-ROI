@@ -102,6 +102,21 @@ public enum AccountUpgradeType {
 		throw new IllegalStateException();
 	}
 
+	public void setLevel(Account account, RockyBody planetOrMoon, int level) {
+		switch (type) {
+		case Building:
+			planetOrMoon.setBuildingLevel(building, level);
+			return;
+		case Research:
+			account.getResearch().setResearchLevel(research, level);
+			return;
+		case ShipyardItem:
+			planetOrMoon.setStationedShips(shipyardItem, level);
+			return;
+		}
+		throw new IllegalStateException();
+	}
+
 	private AccountUpgradeType(UpgradeType type) {
 		this.type = type;
 		switch (type) {

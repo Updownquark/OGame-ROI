@@ -7,7 +7,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.text.DecimalFormat;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,6 +40,7 @@ import org.qommons.StringUtils;
 import org.qommons.ValueHolder;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
+import org.quark.ogame.OGameUtils;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.AccountUpgrade;
@@ -48,6 +48,7 @@ import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
 import org.quark.ogame.uni.OGameRuleSet;
 import org.quark.ogame.uni.Planet;
+import org.quark.ogame.uni.PointType;
 import org.quark.ogame.uni.Research;
 import org.quark.ogame.uni.ResearchType;
 import org.quark.ogame.uni.ShipyardItemType;
@@ -87,7 +88,7 @@ public class OGameUniGui extends JPanel {
 			Account::getReferenceAccount, Account::getReferenceAccount, null);
 
 		theGlobalUpgrades = ObservableCollection.build(AccountUpgrade.class).safe(false).build();
-		Observable.or(theSelectedAccount.noInitChanges(), theReferenceAccount.noInitChanges()).act(__ -> {
+		Observable.or(theSelectedAccount.changes(), theReferenceAccount.noInitChanges()).act(__ -> {
 			Account account = theSelectedAccount.get();
 			Account refAcct = theReferenceAccount.get();
 			if (account == null || refAcct == null) {
@@ -172,7 +173,10 @@ public class OGameUniGui extends JPanel {
 					.withColumn("Reference", Account.class, Account::getReferenceAccount,
 						refColumn -> refColumn.withWidths(50, 100, 300)//
 						.formatText(account -> account == null ? "" : account.getName()))//
-					.withColumn("Eco Points", String.class, account -> OGameUniGui.this.printPoints(account), //
+								.withColumn("Eco Points", String.class, account -> OGameUniGui.this.printPoints(account, PointType.Economy), //
+									pointsColumn -> pointsColumn.withWidths(75, 75, 75))//
+								.withColumn("Rsrch Points", String.class,
+									account -> OGameUniGui.this.printPoints(account, PointType.Research), //
 						pointsColumn -> pointsColumn.withWidths(75, 75, 75))//
 					.withSelection(theSelectedAccount, false)//
 					.withAdd(() -> initAccount(theAccounts.create()//
@@ -351,10 +355,14 @@ public class OGameUniGui extends JPanel {
 											.withColumn("Upgrade", AccountUpgradeType.class, upgrade -> upgrade.type, null)//
 											.withColumn("From", int.class, upgrade -> upgrade.fromLevel, null)//
 											.withColumn("To", int.class, upgrade -> upgrade.toLevel, null)//
-											.withColumn("Metal", String.class, upgrade -> printResourceAmount(upgrade.cost.metal), null)//
-											.withColumn("Crystal", String.class, upgrade -> printResourceAmount(upgrade.cost.crystal), null)//
-											.withColumn("Deut", String.class, upgrade -> printResourceAmount(upgrade.cost.deuterium), null)//
-											.withColumn("Time", String.class, upgrade -> printUpgradeTime(upgrade.cost.upgradeTime), null))//
+											.withColumn("Metal", String.class,
+												upgrade -> OGameUtils.printResourceAmount(upgrade.cost.getMetal()), null)//
+											.withColumn("Crystal", String.class,
+												upgrade -> OGameUtils.printResourceAmount(upgrade.cost.getCrystal()), null)//
+											.withColumn("Deut", String.class,
+												upgrade -> OGameUtils.printResourceAmount(upgrade.cost.getDeuterium()), null)//
+											.withColumn("Time", String.class, upgrade -> printUpgradeTime(upgrade.cost.getUpgradeTime()),
+												null))//
 							, acctResearchTab -> acctResearchTab.setName("Research")//
 								)//
 				// .withVTab("construction",
@@ -479,14 +487,11 @@ public class OGameUniGui extends JPanel {
 		return column;
 	}
 
-	static final DecimalFormat WHOLE_FORMAT = new DecimalFormat("#,##0");
-	static final DecimalFormat THREE_DIGIT_FORMAT = new DecimalFormat("#,##0.000");
-
-	String printPoints(Account account) {
+	String printPoints(Account account, PointType type) {
 		if (account.getPlanets().getValues().isEmpty()) {
 			return "0";
 		}
-		UpgradeCost cost = new UpgradeCost(0, 0, 0, 0, Duration.ZERO);
+		UpgradeCost cost = UpgradeCost.ZERO;
 		OGameRuleSet rules = theSelectedRuleSet.get();
 		for (AccountUpgradeType upgrade : AccountUpgradeType.values()) {
 			switch (upgrade.type) {
@@ -508,37 +513,21 @@ public class OGameUniGui extends JPanel {
 				break;
 			}
 		}
-		double value = cost.getMetalValue(account.getUniverse().getTradeRatios());
+		double value = cost.getPoints(type);
 		value /= 1E3;
-		if (value < 1E6) {
-			return WHOLE_FORMAT.format(value);
-		} else if (value < 1E9) {
-			return THREE_DIGIT_FORMAT.format(value / 1E6) + "M";
-		} else {
-			return THREE_DIGIT_FORMAT.format(value / 1E9) + "B";
-		}
+		return OGameUtils.printResourceAmount(value);
 	}
 
-	static String printResourceAmount(double amount) {
-		StringBuilder str = new StringBuilder();
-		if (amount < 0) {
-			str.append('-');
-			amount = -amount;
-		}
-		if (amount < 1E6) {
-			str.append(OGameUniGui.WHOLE_FORMAT.format(amount));
-		} else if (amount < 1E9) {
-			str.append(OGameUniGui.THREE_DIGIT_FORMAT.format(amount / 1E6)).append('M');
-		} else if (amount < 1E12) {
-			str.append(OGameUniGui.THREE_DIGIT_FORMAT.format(amount / 1E9)).append('B');
-		} else {
-			str.append(OGameUniGui.THREE_DIGIT_FORMAT.format(amount / 1E12)).append('T');
-		}
-		return str.toString();
-	}
+	private static final Duration WEEK = Duration.ofDays(7);
 
 	static String printUpgradeTime(Duration upgradeTime) {
-		return QommonsUtils.printDuration(upgradeTime, true);
+		if (upgradeTime.compareTo(WEEK) < 0) {
+			return QommonsUtils.printDuration(upgradeTime, true);
+		} else {
+			int wks = (int) (upgradeTime.getSeconds() / WEEK.getSeconds());
+			Duration days = Duration.ofSeconds(upgradeTime.getSeconds() % WEEK.getSeconds(), upgradeTime.getNano());
+			return wks + "w" + QommonsUtils.printDuration(days, true);
+		}
 	}
 
 	int getNewId() {
@@ -696,15 +685,7 @@ public class OGameUniGui extends JPanel {
 		List<OGameRuleSet> ruleSets = new ArrayList<>();
 		ruleSets.add(new OGameRuleSet710());
 		ObservableSwingUtils.systemLandF();
-		ValueHolder<ObservableValueSet<Account>> accounts = new ValueHolder<>();
-		ObservableConfigFormat<Account> accountRefFormat = ObservableConfigFormat
-			.<Account> buildReferenceFormat(fv -> accounts.get().getValues(), null)//
-			.withField("id", Account::getId, ObservableConfigFormat.INT).build();
-		config.asValue(TypeTokens.get().of(Account.class))
-		.asEntity(efb -> efb//
-			.withFieldFormat(Account::getReferenceAccount, accountRefFormat))//
-		.at("accounts/account").buildEntitySet(accounts);
-		OGameUniGui ui = new OGameUniGui(config, ruleSets, accounts.get());
+		OGameUniGui ui = new OGameUniGui(config, ruleSets, getAccounts(config, "accounts/account"));
 		JFrame frame = new JFrame("OGame Account Helper");
 		// frame.setContentPane(ui);
 		frame.getContentPane().add(ui);
@@ -712,5 +693,17 @@ public class OGameUniGui extends JPanel {
 		frame.pack();
 		ObservableSwingUtils.configureFrameBounds(frame, config);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+	}
+
+	public static ObservableValueSet<Account> getAccounts(ObservableConfig config, String path) {
+		ValueHolder<ObservableValueSet<Account>> accounts = new ValueHolder<>();
+		ObservableConfigFormat<Account> accountRefFormat = ObservableConfigFormat
+			.<Account> buildReferenceFormat(fv -> accounts.get().getValues(), null)//
+			.withField("id", Account::getId, ObservableConfigFormat.INT).build();
+		config.asValue(TypeTokens.get().of(Account.class))
+		.asEntity(efb -> efb//
+			.withFieldFormat(Account::getReferenceAccount, accountRefFormat))//
+			.at(path).buildEntitySet(accounts);
+		return accounts.get();
 	}
 }

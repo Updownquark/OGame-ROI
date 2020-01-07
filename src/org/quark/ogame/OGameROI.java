@@ -10,6 +10,13 @@ import java.util.function.Consumer;
 
 import org.observe.SettableValue;
 import org.observe.SimpleSettableValue;
+import org.quark.ogame.uni.AccountClass;
+import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
+import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
+import org.quark.ogame.uni.OGameRuleSet;
+import org.quark.ogame.uni.ResourceType;
+import org.quark.ogame.uni.UpgradeCost;
+import org.quark.ogame.uni.versions.OGameRuleSet710;
 
 public class OGameROI {
 	private final SettableValue<Integer> theEconomySpeed;
@@ -100,10 +107,11 @@ public class OGameROI {
 	private static final int PLANETS_BEFORE_FUSION = 3;
 
 	public static class ROIComputation implements Spliterator<OGameImprovement> {
-		private final OGameState theState;
-		private final double[] theTradeRates;
+		private final OGameRuleSet theRules;
+		private final OGameState2 theState;
+		private final boolean isUsingCrawlers;
 		private final double theFusionContribution;
-		private double[] theCurrentProduction;
+		private long[] theCurrentProduction;
 		private double theDailyStorageRequirement;
 		private final boolean isWithAggressiveHelpers;
 		private int theImprovementCounter; // Just debugging
@@ -111,22 +119,25 @@ public class OGameROI {
 		ROIComputation(int ecoSpeed, int researchSpeed, int planetTemp, boolean miningClass, boolean useCrawlers, double fusionContribution,
 			double dailyStorage, boolean aggressiveHelpers, //
 			double metalTradeRate, double crystalTradeRate, double deutTradeRate) {
-			theTradeRates = new double[] { metalTradeRate, crystalTradeRate, deutTradeRate };
+			theRules = new OGameRuleSet710();
 			theDailyStorageRequirement = dailyStorage;
 			isWithAggressiveHelpers = aggressiveHelpers;
+			isUsingCrawlers = useCrawlers;
 			theFusionContribution = fusionContribution;
-			theState = new OGameState(new OGameRules(), ecoSpeed, researchSpeed, planetTemp, miningClass, useCrawlers);
-			for (int i = 0; i < 12; i++) {
-				theState.upgrade(OGameImprovementType.Energy).effect();
-			}
+			theState = new OGameState2(theRules);
+			theState.getAccount().setGameClass(miningClass ? AccountClass.Collector : AccountClass.Unselected)//
+				.getUniverse().setCollectorEnergyBonus(10).setCollectorProductionBonus(25).setCrawlerCap(8)//
+				.setEconomySpeed(ecoSpeed).setResearchSpeed(researchSpeed)//
+				.getTradeRatios().setMetal(metalTradeRate).setCrystal(crystalTradeRate).setDeuterium(deutTradeRate);
+			theState.getPlanet().setMinimumTemperature(planetTemp - 20).setMaximumTemperature(planetTemp + 20);
 			theCurrentProduction = theState.getProduction();
 		}
 
-		public OGameState getState() {
+		public OGameState2 getState() {
 			return theState;
 		}
 
-		public double[] getCurrentProduction() {
+		public long[] getCurrentProduction() {
 			return theCurrentProduction;
 		}
 
@@ -134,16 +145,19 @@ public class OGameROI {
 		public boolean tryAdvance(Consumer<? super OGameImprovement> action) {
 			List<OGameImprovementType> bestType = new ArrayList<>();
 			Duration bestROI = null;
-			OGameCost bestCost = null;
-			double[] postUpgradeProduction = null;
-			List<OGameState.Upgrade> tempUpgrades = new ArrayList<>();
+			UpgradeCost bestCost = null;
+			long[] postUpgradeProduction = null;
+			List<OGameState2.Upgrade> tempUpgrades = new ArrayList<>();
 			for (OGameImprovementType type : OGameImprovementType.values()) {
-				if (type.energyType || type.isHelper || type.isStorage() >= 0) {
+				if (type.energyType || type.isHelper || type.isStorage() != null) {
 					continue; // No upgrade benefit by itself
+				} else if (type == OGameImprovementType.Crawler && !isUsingCrawlers) {
+					continue;
 				}
-				OGameCost cost = theState.getImprovementCost(type);
-				tempUpgrades.add(theState.upgrade(type));
-				double[] production = theState.getProduction();
+				OGameState2.Upgrade upgrade=theState.upgrade(type);
+				tempUpgrades.add(upgrade);
+				UpgradeCost cost = upgrade.getCost();
+				long[] production = theState.getProduction();
 				Duration roi = calculateROI(cost, theCurrentProduction, production);
 				if (bestROI == null || roi.compareTo(bestROI) < 0) {
 					bestType.clear();
@@ -170,11 +184,11 @@ public class OGameROI {
 					postUpgradeProduction[1] - theCurrentProduction[1], //
 					postUpgradeProduction[2] - theCurrentProduction[2]);
 				for (OGameImprovementType helper : helpers) {
-					OGameState.Upgrade helperUpgrade = theState.upgrade(helper);
+					OGameState2.Upgrade helperUpgrade = theState.upgrade(helper);
 					double helperCost = calcValueCost(helperUpgrade.getCost());
 					Duration postUpgradeTime = Duration.ZERO;
 					for (OGameImprovementType type : bestType) {
-						OGameState.Upgrade postHelpUpgrade = theState.upgrade(type);
+						OGameState2.Upgrade postHelpUpgrade = theState.upgrade(type);
 						postUpgradeTime = postUpgradeTime.plus(postHelpUpgrade.getCost().getUpgradeTime());
 						tempUpgrades.add(postHelpUpgrade);
 					}
@@ -184,6 +198,9 @@ public class OGameROI {
 					}
 					tempUpgrades.clear();
 
+					if (bestCost.getUpgradeTime() == null || postUpgradeTime == null) {
+						bestCost.getUpgradeTime();
+					}
 					Duration upgradeTimeDiff = bestCost.getUpgradeTime().minus(postUpgradeTime);
 					double addedProduction = addedProductionRate * (upgradeTimeDiff.getSeconds() / 3600.0);
 					if (isWithAggressiveHelpers) {
@@ -224,31 +241,55 @@ public class OGameROI {
 			}
 			theCurrentProduction = postUpgradeProduction;
 			theImprovementCounter++;
-			if (theState.getPlanets() >= PLANETS_BEFORE_FUSION && theFusionContribution > 0.0) {
-				double[] energy = theState.getEnergyProductionConsumption();
-				double fusionEnergy = energy[0] - theState.getSatelliteEnergy();
+			if (theState.getPlanetCount() >= PLANETS_BEFORE_FUSION && theFusionContribution > 0.0) {
+				Production energy = theState.getEnergy();
+				double fusionEnergy = energy.byType.get(ProductionSource.Fusion);
 				int newFusion = 0;
 				int newEnergy = 0;
-				boolean fusionInit = theState.getBuildingLevel(OGameBuildingType.Fusion) == 0;
-				while (fusionEnergy / energy[1] < theFusionContribution) {
+				int otherEnergy = 0;
+				for (ProductionSource src : ProductionSource.values()) {
+					switch (src) {
+					case Solar:
+					case Satellite:
+						otherEnergy += energy.byType.get(src);
+						break;
+					default:
+						break;
+					}
+				}
+				boolean fusionInit = theState.getPlanet().getFusionReactor() == 0;
+				while (fusionEnergy / (fusionEnergy + otherEnergy) < theFusionContribution) {
 					// More fusion power
-					OGameCost fusionCost = theState.getImprovementCost(OGameImprovementType.Fusion);
-					OGameState.Upgrade energyUpgrade = theState.upgrade(OGameImprovementType.Fusion);
+					OGameState2.Upgrade energyUpgrade = theState.upgrade(OGameImprovementType.Fusion);
+					UpgradeCost fusionCost = energyUpgrade.getCost();
 					double fusionBuildingCost = calcValueCost(fusionCost);
-					double fusionDeutCost = (postUpgradeProduction[2] - theState.getProduction()[2]) / theTradeRates[2]
+					double fusionDeutCost = (postUpgradeProduction[2] - theState.getProduction()[2])
+						/ theState.getAccount().getUniverse().getTradeRatios().getDeuterium()
 						* bestROI.getSeconds() / 3600.0;
 					double fusionTotalCost = fusionBuildingCost + fusionDeutCost;
-					double newFusionEnergy1 = theState.getEnergyProductionConsumption()[0] - theState.getSatelliteEnergy();
-					double fusionEfficiency = (newFusionEnergy1 - fusionEnergy) * theState.getPlanets() / fusionTotalCost;
+					int newFusionEnergy1 = theState.getEnergy().byType.get(ProductionSource.Fusion);
+					double fusionEfficiency = (newFusionEnergy1 - fusionEnergy) * theState.getPlanetCount() / fusionTotalCost;
 					energyUpgrade.undo();
-					OGameCost energyCost = theState.getImprovementCost(OGameImprovementType.Energy);
 					energyUpgrade = theState.upgrade(OGameImprovementType.Energy);
+					UpgradeCost energyCost = energyUpgrade.getCost();
 					double energyTotalCost = calcValueCost(energyCost);
-					double newFusionEnergy2 = theState.getEnergyProductionConsumption()[0] - theState.getSatelliteEnergy();
-					double energyEfficiency = (newFusionEnergy2 - fusionEnergy) * theState.getPlanets() / energyTotalCost;
+					int newFusionEnergy2 = theState.getEnergy().byType.get(ProductionSource.Fusion);
+					double energyEfficiency = (newFusionEnergy2 - fusionEnergy) * theState.getPlanetCount() / energyTotalCost;
 					energyUpgrade.undo();
-					if (fusionEfficiency >= energyEfficiency) {
-						bestCost = fusionCost;
+					int newFusionEnergy3;
+					double fusionUtilEfficiency;
+					if (theState.getPlanet().getFusionReactorUtilization() < 100) {
+						theState.getPlanet().setFusionReactorUtilization(theState.getPlanet().getFusionReactorUtilization() + 10);
+						fusionDeutCost = (postUpgradeProduction[2] - theState.getProduction()[2])
+							/ theState.getAccount().getUniverse().getTradeRatios().getDeuterium() * bestROI.getSeconds() / 3600.0;
+						newFusionEnergy3 = theState.getEnergy().byType.get(ProductionSource.Fusion);
+						fusionUtilEfficiency = (newFusionEnergy3 - fusionEnergy) * theState.getPlanetCount() / fusionDeutCost;
+						theState.getPlanet().setFusionReactorUtilization(theState.getPlanet().getFusionReactorUtilization() - 10);
+					} else {
+						newFusionEnergy3 = 0;
+						fusionUtilEfficiency = 0;
+					}
+					if (fusionEfficiency >= energyEfficiency && fusionEfficiency > fusionUtilEfficiency) {
 						energyUpgrade = theState.upgrade(OGameImprovementType.Fusion);
 						newFusion = energyUpgrade.effect();
 						if (!fusionInit) {
@@ -256,8 +297,7 @@ public class OGameROI {
 							System.out.println(OGameImprovementType.Fusion + " " + newFusion);
 						}
 						fusionEnergy = newFusionEnergy1;
-					} else {
-						bestCost = energyCost;
+					} else if (energyEfficiency > fusionUtilEfficiency) {
 						energyUpgrade = theState.upgrade(OGameImprovementType.Energy);
 						newEnergy = energyUpgrade.effect();
 						if (!fusionInit) {
@@ -265,8 +305,27 @@ public class OGameROI {
 							System.out.println(OGameImprovementType.Energy + " " + newEnergy);
 						}
 						fusionEnergy = newFusionEnergy2;
+					} else {
+						theState.getPlanet().setFusionReactorUtilization(theState.getPlanet().getFusionReactorUtilization() + 10);
+						fusionEnergy = newFusionEnergy3;
 					}
-					energy = theState.getEnergyProductionConsumption();
+					energy = theState.getEnergy();
+					if (theState.getPlanet().getSolarSatellites() > 0 && energy.totalProduction > energy.totalConsumption) {
+						int satEnergy = theRules.economy().getSatelliteEnergy(theState.getAccount(), theState.getPlanet());
+						int dropped = (energy.totalProduction - energy.totalConsumption) / satEnergy;
+						theState.getPlanet().setSolarSatellites(theState.getPlanet().getSolarSatellites() - dropped);
+					}
+					otherEnergy = 0;
+					for (ProductionSource src : ProductionSource.values()) {
+						switch (src) {
+						case Solar:
+						case Satellite:
+							otherEnergy += energy.byType.get(src);
+							break;
+						default:
+							break;
+						}
+					}
 					postUpgradeProduction = theState.getProduction();
 				}
 				if (fusionInit) {
@@ -278,16 +337,17 @@ public class OGameROI {
 			}
 			// See if we need to upgrade storage
 			if (theDailyStorageRequirement > 0) {
-				int resType = bestType.get(0).isMine();
-				if (resType >= 0) {
-					double storageAmount = theState.getStorageCapacity(resType);
+				ResourceType resType = bestType.get(0).isMine();
+				if (resType != null) {
+					double storageAmount = theRules.economy().getStorage(theState.getPlanet(), resType);
 					// No way a single mine upgrade would cause the need for 2 storage levels, but this is for completeness
-					while (storageAmount < theDailyStorageRequirement / theState.getPlanets() * 24 * theCurrentProduction[resType]) {
+					while (storageAmount < theDailyStorageRequirement / theState.getPlanetCount() * 24
+						* theCurrentProduction[resType.ordinal()]) {
 						OGameImprovementType upgradeType = OGameImprovementType.getStorageImprovement(resType);
 						int level = theState.upgrade(upgradeType).effect();
 						action.accept(new OGameImprovement(theState, upgradeType, level, null));
 						System.out.println(upgradeType + " " + level);
-						storageAmount = theState.getStorageCapacity(resType);
+						storageAmount = theRules.economy().getStorage(theState.getPlanet(), resType);
 					}
 				}
 			}
@@ -309,19 +369,22 @@ public class OGameROI {
 			return 0;
 		}
 
-		private double calcValueCost(OGameCost upgradeCost) {
-			return calcValue(upgradeCost.getTotalCost(0), upgradeCost.getTotalCost(1), upgradeCost.getTotalCost(2));
+		private double calcValueCost(UpgradeCost upgradeCost) {
+			return calcValue(upgradeCost.getMetal(), upgradeCost.getCrystal(), upgradeCost.getDeuterium());
 		}
 
-		private double calcValue(double metal, double crystal, double deuterium) {
-			return metal / theTradeRates[0] + crystal / theTradeRates[1] + deuterium / theTradeRates[2];
+		private double calcValue(long metal, long crystal, long deuterium) {
+			return metal / theState.getAccount().getUniverse().getTradeRatios().getMetal()//
+				+ crystal / theState.getAccount().getUniverse().getTradeRatios().getCrystal()//
+				+ deuterium / theState.getAccount().getUniverse().getTradeRatios().getDeuterium();
 		}
 
-		private Duration calculateROI(OGameCost upgradeCost, double[] previousProduction, double[] postProduction) {
+		private Duration calculateROI(UpgradeCost upgradeCost, long[] previousProduction, long[] postProduction) {
 			double valueCost = calcValueCost(upgradeCost);
-			double productionValueDiff = (postProduction[0] - previousProduction[0]) / theTradeRates[0]//
-				+ (postProduction[1] - previousProduction[1]) / theTradeRates[1]//
-				+ (postProduction[2] - previousProduction[2]) / theTradeRates[2];
+			double productionValueDiff = (postProduction[0] - previousProduction[0])
+				/ theState.getAccount().getUniverse().getTradeRatios().getMetal()//
+				+ (postProduction[1] - previousProduction[1]) / theState.getAccount().getUniverse().getTradeRatios().getCrystal()//
+				+ (postProduction[2] - previousProduction[2]) / theState.getAccount().getUniverse().getTradeRatios().getDeuterium();
 			double hours = valueCost / productionValueDiff;
 			if (hours < 0) {
 				return Duration.ofDays(365000000);

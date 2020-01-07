@@ -86,4 +86,58 @@ public interface Research {
 		}
 		throw new IllegalStateException("Unrecognized research type " + type);
 	}
+
+	default void setResearchLevel(ResearchType type, int level) {
+		switch (type) {
+		case Energy:
+			setEnergy(level);
+			return;
+		case Laser:
+			setLaser(level);
+			return;
+		case Ion:
+			setIon(level);
+			return;
+		case Hyperspace:
+			setHyperspace(level);
+			return;
+		case Plasma:
+			setPlasma(level);
+			return;
+		case Combustion:
+			setCombustionDrive(level);
+			return;
+		case Impulse:
+			setImpulseDrive(level);
+			return;
+		case Hyperdrive:
+			setHyperspaceDrive(level);
+			return;
+		case Espionage:
+			setEspionage(level);
+			return;
+		case Computer:
+			setComputer(level);
+			return;
+		case Astrophysics:
+			setAstrophysics(level);
+			return;
+		case IntergalacticResearchNetwork:
+			setIntergalacticResearchNetwork(level);
+			return;
+		case Graviton:
+			setGraviton(level);
+			return;
+		case Weapons:
+			setWeapons(level);
+			return;
+		case Shielding:
+			setShielding(level);
+			return;
+		case Armor:
+			setArmor(level);
+			return;
+		}
+		throw new IllegalStateException("Unrecognized research type " + type);
+	}
 }

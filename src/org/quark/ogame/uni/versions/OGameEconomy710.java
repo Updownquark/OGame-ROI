@@ -3,6 +3,8 @@ package org.quark.ogame.uni.versions;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -20,6 +22,7 @@ import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.RockyBody;
 import org.quark.ogame.uni.UpgradeCost;
+import org.quark.ogame.uni.UpgradeType;
 
 public class OGameEconomy710 implements OGameEconomyRuleSet {
 	static class MineProduction {
@@ -44,26 +47,46 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		final int baseMetal;
 		final int baseCrystal;
 		final int baseDeuterium;
-		final int baseEnergy;
-		final double resourceExponent;
-		final double energyExponent;
+		int baseEnergy;
+		double resourceExponent;
+		double energyExponent;
+		double ecoWeight;
+		List<Requirement> requirements;
 
-		public CostDescrip(int baseMetal, int baseCrystal, int baseDeuterium, int baseEnergy, double resourceExponent,
-			double energyExponent) {
+		/** Building/research constructor */
+		public CostDescrip(int baseMetal, int baseCrystal, int baseDeuterium, double resourceExp) {
 			this.baseMetal = baseMetal;
 			this.baseCrystal = baseCrystal;
 			this.baseDeuterium = baseDeuterium;
-			this.baseEnergy = baseEnergy;
-			this.resourceExponent = resourceExponent;
-			this.energyExponent = energyExponent;
+			this.baseEnergy = 0;
+			this.resourceExponent = resourceExp;
+			this.energyExponent = resourceExp;
+			ecoWeight = 1;
+			requirements = Collections.emptyList();
 		}
 
-		public CostDescrip(int baseMetal, int baseCrystal, int baseDeuterium, double exponent) {
-			this(baseMetal, baseCrystal, baseDeuterium, 0, exponent, 1);
-		}
-
+		/** Shipyard type constructor */
 		public CostDescrip(int baseMetal, int baseCrystal, int baseDeuterium) {
-			this(baseMetal, baseCrystal, baseDeuterium, 0, 1, 1);
+			this(baseMetal, baseCrystal, baseDeuterium, 1);
+		}
+
+		public CostDescrip withEnergy(int base, double exponent) {
+			baseEnergy = base;
+			energyExponent = exponent;
+			return this;
+		}
+
+		public CostDescrip withEcoWeight(double weight) {
+			ecoWeight = weight;
+			return this;
+		}
+
+		public CostDescrip withRequirement(AccountUpgradeType type, int level) {
+			if (requirements.isEmpty()) {
+				requirements = new LinkedList<>();
+			}
+			requirements.add(new Requirement(type, level));
+			return this;
 		}
 	}
 
@@ -91,7 +114,10 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				costs.put(upgrade, new CostDescrip(75, 30, 0, 1.5));
 				break;
 			case FusionReactor:
-				costs.put(upgrade, new CostDescrip(900, 360, 180, 1.8));
+				costs.put(upgrade,
+					new CostDescrip(900, 360, 180, 1.8)//
+					.withRequirement(AccountUpgradeType.DeuteriumSynthesizer, 5)//
+						.withRequirement(AccountUpgradeType.Energy, 3));
 				break;
 			case MetalStorage:
 				costs.put(upgrade, new CostDescrip(1000, 0, 0, 2));
@@ -118,62 +144,99 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				costs.put(upgrade, new CostDescrip(20000, 20000, 1000, 2));
 				break;
 			case NaniteFactory:
-				costs.put(upgrade, new CostDescrip(1000000, 500000, 100000, 2));
+				costs.put(upgrade,
+					new CostDescrip(1000000, 500000, 100000, 2)//
+					.withRequirement(AccountUpgradeType.RoboticsFactory, 10)//
+						.withRequirement(AccountUpgradeType.Computer, 10));
 				break;
 			case Terraformer:
-				costs.put(upgrade, new CostDescrip(0, 50000, 100000, 1000, 2, 2));
+				costs.put(upgrade, new CostDescrip(0, 50000, 100000, 2).withEnergy(1000, 2));
 				break;
 			case SpaceDock:
-				costs.put(upgrade, new CostDescrip(200, 0, 50, 50, 5, 2.5));
+				costs.put(upgrade, new CostDescrip(200, 0, 50, 5).withEnergy(50, 2.5)//
+					.withRequirement(AccountUpgradeType.Shipyard, 2));
 				break;
 			case LunarBase:
 				costs.put(upgrade, new CostDescrip(20000, 40000, 20000, 2));
 				break;
 			case SensorPhalanx:
-				costs.put(upgrade, new CostDescrip(20000, 40000, 20000, 2));
+				costs.put(upgrade, new CostDescrip(20000, 40000, 20000, 2).withEcoWeight(.5)//
+					.withRequirement(AccountUpgradeType.LunarBase, 1));
 				break;
 			case JumpGate:
-				costs.put(upgrade, new CostDescrip(2000000, 4000000, 2000000, 2));
+				costs.put(upgrade, new CostDescrip(2000000, 4000000, 2000000, 2).withEcoWeight(.5)//
+					.withRequirement(AccountUpgradeType.LunarBase, 1));
 				break;
 
 			case Energy:
-				costs.put(upgrade, new CostDescrip(0, 800, 400, 2));
+				costs.put(upgrade, new CostDescrip(0, 800, 400, 2)//
+					.withRequirement(AccountUpgradeType.ResearchLab, 1));
 				break;
 			case Laser:
-				costs.put(upgrade, new CostDescrip(200, 100, 0, 2));
+				costs.put(upgrade,
+					new CostDescrip(200, 100, 0, 2)//
+					.withRequirement(AccountUpgradeType.ResearchLab, 1)//
+						.withRequirement(AccountUpgradeType.Energy, 2));
 				break;
 			case Ion:
-				costs.put(upgrade, new CostDescrip(1000, 300, 100, 2));
+				costs.put(upgrade,
+					new CostDescrip(1000, 300, 100, 2)//
+					.withRequirement(AccountUpgradeType.ResearchLab, 4)//
+					.withRequirement(AccountUpgradeType.Energy, 4)//
+						.withRequirement(AccountUpgradeType.Laser, 5));
 				break;
 			case Hyperspace:
-				costs.put(upgrade, new CostDescrip(0, 4000, 2000, 2));
+				costs.put(upgrade,
+					new CostDescrip(0, 4000, 2000, 2)//
+					.withRequirement(AccountUpgradeType.ResearchLab, 7)//
+					.withRequirement(AccountUpgradeType.Energy, 5)//
+						.withRequirement(AccountUpgradeType.Shielding, 5));
 				break;
 			case Plasma:
-				costs.put(upgrade, new CostDescrip(2000, 4000, 1000, 2));
+				costs.put(upgrade,
+					new CostDescrip(2000, 4000, 1000, 2)//
+					.withRequirement(AccountUpgradeType.ResearchLab, 4)//
+					.withRequirement(AccountUpgradeType.Energy, 8)//
+					.withRequirement(AccountUpgradeType.Laser, 10)//
+						.withRequirement(AccountUpgradeType.Ion, 5));
 				break;
 			case Combustion:
 				costs.put(upgrade, new CostDescrip(400, 600, 0, 2));
 				break;
 			case Impulse:
-				costs.put(upgrade, new CostDescrip(2000, 4000, 600, 2));
+				costs.put(upgrade,
+					new CostDescrip(2000, 4000, 600, 2)//
+					.withRequirement(AccountUpgradeType.ResearchLab, 2)//
+						.withRequirement(AccountUpgradeType.Energy, 1));
 				break;
 			case Hyperdrive:
 				costs.put(upgrade, new CostDescrip(10000, 20000, 6000, 2));
 				break;
 			case Espionage:
-				costs.put(upgrade, new CostDescrip(200, 1000, 200, 2));
+				costs.put(upgrade, new CostDescrip(200, 1000, 200, 2)//
+					.withRequirement(AccountUpgradeType.ResearchLab, 3));
 				break;
 			case Computer:
-				costs.put(upgrade, new CostDescrip(0, 400, 600, 2));
+				costs.put(upgrade, new CostDescrip(0, 400, 600, 2)//
+					.withRequirement(AccountUpgradeType.ResearchLab, 1));
 				break;
 			case Astrophysics:
-				costs.put(upgrade, new CostDescrip(4000, 8000, 4000, 1.75));
+				costs.put(upgrade,
+					new CostDescrip(4000, 8000, 4000, 1.75)//
+					.withRequirement(AccountUpgradeType.ResearchLab, 3)//
+					.withRequirement(AccountUpgradeType.Espionage, 4)//
+						.withRequirement(AccountUpgradeType.Impulse, 3));
 				break;
 			case IntergalacticResearchNetwork:
-				costs.put(upgrade, new CostDescrip(240000, 400000, 160000, 2));
+				costs.put(upgrade,
+					new CostDescrip(240000, 400000, 160000, 2)//
+					.withRequirement(AccountUpgradeType.ResearchLab, 10)//
+					.withRequirement(AccountUpgradeType.Computer, 8)//
+						.withRequirement(AccountUpgradeType.Hyperspace, 8));
 				break;
 			case Graviton:
-				costs.put(upgrade, new CostDescrip(0, 0, 0, 300000, 0, 3));
+				costs.put(upgrade, new CostDescrip(0, 0, 0, 0).withEnergy(300000, 3)//
+					.withRequirement(AccountUpgradeType.ResearchLab, 12));
 				break;
 			case Weapons:
 				costs.put(upgrade, new CostDescrip(800, 200, 0, 2));
@@ -186,55 +249,55 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				break;
 
 			case LightFighter:
-				costs.put(upgrade, new CostDescrip(3000, 1000, 0));
+				costs.put(upgrade, new CostDescrip(3000, 1000, 0).withEcoWeight(0));
 				break;
 			case HeavyFighter:
-				costs.put(upgrade, new CostDescrip(6000, 4000, 0));
+				costs.put(upgrade, new CostDescrip(6000, 4000, 0).withEcoWeight(0));
 				break;
 			case Cruiser:
-				costs.put(upgrade, new CostDescrip(20000, 7000, 2000));
+				costs.put(upgrade, new CostDescrip(20000, 7000, 2000).withEcoWeight(0));
 				break;
 			case Battleship:
-				costs.put(upgrade, new CostDescrip(45000, 15000, 0));
+				costs.put(upgrade, new CostDescrip(45000, 15000, 0).withEcoWeight(0));
 				break;
 			case Battlecruiser:
-				costs.put(upgrade, new CostDescrip(30000, 40000, 15000));
+				costs.put(upgrade, new CostDescrip(30000, 40000, 15000).withEcoWeight(0));
 				break;
 			case Bomber:
-				costs.put(upgrade, new CostDescrip(50000, 25000, 15000));
+				costs.put(upgrade, new CostDescrip(50000, 25000, 15000).withEcoWeight(0));
 				break;
 			case Destroyer:
-				costs.put(upgrade, new CostDescrip(60000, 50000, 15000));
+				costs.put(upgrade, new CostDescrip(60000, 50000, 15000).withEcoWeight(0));
 				break;
 			case Deathstar:
-				costs.put(upgrade, new CostDescrip(5000000, 4000000, 1000000));
+				costs.put(upgrade, new CostDescrip(5000000, 4000000, 1000000).withEcoWeight(0));
 				break;
 			case Reaper:
-				costs.put(upgrade, new CostDescrip(85000, 55000, 20000));
+				costs.put(upgrade, new CostDescrip(85000, 55000, 20000).withEcoWeight(0));
 				break;
 			case Pathfinder:
-				costs.put(upgrade, new CostDescrip(8000, 15000, 8000));
+				costs.put(upgrade, new CostDescrip(8000, 15000, 8000).withEcoWeight(.5));
 				break;
 			case SmallCargo:
-				costs.put(upgrade, new CostDescrip(2000, 2000, 0));
+				costs.put(upgrade, new CostDescrip(2000, 2000, 0).withEcoWeight(.5));
 				break;
 			case LargeCargo:
-				costs.put(upgrade, new CostDescrip(6000, 6000, 0));
+				costs.put(upgrade, new CostDescrip(6000, 6000, 0).withEcoWeight(.5));
 				break;
 			case ColonyShip:
-				costs.put(upgrade, new CostDescrip(10000, 20000, 10000));
+				costs.put(upgrade, new CostDescrip(10000, 20000, 10000).withEcoWeight(.5));
 				break;
 			case Recycler:
-				costs.put(upgrade, new CostDescrip(10000, 6000, 2000));
+				costs.put(upgrade, new CostDescrip(10000, 6000, 2000).withEcoWeight(.5));
 				break;
 			case EspionageProbe:
-				costs.put(upgrade, new CostDescrip(0, 1000, 0));
+				costs.put(upgrade, new CostDescrip(0, 1000, 0).withEcoWeight(.5));
 				break;
 			case SolarSatellite:
-				costs.put(upgrade, new CostDescrip(0, 2000, 500));
+				costs.put(upgrade, new CostDescrip(0, 2000, 500).withEcoWeight(.5));
 				break;
 			case Crawler:
-				costs.put(upgrade, new CostDescrip(2000, 2000, 1000));
+				costs.put(upgrade, new CostDescrip(2000, 2000, 1000).withEcoWeight(.5));
 				break;
 			}
 		}
@@ -258,7 +321,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 	}
 
 	/** Storage amount per storage building level, starting at level 0 */
-	private final BetterSortedSet<Integer> STORAGE = new BetterTreeSet<>(false, Integer::compareTo).with(10);
+	private final BetterSortedSet<Long> STORAGE = new BetterTreeSet<>(false, Long::compareTo).with(10L);
 
 	@Override
 	public Production getProduction(Account account, Planet planet, ResourceType resourceType, double energyFactor) {
@@ -269,19 +332,19 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			// Mines
 			int typeAmount = getMineEnergy(METAL_PRODUCTION, //
 				planet.getMetalMine(), planet.getMetalUtilization());
-			byType.put(ProductionSource.MetalMine, typeAmount);
+			byType.put(ProductionSource.MetalMine, -typeAmount);
 			totalConsumed+=typeAmount;
 			typeAmount = getMineEnergy(CRYSTAL_PRODUCTION, //
 				planet.getCrystalMine(), planet.getCrystalUtilization());
-			byType.put(ProductionSource.CrystalMine, typeAmount);
+			byType.put(ProductionSource.CrystalMine, -typeAmount);
 			totalConsumed += typeAmount;
 			typeAmount = getMineEnergy(DEUT_PRODUCTION, //
 				planet.getDeuteriumSynthesizer(), planet.getDeuteriumUtilization());
-			byType.put(ProductionSource.DeuteriumSynthesizer, typeAmount);
+			byType.put(ProductionSource.DeuteriumSynthesizer, -typeAmount);
 			totalConsumed += typeAmount;
 			// Crawlers
 			typeAmount = getUsableCrawlers(account, planet) * 50;
-			byType.put(ProductionSource.Crawler, typeAmount);
+			byType.put(ProductionSource.Crawler, -typeAmount);
 			totalConsumed += typeAmount;
 
 			// Producers
@@ -431,7 +494,8 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		return (planet.getMetalMine() + planet.getCrystalMine() + planet.getDeuteriumSynthesizer()) * 8;
 	}
 
-	protected int getSatelliteEnergy(Account account, Planet planet) {
+	@Override
+	public int getSatelliteEnergy(Account account, Planet planet) {
 		return (int) Math.floor(((planet.getMinimumTemperature() + planet.getMaximumTemperature()) / 2.0 + 160) / 6);
 	}
 
@@ -455,33 +519,34 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			throw new IndexOutOfBoundsException(level + "<0");
 		}
 		while (level >= STORAGE.size()) {
-			STORAGE.add(5 * (int) Math.floor(2.5 * Math.exp(20.0 / 33 * STORAGE.size())));
+			STORAGE.add(5 * (long) Math.floor(2.5 * Math.exp(20.0 / 33 * STORAGE.size())));
 		}
-		return STORAGE.get(level) * 1000;
+		return STORAGE.get(level).longValue() * 1000;
+	}
+
+	@Override
+	public List<Requirement> getRequirements(AccountUpgradeType target) {
+		CostDescrip cost = COST_DESCRIPS.get(target);
+		return cost.requirements.isEmpty() ? cost.requirements : Collections.unmodifiableList(cost.requirements);
 	}
 
 	@Override
 	public UpgradeCost getUpgradeCost(Account account, RockyBody planetOrMoon, AccountUpgradeType upgrade, int fromLevel, int toLevel) {
 		if (fromLevel == toLevel) {
-			return new UpgradeCost(0, 0, 0, 0, Duration.ZERO);
+			return UpgradeCost.ZERO;
 		}
 		CostDescrip cost = COST_DESCRIPS.get(upgrade);
-		long[] resAmounts = getCost(upgrade, fromLevel, toLevel, cost, account, planetOrMoon);
-		long seconds = getUpgradeTime(account, planetOrMoon, upgrade, resAmounts);
-		return new UpgradeCost(resAmounts[0], resAmounts[1], resAmounts[2], (int) resAmounts[3], Duration.ofSeconds(seconds));
-	}
-
-	protected long[] getCost(AccountUpgradeType upgrade, int fromLevel, int toLevel, CostDescrip cost, Account account,
-		RockyBody planetOrMoon) {
 		long[] resAmounts = new long[4];
 		resAmounts[0] = cost.baseMetal;
 		resAmounts[1] = cost.baseCrystal;
 		resAmounts[2] = cost.baseDeuterium;
 		resAmounts[3] = cost.baseEnergy;
 		double resMult = 1;
+		char t = 0;
 		switch (upgrade.type) {
 		case Building:
 		case Research:
+			t = upgrade.type.name().charAt(0);
 			resMult = Math.pow(cost.resourceExponent, Math.min(fromLevel, toLevel))
 				* ((1 - Math.pow(cost.resourceExponent, Math.abs(toLevel - fromLevel))) / (1 - cost.resourceExponent));
 			if (toLevel < fromLevel) {
@@ -489,6 +554,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			}
 			break;
 		case ShipyardItem:
+			t = 's';
 			resMult = (toLevel - fromLevel);
 			if (toLevel < fromLevel) {
 				resMult *= 0.35; // Scrapping
@@ -501,9 +567,24 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		if (cost.energyExponent > 1 && toLevel > fromLevel) {
 			double mult = Math.pow(cost.energyExponent, Math.min(fromLevel, toLevel))
 				* ((1 - Math.pow(cost.energyExponent, Math.abs(toLevel - fromLevel))) / (1 - cost.energyExponent));
-			resAmounts[3] = Math.round(resAmounts[3] * mult);
+			resAmounts[3] = (long) Math.floor(resAmounts[3] * mult);
 		}
-		return resAmounts;
+		long seconds = getUpgradeTime(account, planetOrMoon, upgrade, resAmounts);
+		Duration time = Duration.ofSeconds(seconds);
+		if (upgrade.type == UpgradeType.Research) {
+			return UpgradeCost.of(t, 'r', resAmounts[0], resAmounts[1], resAmounts[2], (int) resAmounts[3], time);
+		} else if (cost.ecoWeight == 1.0) {
+			return UpgradeCost.of(t, 'e', resAmounts[0], resAmounts[1], resAmounts[2], (int) resAmounts[3], time);
+		} else if (cost.ecoWeight == 0.0) {
+			return UpgradeCost.of(t, 'm', resAmounts[0], resAmounts[1], resAmounts[2], (int) resAmounts[3], time);
+		} else {
+			long ecoMetal = Math.round(resAmounts[0] * cost.ecoWeight);
+			long ecoCrystal = Math.round(resAmounts[1] * cost.ecoWeight);
+			long ecoDeuterium = Math.round(resAmounts[2] * cost.ecoWeight);
+			Duration ecoTime = Duration.ofSeconds((long) Math.ceil(seconds * cost.ecoWeight));
+			return UpgradeCost.of(t, 'e', ecoMetal, ecoCrystal, ecoDeuterium, (int) resAmounts[3], ecoTime).plus(UpgradeCost.of(//
+				t, 'm', resAmounts[0] - ecoMetal, resAmounts[1] - ecoCrystal, resAmounts[2] - ecoDeuterium, 0, time.minus(ecoTime)));
+		}
 	}
 
 	protected long getUpgradeTime(Account account, RockyBody planetOrMoon, AccountUpgradeType upgrade, long [] resAmounts){
@@ -540,6 +621,9 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 
 	protected int getTotalLabLevels(Account account, RockyBody planetOrMoon) {
 		if (planetOrMoon == null) {
+			if (account.getPlanets().getValues().isEmpty()) {
+				return 1; //Just to avoid getting arithmetic exceptions
+			}
 			planetOrMoon=account.getPlanets().getValues().getFirst();
 		}
 		int levels = planetOrMoon.getBuildingLevel(BuildingType.ResearchLab);
