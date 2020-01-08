@@ -23,6 +23,8 @@ import javax.swing.border.LineBorder;
 
 import org.observe.Observable;
 import org.observe.SettableValue;
+import org.observe.SimpleObservable;
+import org.observe.collect.CollectionChangeType;
 import org.observe.collect.ObservableCollection;
 import org.observe.config.ObservableConfig;
 import org.observe.config.ObservableConfigFormat;
@@ -38,6 +40,7 @@ import org.qommons.ArrayUtils;
 import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
 import org.qommons.ValueHolder;
+import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
 import org.quark.ogame.OGameUtils;
@@ -46,11 +49,13 @@ import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.AccountUpgrade;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
+import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameRuleSet;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.PointType;
 import org.quark.ogame.uni.Research;
 import org.quark.ogame.uni.ResearchType;
+import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.versions.OGameRuleSet710;
@@ -64,6 +69,8 @@ public class OGameUniGui extends JPanel {
 	private final SettableValue<Account> theSelectedAccount;
 	private final SettableValue<Account> theReferenceAccount;
 
+	private final SimpleObservable<Void> thePlanetRefresh;
+	private final ObservableCollection<PlanetWithProduction> thePlanets;
 	private final ObservableCollection<AccountUpgrade> theGlobalUpgrades;
 
 	public OGameUniGui(ObservableConfig config, List<OGameRuleSet> ruleSets, ObservableValueSet<Account> accounts) {
@@ -129,7 +136,81 @@ public class OGameUniGui extends JPanel {
 			});
 		});
 
+		thePlanetRefresh = new SimpleObservable<>();
+		thePlanets = ObservableCollection
+			.flattenValue(theSelectedAccount.map(
+				account -> account == null ? ObservableCollection.of(TypeTokens.get().of(Planet.class)) : account.getPlanets().getValues()))
+			.flow().refresh(thePlanetRefresh)//
+			.map(TypeTokens.get().of(PlanetWithProduction.class), this::productionFor, opts -> opts.cache(true).reEvalOnUpdate(false))
+			.collect();
+		thePlanets.changes().act(evt -> {
+			if (evt.type == CollectionChangeType.set) {
+				for (PlanetWithProduction p : evt.getValues()) {
+					updateProduction(p);
+				}
+			}
+		});
+
 		initComponents();
+	}
+
+	public ObservableConfig getConfig() {
+		return theConfig;
+	}
+
+	public SettableValue<OGameRuleSet> getRules() {
+		return theSelectedRuleSet;
+	}
+
+	public SettableValue<Account> getSelectedAccount() {
+		return theSelectedAccount;
+	}
+
+	public SettableValue<Account> getReferenceAccount() {
+		return theReferenceAccount;
+	}
+
+	public ObservableCollection<PlanetWithProduction> getPlanets() {
+		return thePlanets;
+	}
+
+	public void refreshProduction() {
+		thePlanetRefresh.onNext(null);
+	}
+
+	public PlanetWithProduction createPlanet() {
+		CollectionElement<Planet> newPlanet = theSelectedAccount.get().getPlanets().create()//
+			.with(Planet::getName,
+				StringUtils.getNewItemName(theSelectedAccount.get().getPlanets().getValues(), Planet::getName, "New Planet",
+					StringUtils.SIMPLE_DUPLICATES))
+			.with(Planet::getBaseFields, 173)//
+			.with(Planet::getMetalUtilization, 100)//
+			.with(Planet::getCrystalUtilization, 100)//
+			.with(Planet::getDeuteriumUtilization, 100)//
+			.with(Planet::getSolarPlantUtilization, 100)//
+			.with(Planet::getSolarSatelliteUtilization, 100)//
+			.with(Planet::getFusionReactorUtilization, 100)//
+			.with(Planet::getCrawlerUtilization, 100)//
+			.create();
+		return thePlanets.getElementsBySource(newPlanet.getElementId()).getFirst().get();
+	}
+
+	PlanetWithProduction productionFor(Planet planet) {
+		PlanetWithProduction p = new PlanetWithProduction(planet);
+		updateProduction(p);
+		return p;
+	}
+
+	void updateProduction(PlanetWithProduction p) {
+		Production energy = theSelectedRuleSet.get().economy().getProduction(theSelectedAccount.get(), p.planet, ResourceType.Energy, 1);
+		double energyFactor = Math.min(1, energy.totalProduction * 1.0 / energy.totalConsumption);
+		Production metal = theSelectedRuleSet.get().economy().getProduction(theSelectedAccount.get(), p.planet, ResourceType.Metal,
+			energyFactor);
+		Production crystal = theSelectedRuleSet.get().economy().getProduction(theSelectedAccount.get(), p.planet, ResourceType.Crystal,
+			energyFactor);
+		Production deuterium = theSelectedRuleSet.get().economy().getProduction(theSelectedAccount.get(), p.planet, ResourceType.Deuterium,
+			energyFactor);
+		p.setProduction(energy, metal, crystal, deuterium);
 	}
 
 	void initComponents() {
@@ -164,7 +245,7 @@ public class OGameUniGui extends JPanel {
 					.withColumn("Universe", String.class, account -> account.getUniverse().getName(),
 						uniColumn -> uniColumn//
 						.withWidths(50, 100, 300)//
-						.withMutation(uniMutator -> uniMutator.mutateAttribute((account, uniName) -> {
+						.withMutation(uniMutator -> uniMutator.mutateAttribute2((account, uniName) -> {
 							account.getUniverse().setName(uniName);
 							return uniName;
 						}).asText(Format.TEXT)))//
@@ -322,9 +403,7 @@ public class OGameUniGui extends JPanel {
 								.spacer(3)//
 								)//
 							, acctSettingsTab -> acctSettingsTab.setName("Settings"))//
-						.withVTab("planets",
-									acctBuildingsPanel -> new PlanetTable(theConfig, theSelectedRuleSet, theSelectedAccount,
-										theReferenceAccount).addPlanetTable(acctBuildingsPanel)//
+								.withVTab("planets", acctBuildingsPanel -> new PlanetTable(this).addPlanetTable(acctBuildingsPanel)//
 							, acctBuildingsTab -> acctBuildingsTab.setName("Planets"))//
 						.withVTab("research", acctResearchPanel -> acctResearchPanel//
 							.addTable(researchColl, researchTable -> researchTable.fill()//
@@ -369,6 +448,8 @@ public class OGameUniGui extends JPanel {
 				// constructionPanel -> new ConstructionPanel(theConfig, theSelectedRuleSet, theSelectedAccount)
 				// .addPanel(constructionPanel),
 				// constructionTab -> constructionTab.setName("Construction"))//
+								.withVTab("resources", resPanel -> new HoldingsPanel(this).addPanel(resPanel),
+									resTab -> resTab.setName("Resources"))//
 						))//
 			);
 	}
@@ -526,7 +607,7 @@ public class OGameUniGui extends JPanel {
 		} else {
 			int wks = (int) (upgradeTime.getSeconds() / WEEK.getSeconds());
 			Duration days = Duration.ofSeconds(upgradeTime.getSeconds() % WEEK.getSeconds(), upgradeTime.getNano());
-			return wks + "w" + QommonsUtils.printDuration(days, true);
+			return wks + "w " + QommonsUtils.printDuration(days, true);
 		}
 	}
 

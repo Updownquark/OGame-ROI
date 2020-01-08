@@ -9,9 +9,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.observe.Observable;
-import org.observe.ObservableValue;
 import org.observe.SettableValue;
-import org.observe.collect.CollectionChangeType;
 import org.observe.collect.ObservableCollection;
 import org.observe.config.ObservableConfig;
 import org.observe.config.ObservableConfigFormat;
@@ -21,11 +19,8 @@ import org.observe.util.swing.JustifiedBoxLayout;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.PanelPopulation;
 import org.qommons.ArrayUtils;
-import org.qommons.StringUtils;
 import org.qommons.TimeUtils;
-import org.qommons.TimeUtils.DurationComponentType;
 import org.qommons.collect.BetterList;
-import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
 import org.quark.ogame.OGameUtils;
@@ -37,7 +32,6 @@ import org.quark.ogame.uni.BuildingType;
 import org.quark.ogame.uni.Moon;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
-import org.quark.ogame.uni.OGameRuleSet;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.Research;
 import org.quark.ogame.uni.ResourceType;
@@ -47,12 +41,10 @@ import org.quark.ogame.uni.UpgradeCost;
 import com.google.common.reflect.TypeToken;
 
 public class PlanetTable {
-	private final ObservableValue<OGameRuleSet> theSelectedRuleSet;
-	private final SettableValue<Account> theSelectedAccount;
+	private final OGameUniGui theUniGui;
 
 	private final ObservableCollection<PlanetWithProduction> selectedPlanets;
 	private final SettableValue<PlanetWithProduction> theSelectedPlanet;
-	private final ObservableValue<Account> theReferenceAccount;
 
 	private final SettableValue<Boolean> showFields;
 	private final SettableValue<Boolean> showTemps;
@@ -66,12 +58,10 @@ public class PlanetTable {
 
 	private final ObservableCollection<AccountUpgrade> theSelectedPlanetUpgrades;
 
-	public PlanetTable(ObservableConfig config, ObservableValue<OGameRuleSet> ruleSet, SettableValue<Account> selectedAccount,
-		ObservableValue<Account> referenceAccount) {
-		theSelectedRuleSet = ruleSet;
-		theSelectedAccount = selectedAccount;
-		theReferenceAccount = referenceAccount;
+	public PlanetTable(OGameUniGui uniGui) {
+		theUniGui = uniGui;
 
+		ObservableConfig config = uniGui.getConfig();
 		showFields = config.asValue(boolean.class).at("planet-categories/fields").withFormat(Format.BOOLEAN, () -> false)
 			.buildValue(null);
 		showTemps = config.asValue(boolean.class).at("planet-categories/temps").withFormat(Format.BOOLEAN, () -> true).buildValue(null);
@@ -90,35 +80,25 @@ public class PlanetTable {
 			.withFormat(ObservableConfigFormat.enumFormat(ProductionDisplayType.class, () -> ProductionDisplayType.Hourly))
 			.buildValue(null);
 
-		ObservableCollection<Research> researchColl = ObservableCollection.flattenValue(
-			theSelectedAccount.<ObservableCollection<Research>> map(account -> ObservableCollection.of(TypeTokens.get().of(Research.class),
+		ObservableCollection<Research> researchColl = ObservableCollection.flattenValue(theUniGui.getSelectedAccount()
+			.<ObservableCollection<Research>> map(account -> ObservableCollection.of(TypeTokens.get().of(Research.class),
 				account == null ? Collections.emptyList() : Arrays.asList(account.getResearch()))));
+		// TODO Do I need this?
+		// researchColl.simpleChanges().act(__ -> theUniGui.refreshProduction());
 
-		selectedPlanets = ObservableCollection
-			.flattenValue(theSelectedAccount.map(
-				account -> account == null ? ObservableCollection.of(TypeTokens.get().of(Planet.class)) : account.getPlanets().getValues()))
-			.flow().refresh(Observable.or(researchColl.simpleChanges(), productionType.noInitChanges()))//
-			.map(TypeTokens.get().of(PlanetWithProduction.class), this::productionFor, opts -> opts.cache(true).reEvalOnUpdate(false))
-			.collect();
-		selectedPlanets.changes().act(evt -> {
-			if (evt.type == CollectionChangeType.set) {
-				for (PlanetWithProduction p : evt.getValues()) {
-					updateProduction(p);
-				}
-			}
-		});
+		selectedPlanets = theUniGui.getPlanets().flow().refresh(productionType.noInitChanges()).collect();
 
 		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).build();
 		
 		theSelectedPlanetUpgrades=ObservableCollection.build(AccountUpgrade.class).safe(false).build();
-		Observable.or(theSelectedPlanet.changes(), theReferenceAccount.noInitChanges()).act(__ -> {
+		Observable.or(theSelectedPlanet.changes(), theUniGui.getReferenceAccount().noInitChanges()).act(__ -> {
 			PlanetWithProduction p=theSelectedPlanet.get();
-			Account refAcct=theReferenceAccount.get();
+			Account refAcct = theUniGui.getReferenceAccount().get();
 			if(p==null || refAcct==null){
 				theSelectedPlanetUpgrades.clear();
 				return;
 			}
-			Account account=theSelectedAccount.get();
+			Account account = theUniGui.getSelectedAccount().get();
 			int pIdx=account.getPlanets().getValues().indexOf(p.planet);
 			Planet refPlanet=refAcct.getPlanets().getValues().size()<=pIdx ? null : refAcct.getPlanets().getValues().get(pIdx);
 			List<AccountUpgrade> upgrades=new ArrayList<>();
@@ -127,7 +107,7 @@ public class PlanetTable {
 				int toLevel=p.planet.getBuildingLevel(bdg);
 				if(fromLevel!=toLevel){
 					AccountUpgradeType type=AccountUpgradeType.getBuildingUpgrade(bdg);
-					UpgradeCost cost = theSelectedRuleSet.get().economy().getUpgradeCost(account, p.planet, type, fromLevel, toLevel);
+					UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, p.planet, type, fromLevel, toLevel);
 					upgrades.add(new AccountUpgrade(type, p.planet, fromLevel, toLevel, cost));
 				}
 			}
@@ -136,7 +116,7 @@ public class PlanetTable {
 				int toLevel = p.planet.getStationedShips(ship);
 				if (fromLevel != toLevel) {
 					AccountUpgradeType type = AccountUpgradeType.getShipyardItemUpgrade(ship);
-					UpgradeCost cost = theSelectedRuleSet.get().economy().getUpgradeCost(account, p.planet, type, fromLevel, toLevel);
+					UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, p.planet, type, fromLevel, toLevel);
 					upgrades.add(new AccountUpgrade(type, p.planet, fromLevel, toLevel, cost));
 				}
 			}
@@ -180,8 +160,8 @@ public class PlanetTable {
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> basicPlanetColumns = ObservableCollection
 			.create(planetColumnType);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> fieldColumns = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("Total Fields", false, p -> theSelectedRuleSet.get().economy().getFields(p), (p, f) -> {
-				int currentTotal = theSelectedRuleSet.get().economy().getFields(p);
+			intPlanetColumn("Total Fields", false, p -> theUniGui.getRules().get().economy().getFields(p), (p, f) -> {
+				int currentTotal = theUniGui.getRules().get().economy().getFields(p);
 				int currentBase = p.getBaseFields();
 				int diff = f - currentTotal;
 				int newBase = currentBase + diff;
@@ -190,7 +170,7 @@ public class PlanetTable {
 				}
 				p.setBaseFields(newBase);
 			}, 80).withMutation(m -> m.filterAccept((p, f) -> {
-				int currentTotal = theSelectedRuleSet.get().economy().getFields(((PlanetWithProduction) p.get()).planet);
+				int currentTotal = theUniGui.getRules().get().economy().getFields(((PlanetWithProduction) p.get()).planet);
 				int currentBase = ((PlanetWithProduction) p.get()).planet.getBaseFields();
 				int diff = f - currentTotal;
 				int newBase = currentBase + diff;
@@ -200,14 +180,14 @@ public class PlanetTable {
 				return null;
 			})), //
 			intPlanetColumn("Free Fields", false, planet -> {
-				return theSelectedRuleSet.get().economy().getFields(planet) - planet.getUsedFields();
+				return theUniGui.getRules().get().economy().getFields(planet) - planet.getUsedFields();
 			}, null, 80)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonFieldColumns = ObservableCollection.of(planetColumnType,
-			intMoonColumn("Moon Fields", moon -> theSelectedRuleSet.get().economy().getFields(moon), null, 80), //
+			intMoonColumn("Moon Fields", moon -> theUniGui.getRules().get().economy().getFields(moon), null, 80), //
 			intMoonColumn("Bonus Fields", Moon::getFieldBonus, Moon::setFieldBonus, 80), //
 			intMoonColumn("Free Fields", moon -> {
-				return theSelectedRuleSet.get().economy().getFields(moon) - moon.getUsedFields();
+				return theUniGui.getRules().get().economy().getFields(moon) - moon.getUsedFields();
 			}, null, 80)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> tempColumns = ObservableCollection.of(planetColumnType,
@@ -227,7 +207,7 @@ public class PlanetTable {
 			intPlanetColumn("Crawlers", false, Planet::getCrawlers, Planet::setCrawlers, 60).formatText((planet, crawlers) -> {
 				StringBuilder str = new StringBuilder();
 				str.append(crawlers).append('/');
-				str.append(theSelectedRuleSet.get().economy().getMaxCrawlers(theSelectedAccount.get(), planet.planet));
+				str.append(theUniGui.getRules().get().economy().getMaxCrawlers(theUniGui.getSelectedAccount().get(), planet.planet));
 				return str.toString();
 			}) //
 			);
@@ -241,9 +221,9 @@ public class PlanetTable {
 			intPlanetColumn("D Stor", false, Planet::getDeuteriumStorage, Planet::setDeuteriumStorage, 55)//
 			);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> productionColumns = ObservableCollection.of(planetColumnType,
-			planetColumn("M Prod", String.class, planet -> printProduction(planet.metal.totalNet, productionType.get()), null, 80), //
-			planetColumn("C Prod", String.class, planet -> printProduction(planet.crystal.totalNet, productionType.get()), null, 80), //
-			planetColumn("D Prod", String.class, planet -> printProduction(planet.deuterium.totalNet, productionType.get()), null, 80), //
+			planetColumn("M Prod", String.class, planet -> printProduction(planet.getMetal().totalNet, productionType.get()), null, 80), //
+			planetColumn("C Prod", String.class, planet -> printProduction(planet.getCrystal().totalNet, productionType.get()), null, 80), //
+			planetColumn("D Prod", String.class, planet -> printProduction(planet.getDeuterium().totalNet, productionType.get()), null, 80), //
 			planetColumn("Cargoes", int.class, planet -> getCargoes(planet, false, productionType.get()), null, 80), //
 			planetColumn("SS Cargoes", int.class, planet -> getCargoes(planet, true, productionType.get()), null, 80)//
 			).flow().refresh(productionType.noInitChanges()).collect();
@@ -310,7 +290,7 @@ public class PlanetTable {
 					} else {
 						return "None";
 					}
-				}, planetUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
+						}, planetUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
 					if (bdg instanceof BuildingType) {
 						p.planet.setCurrentUpgrade((BuildingType) bdg);
 					} else {
@@ -319,8 +299,9 @@ public class PlanetTable {
 				})))//
 			.withColumns(planetColumns)//
 			.withSelection(theSelectedPlanet, false)//
-			.withAdd(() -> createPlanet(selectedPlanets), null)//
-			.withRemove(planets -> theSelectedAccount.get().getPlanets().getValues().removeAll(planets), action -> action//
+					.withAdd(() -> theUniGui.createPlanet(), null)//
+					.withRemove(planets -> theUniGui.getSelectedAccount().get().getPlanets().getValues().removeAll(planets),
+						action -> action//
 				.confirmForItems("Delete Planets?", "Are you sure you want to delete ", null, true))//
 			)//
 			.addHPanel(null, new JustifiedBoxLayout(false).mainJustified().crossJustified(),
@@ -359,7 +340,7 @@ public class PlanetTable {
 					.addVPanel(upgradePanel -> upgradePanel.fill().fillV()// ;
 						.addComponent(null, ObservableSwingUtils.label("Upgrade Costs").bold().withFontSize(16).label, null)//
 						.addTable(theSelectedPlanetUpgrades, upgradeTable -> upgradeTable.fill()//
-							.visibleWhen(theSelectedPlanet.combine((p, a) -> p != null && a != null, theReferenceAccount))//
+							.visibleWhen(theSelectedPlanet.combine((p, a) -> p != null && a != null, theUniGui.getReferenceAccount()))//
 								.withColumn("Planet", String.class, upgrade -> upgrade.planet.getName(), null)//
 								.withColumn("Upgrade", AccountUpgradeType.class, upgrade -> upgrade.type, null)//
 								.withColumn("From", int.class, upgrade -> upgrade.fromLevel, null)//
@@ -389,7 +370,7 @@ public class PlanetTable {
 		CategoryRenderStrategy<PlanetWithProduction, Integer> column = planetColumn(name, int.class, p -> getter.apply(p.planet), setter,
 			width);
 		OGameUniGui.decorateDiffColumn(column, planetIdx -> {
-			Account refAccount = theReferenceAccount.get();
+			Account refAccount = theUniGui.getReferenceAccount().get();
 			if (refAccount == null) {
 				return null;
 			} else if (refAccount.getPlanets().getValues().size() <= planetIdx) {
@@ -413,7 +394,7 @@ public class PlanetTable {
 		CategoryRenderStrategy<PlanetWithProduction, Integer> column = planetColumn(name, int.class, p -> getter.apply(p.planet.getMoon()),
 			(p, v) -> setter.accept(p.getMoon(), v), width);
 		OGameUniGui.decorateDiffColumn(column, planetIdx -> {
-			Account refAccount = theReferenceAccount.get();
+			Account refAccount = theUniGui.getReferenceAccount().get();
 			if (refAccount == null) {
 				return null;
 			} else if (refAccount.getPlanets().getValues().size() <= planetIdx) {
@@ -448,21 +429,6 @@ public class PlanetTable {
 			column.withMutation(m -> m.mutateAttribute((t, v) -> setter.accept(selectedPlanet.get(), t, v)).withRowUpdate(false));
 		}
 		return column;
-	}
-
-	enum ProductionDisplayType {
-		None(null),
-		Hourly(TimeUtils.DurationComponentType.Hour),
-		Daily(TimeUtils.DurationComponentType.Day),
-		Weekly(TimeUtils.DurationComponentType.Week),
-		Monthly(TimeUtils.DurationComponentType.Month),
-		Yearly(TimeUtils.DurationComponentType.Year);
-
-		public final TimeUtils.DurationComponentType type;
-
-		private ProductionDisplayType(DurationComponentType type) {
-			this.type = type;
-		}
 	}
 
 	enum ResourceRow {
@@ -523,7 +489,7 @@ public class PlanetTable {
 	}
 
 	int getCargoes(PlanetWithProduction planet, boolean subtractCargoCost, ProductionDisplayType time) {
-		double production = planet.metal.totalNet * 1.0 + planet.crystal.totalNet + planet.deuterium.totalNet;
+		double production = planet.getMetal().totalNet * 1.0 + planet.getCrystal().totalNet + planet.getDeuterium().totalNet;
 		switch (time.type) {
 		case Year:
 			production *= TimeUtils.getDaysInYears(1) * 24;
@@ -540,11 +506,11 @@ public class PlanetTable {
 		default:
 			break;
 		}
-		long capacity = theSelectedRuleSet.get().fleet().getCargoSpace(//
-			ShipyardItemType.LargeCargo, theSelectedAccount.get());
+		long capacity = theUniGui.getRules().get().fleet().getCargoSpace(//
+			ShipyardItemType.LargeCargo, theUniGui.getSelectedAccount().get());
 		if (subtractCargoCost) {
-			capacity += theSelectedRuleSet.get().economy()
-				.getUpgradeCost(theSelectedAccount.get(), planet.planet, AccountUpgradeType.LargeCargo, 0, 1).getTotal();
+			capacity += theUniGui.getRules().get().economy()
+				.getUpgradeCost(theUniGui.getSelectedAccount().get(), planet.planet, AccountUpgradeType.LargeCargo, 0, 1).getTotal();
 		}
 		return (int) Math.ceil(production / capacity);
 	}
@@ -568,7 +534,7 @@ public class PlanetTable {
 		case Crawler:
 			return planet.planet.getCrawlers();
 		case Plasma:
-			return theSelectedAccount.get().getResearch().getPlasma();
+			return theUniGui.getSelectedAccount().get().getResearch().getPlasma();
 		case Items:
 			int items = 0;
 			if (planet.planet.getMetalBonus() > 0) {
@@ -582,13 +548,13 @@ public class PlanetTable {
 			}
 			return items;
 		case Geologist:
-			return theSelectedAccount.get().getOfficers().isGeologist() ? 1 : 0;
+			return theUniGui.getSelectedAccount().get().getOfficers().isGeologist() ? 1 : 0;
 		case Engineer:
-			return theSelectedAccount.get().getOfficers().isEngineer() ? 1 : 0;
+			return theUniGui.getSelectedAccount().get().getOfficers().isEngineer() ? 1 : 0;
 		case CommandingStaff:
-			return theSelectedAccount.get().getOfficers().isCommandingStaff() ? 1 : 0;
+			return theUniGui.getSelectedAccount().get().getOfficers().isCommandingStaff() ? 1 : 0;
 		case Collector:
-			return theSelectedAccount.get().getGameClass() == AccountClass.Collector ? 1 : 0;
+			return theUniGui.getSelectedAccount().get().getGameClass() == AccountClass.Collector ? 1 : 0;
 		case Storage:
 			return 0;
 		case Divider:
@@ -675,7 +641,7 @@ public class PlanetTable {
 			planet.planet.setCrawlers(value);
 			break;
 		case Plasma:
-			theSelectedAccount.get().getResearch().setPlasma(value);
+			theUniGui.getSelectedAccount().get().getResearch().setPlasma(value);
 			break;
 		default:
 			break;
@@ -686,16 +652,16 @@ public class PlanetTable {
 		Production p = null;
 		switch (resource) {
 		case Metal:
-			p = planet.metal;
+			p = planet.getMetal();
 			break;
 		case Crystal:
-			p = planet.crystal;
+			p = planet.getCrystal();
 			break;
 		case Deuterium:
-			p = planet.deuterium;
+			p = planet.getDeuterium();
 			break;
 		case Energy:
-			p = planet.energy;
+			p = planet.getEnergy();
 			break;
 		}
 		switch (row) {
@@ -731,7 +697,7 @@ public class PlanetTable {
 			if (resource == ResourceType.Energy) {
 				return "0";
 			}
-			return printProduction(theSelectedRuleSet.get().economy().getStorage(planet.planet, resource), ProductionDisplayType.Hourly);
+			return printProduction(theUniGui.getRules().get().economy().getStorage(planet.planet, resource), ProductionDisplayType.Hourly);
 		case Divider:
 			return "----------";
 		case Hourly:
@@ -815,63 +781,6 @@ public class PlanetTable {
 			break;
 		default:
 			break;
-		}
-	}
-
-	PlanetWithProduction productionFor(Planet planet) {
-		Production energy = theSelectedRuleSet.get().economy().getProduction(theSelectedAccount.get(), planet, ResourceType.Energy, 1);
-		double energyFactor = Math.min(1, energy.totalProduction * 1.0 / energy.totalConsumption);
-		Production metal = theSelectedRuleSet.get().economy().getProduction(theSelectedAccount.get(), planet, ResourceType.Metal,
-			energyFactor);
-		Production crystal = theSelectedRuleSet.get().economy().getProduction(theSelectedAccount.get(), planet, ResourceType.Crystal,
-			energyFactor);
-		Production deuterium = theSelectedRuleSet.get().economy().getProduction(theSelectedAccount.get(), planet, ResourceType.Deuterium,
-			energyFactor);
-		return new PlanetWithProduction(planet, metal, crystal, deuterium, energy);
-	}
-
-	void updateProduction(PlanetWithProduction p) {
-		p.energy = theSelectedRuleSet.get().economy().getProduction(//
-			theSelectedAccount.get(), p.planet, ResourceType.Energy, 1);
-		double energyFactor = Math.min(1, p.energy.totalProduction * 1.0 / p.energy.totalConsumption);
-		p.metal = theSelectedRuleSet.get().economy().getProduction(//
-			theSelectedAccount.get(), p.planet, ResourceType.Metal, energyFactor);
-		p.crystal = theSelectedRuleSet.get().economy().getProduction(//
-			theSelectedAccount.get(), p.planet, ResourceType.Crystal, energyFactor);
-		p.deuterium = theSelectedRuleSet.get().economy().getProduction(//
-			theSelectedAccount.get(), p.planet, ResourceType.Deuterium, energyFactor);
-	}
-
-	PlanetWithProduction createPlanet(ObservableCollection<PlanetWithProduction> planets) {
-		CollectionElement<Planet> newPlanet = theSelectedAccount.get().getPlanets().create()//
-			.with(Planet::getName,
-				StringUtils.getNewItemName(theSelectedAccount.get().getPlanets().getValues(), Planet::getName, "New Planet",
-					StringUtils.SIMPLE_DUPLICATES))
-			.with(Planet::getBaseFields, 173)//
-			.with(Planet::getMetalUtilization, 100)//
-			.with(Planet::getCrystalUtilization, 100)//
-			.with(Planet::getDeuteriumUtilization, 100)//
-			.with(Planet::getSolarPlantUtilization, 100)//
-			.with(Planet::getSolarSatelliteUtilization, 100)//
-			.with(Planet::getFusionReactorUtilization, 100)//
-			.with(Planet::getCrawlerUtilization, 100)//
-			.create();
-		return planets.getElementsBySource(newPlanet.getElementId()).getFirst().get();
-	}
-
-	static class PlanetWithProduction {
-		final Planet planet;
-		Production metal;
-		Production crystal;
-		Production deuterium;
-		Production energy;
-
-		PlanetWithProduction(Planet planet, Production metal, Production crystal, Production deuterium, Production energy) {
-			this.planet = planet;
-			this.metal = metal;
-			this.crystal = crystal;
-			this.deuterium = deuterium;
-			this.energy = energy;
 		}
 	}
 }
