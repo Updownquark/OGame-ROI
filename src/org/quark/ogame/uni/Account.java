@@ -26,4 +26,6 @@ public interface Account extends Nameable {
 	Research getResearch();
 
 	ObservableValueSet<Planet> getPlanets();
+
+	ObservableValueSet<Holding> getHoldings();
 }

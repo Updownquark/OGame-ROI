@@ -23,6 +23,7 @@ public class OGameUtils {
 	}
 
 	public static final DecimalFormat WHOLE_FORMAT = new DecimalFormat("#,##0");
+	public static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("#,##0.00");
 	public static final DecimalFormat THREE_DIGIT_FORMAT = new DecimalFormat("#,##0.000");
 
 }
