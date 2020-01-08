@@ -181,6 +181,7 @@ public class OGameState2 {
 		case Planet:
 			newLevel = thePlanetCount + 1;
 			seq.add(new UpgradeSeqElement(AccountUpgradeType.Astrophysics, thePlanetCount == 1 ? 1 : 2, seq));
+			seq.add(new UpgradeSeqElement(AccountUpgradeType.ColonyShip, 1, seq));
 			for (BuildingType b : BuildingType.values()) {
 				int level = thePlanet.getBuildingLevel(b);
 				if (level > 0) {
