@@ -1,5 +1,6 @@
 package org.quark.ogame.uni.ui;
 
+import java.awt.Color;
 import java.time.Duration;
 
 import org.observe.collect.ObservableCollection;
@@ -15,6 +16,9 @@ import org.qommons.io.SpinnerFormat;
 import org.quark.ogame.OGameUtils;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.Holding;
+import org.quark.ogame.uni.ResourceType;
+import org.quark.ogame.uni.Trade;
+import org.quark.ogame.uni.TradeRatios;
 import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.UpgradeType;
 
@@ -26,6 +30,12 @@ public class HoldingsPanel {
 	private final ObservableCollection<Holding> theHoldings;
 	private final Holding theTotalHolding;
 	private final Holding theProductionTimeHolding;
+	private final Holding theUpgradeTimeHolding;
+
+	private final ObservableCollection<Trade> theTrades;
+	private final Trade theTotalTrade;
+	private final Trade theUpgradeTimeTrade;
+	private final SyntheticTrade theTradesNeeded;
 
 	public HoldingsPanel(OGameUniGui uniGui) {
 		theUniGui = uniGui;
@@ -87,41 +97,238 @@ public class HoldingsPanel {
 				long holdings = theTotalHolding.getMetal();
 				long production = 0;
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
-					production += planet.getMetal().totalProduction;
-				}
-				return holdings * 3600 / production; // Seconds
-			}
-
-			@Override
-			public long getDeuterium() {
-				long holdings = theTotalHolding.getCrystal();
-				long production = 0;
-				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
-					production += planet.getCrystal().totalProduction;
+					production += planet.getMetal().totalNet;
 				}
 				return holdings * 3600 / production; // Seconds
 			}
 
 			@Override
 			public long getCrystal() {
+				long holdings = theTotalHolding.getCrystal();
+				long production = 0;
+				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
+					production += planet.getCrystal().totalNet;
+				}
+				return holdings * 3600 / production; // Seconds
+			}
+
+			@Override
+			public long getDeuterium() {
 				long holdings = theTotalHolding.getDeuterium();
 				long production = 0;
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
-					production += planet.getDeuterium().totalProduction;
+					production += planet.getDeuterium().totalNet;
 				}
 				return holdings * 3600 / production; // Seconds
 			}
 		};
+		theUpgradeTimeHolding = new SyntheticHolding() {
+			@Override
+			public String getName() {
+				return "Goal Completion";
+			}
+
+			@Override
+			public long getMetal() {
+				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getMetal();
+				if (needed == 0) {
+					return 0;
+				}
+				needed -= theTotalHolding.getMetal();
+				if (needed <= 0) {
+					return 0;
+				}
+				long production = 0;
+				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
+					production += planet.getMetal().totalNet;
+				}
+				return needed * 3600 / production; // seconds
+			}
+
+			@Override
+			public long getCrystal() {
+				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getCrystal();
+				if (needed == 0) {
+					return 0;
+				}
+				needed -= theTotalHolding.getCrystal();
+				if (needed <= 0) {
+					return 0;
+				}
+				long production = 0;
+				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
+					production += planet.getCrystal().totalNet;
+				}
+				return needed * 3600 / production; // seconds
+			}
+
+			@Override
+			public long getDeuterium() {
+				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getDeuterium();
+				if (needed == 0) {
+					return 0;
+				}
+				needed -= theTotalHolding.getDeuterium();
+				if (needed <= 0) {
+					return 0;
+				}
+				long production = 0;
+				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
+					production += planet.getDeuterium().totalNet;
+				}
+				return needed * 3600 / production; // seconds
+			}
+		};
 		ObservableCollection<Holding> synthHoldings = ObservableCollection.build(TypeTokens.get().of(Holding.class)).safe(false).build()
-			.with(theTotalHolding, theProductionTimeHolding);
+			.with(theTotalHolding, theProductionTimeHolding, theUpgradeTimeHolding);
 		ElementId totalId = synthHoldings.getElement(0).getElementId();
 		ElementId productionId = synthHoldings.getElement(1).getElementId();
+		ElementId upgradeTimeId = synthHoldings.getElement(2).getElementId();
 		flatHoldings.simpleChanges().act(__ -> {
 			synthHoldings.mutableElement(totalId).set(theTotalHolding);
 			synthHoldings.mutableElement(productionId).set(theProductionTimeHolding);
+			synthHoldings.mutableElement(upgradeTimeId).set(theUpgradeTimeHolding);
 		});
-		theUniGui.getPlanets().simpleChanges().act(__ -> synthHoldings.mutableElement(productionId).set(theProductionTimeHolding));
+		theUniGui.getPlanets().simpleChanges().act(__ -> {
+			synthHoldings.mutableElement(productionId).set(theProductionTimeHolding);
+			synthHoldings.mutableElement(upgradeTimeId).set(theUpgradeTimeHolding);
+		});
 		theHoldings = ObservableCollection.flattenCollections(TypeTokens.get().of(Holding.class), flatHoldings, synthHoldings).collect();
+
+		ObservableCollection<Trade> flatTrades = ObservableCollection.flattenValue(theUniGui.getSelectedAccount()
+			.map(new TypeToken<ObservableCollection<Trade>>() {}, acct -> (ObservableCollection<Trade>) acct.getTrades().getValues()));
+		theTotalTrade = new SyntheticTrade() {
+			@Override
+			public String getName() {
+				return "Total Trades";
+			}
+
+			@Override
+			public long getMetal() {
+				long amount = 0;
+				try (Transaction t = flatTrades.lock(false, null)) {
+					for (Trade h : flatTrades) {
+						amount += h.getMetal();
+					}
+				}
+				return amount;
+			}
+
+			@Override
+			public long getCrystal() {
+				long amount = 0;
+				try (Transaction t = flatTrades.lock(false, null)) {
+					for (Trade h : flatTrades) {
+						amount += h.getCrystal();
+					}
+				}
+				return amount;
+			}
+
+			@Override
+			public long getDeuterium() {
+				long amount = 0;
+				try (Transaction t = flatTrades.lock(false, null)) {
+					for (Trade h : flatTrades) {
+						amount += h.getDeuterium();
+					}
+				}
+				return amount;
+			}
+		};
+		theUpgradeTimeTrade = new SyntheticTrade() {
+			@Override
+			public String getName() {
+				return "Goal Completion";
+			}
+
+			@Override
+			public long getMetal() {
+				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getMetal();
+				needed -= theTotalHolding.getMetal();
+				needed -= theTotalTrade.getMetal();
+				long production = 0;
+				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
+					production += planet.getMetal().totalNet;
+				}
+				return needed * 3600 / production; // seconds
+			}
+
+			@Override
+			public long getCrystal() {
+				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getCrystal();
+				needed -= theTotalHolding.getCrystal();
+				needed -= theTotalTrade.getCrystal();
+				long production = 0;
+				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
+					production += planet.getCrystal().totalNet;
+				}
+				return needed * 3600 / production; // seconds
+			}
+
+			@Override
+			public long getDeuterium() {
+				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getDeuterium();
+				needed -= theTotalHolding.getDeuterium();
+				needed -= theTotalTrade.getDeuterium();
+				long production = 0;
+				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
+					production += planet.getDeuterium().totalNet;
+				}
+				return needed * 3600 / production; // seconds
+			}
+		};
+		theTradesNeeded = new SyntheticTrade() {
+			@Override
+			public String getName() {
+				return "Trades Needed";
+			}
+
+			@Override
+			public long getMetal() {
+				UpgradeCost cost = theUniGui.getPlanetPanel().getTotalUpgrades().getCost();
+				cost = cost.plus(UpgradeCost.of('b', 'e', theTotalHolding.getMetal(), theTotalHolding.getCrystal(),
+					theTotalHolding.getDeuterium(), 0, Duration.ZERO).negate());
+				UpgradeCost production = UpgradeCost.ZERO;
+				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
+					production = production.plus(UpgradeCost.of('b', 'e', planet.getMetal().totalNet, planet.getCrystal().totalNet,
+						planet.getDeuterium().totalNet, 0, Duration.ZERO));
+				}
+				double metalTime = cost.getMetal() * 1.0 / production.getMetal();
+				double crystalTime = cost.getCrystal() * 1.0 / production.getCrystal();
+				double deutTime = cost.getDeuterium() * 1.0 / production.getDeuterium();
+
+				// TODO Auto-generated method stub
+				return 0;
+			}
+
+			@Override
+			public long getCrystal() {
+				// TODO Auto-generated method stub
+				return 0;
+			}
+
+			@Override
+			public long getDeuterium() {
+				// TODO Auto-generated method stub
+				return 0;
+			}
+		};
+		ObservableCollection<Trade> synthTrades = ObservableCollection.build(TypeTokens.get().of(Trade.class)).safe(false).build()
+			.with(theTotalTrade, theUpgradeTimeTrade, theTradesNeeded);
+		ElementId totalTradeId = synthTrades.getElement(0).getElementId();
+		ElementId upgradeTimeTradeId = synthTrades.getElement(1).getElementId();
+		ElementId tradesNeededId = synthTrades.getElement(2).getElementId();
+		flatTrades.simpleChanges().act(__ -> {
+			synthTrades.mutableElement(totalTradeId).set(theTotalTrade);
+			synthTrades.mutableElement(upgradeTimeTradeId).set(theUpgradeTimeTrade);
+			synthTrades.mutableElement(tradesNeededId).set(theTradesNeeded);
+		});
+		theUniGui.getPlanets().simpleChanges().act(__ -> {
+			synthTrades.mutableElement(upgradeTimeTradeId).set(theUpgradeTimeTrade);
+			synthTrades.mutableElement(tradesNeededId).set(theTradesNeeded);
+		});
+		theTrades = ObservableCollection.flattenCollections(TypeTokens.get().of(Trade.class), flatTrades, synthTrades).collect();
 	}
 
 	public void addPanel(PanelPopulator<?, ?> panel) {
@@ -140,7 +347,7 @@ public class HoldingsPanel {
 		}
 		panel.addHPanel(null, new JustifiedBoxLayout(false).mainJustified().crossJustified(),
 			split -> split.fill().fillV()//
-				.addVPanel(holdingsPanel -> holdingsPanel.fill().fillV()//
+				.addVPanel(holdingsPanel -> holdingsPanel.fill().fillV().decorate(d -> d.withTitledBorder("Holdings", Color.black))//
 					.addTable(theHoldings, holdingsTable -> holdingsTable.fill().fillV()//
 						.withColumn("Name", String.class, Holding::getName, nameCol -> nameCol.withMutation(nameMutator -> {
 							nameMutator.mutateAttribute(Holding::setName).editableIf((h, n) -> !(h instanceof SyntheticHolding))
@@ -186,13 +393,13 @@ public class HoldingsPanel {
 							}
 						}).filterAccept((h, lvl) -> lvl > 0 ? null : "Level must be positive")))//
 						.withColumn("Metal (KK)", Double.class, h->{
-							if(h==theProductionTimeHolding) {
+							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
 								return h.getMetal()*1.0;
 							} else {
 								return h.getMetal()/1E6;
 							}
 						}, metalCol -> metalCol.formatText((h, m) -> {
-							if (h == theProductionTimeHolding) {
+							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
 								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(m.longValue()));
 							} else {
 								return OGameUtils.TWO_DIGIT_FORMAT.format(m);
@@ -207,13 +414,13 @@ public class HoldingsPanel {
 							}).asText(Format.doubleFormat("0.00"));
 						}))//
 						.withColumn("Crystal (KK)", Double.class, h -> {
-							if (h == theProductionTimeHolding) {
+							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
 								return h.getCrystal() * 1.0;
 							} else {
 								return h.getCrystal() / 1E6;
 							}
 						}, crystalCol -> crystalCol.formatText((h, d) -> {
-							if (h == theProductionTimeHolding) {
+							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
 								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(d.longValue()));
 							} else {
 								return OGameUtils.TWO_DIGIT_FORMAT.format(d);
@@ -228,13 +435,13 @@ public class HoldingsPanel {
 							}).asText(Format.doubleFormat("0.00"));
 						}))//
 						.withColumn("Deuterium (KK)", Double.class, h -> {
-							if (h == theProductionTimeHolding) {
+							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
 								return h.getDeuterium() * 1.0;
 							} else {
 								return h.getDeuterium() / 1E6;
 							}
-						}, metalCol -> metalCol.formatText((h, d) -> {
-							if (h == theProductionTimeHolding) {
+						}, deutCol -> deutCol.formatText((h, d) -> {
+							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
 								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(d.longValue()));
 							} else {
 								return OGameUtils.TWO_DIGIT_FORMAT.format(d);
@@ -258,8 +465,131 @@ public class HoldingsPanel {
 								.disableWith(theUniGui.getSelectedAccount().map(acct -> acct == null ? "No Account Selected" : null))))//
 				)//
 				)//
-				.addVPanel(tradePanel -> tradePanel.fill().fillV()//
-			// TODO
+				.addVPanel(tradePanel -> tradePanel.fill().fillV().decorate(d -> d.withTitledBorder("Trades", Color.black))//
+					.addTable(theTrades, tradeTable -> tradeTable.fill().fillV()//
+						.withColumn("Name", String.class, Trade::getName, nameCol -> nameCol.withMutation(nameMutator -> {
+							nameMutator.mutateAttribute(Trade::setName).editableIf((h, n) -> !(h instanceof SyntheticTrade))
+								.withEditor(ObservableCellEditor.createTextEditor(SpinnerFormat.NUMERICAL_TEXT));
+						}))//
+						.withColumn("M Rate", Double.class, h -> {
+							if (h instanceof SyntheticTrade) {
+								return 0.0;
+							}
+							return h.getRate().getMetal();
+						}, rateCol -> rateCol.withWidths(45, 45, 45).formatText(r -> r == 0.0 ? "" : OGameUtils.TWO_DIGIT_FORMAT.format(r))
+							.withMutation(mrm -> {
+							mrm.mutateAttribute((t, r) -> t.getRate().setMetal(r)).withRowUpdate(true).asText(Format.doubleFormat("0.00"))//
+								.editableIf((t, r) -> !(t instanceof SyntheticTrade))
+								.filterAccept((t, r) -> r <= 0 ? "Rate must be positive" : null);
+						}))//
+						.withColumn("C Rate", Double.class, h -> {
+							if (h instanceof SyntheticTrade) {
+								return 0.0;
+							}
+							return h.getRate().getCrystal();
+						}, rateCol -> rateCol.withWidths(45, 45, 45).formatText(r -> r == 0.0 ? "" : OGameUtils.TWO_DIGIT_FORMAT.format(r))
+							.withMutation(mrm -> {
+							mrm.mutateAttribute((t, r) -> t.getRate().setCrystal(r)).withRowUpdate(true).asText(Format.doubleFormat("0.00"))//
+								.editableIf((t, r) -> !(t instanceof SyntheticTrade))
+								.filterAccept((t, r) -> r <= 0 ? "Rate must be positive" : null);
+						}))//
+						.withColumn("D Rate", Double.class, h -> {
+							if (h instanceof SyntheticTrade) {
+								return 0.0;
+							}
+							return h.getRate().getDeuterium();
+						}, rateCol -> rateCol.withWidths(45, 45, 45).formatText(r -> r == 0.0 ? "" : OGameUtils.TWO_DIGIT_FORMAT.format(r))
+							.withMutation(mrm -> {
+							mrm.mutateAttribute((t, r) -> t.getRate().setDeuterium(r)).withRowUpdate(true)
+								.asText(Format.doubleFormat("0.00"))//
+								.editableIf((t, r) -> !(t instanceof SyntheticTrade))
+								.filterAccept((t, r) -> r <= 0 ? "Rate must be positive" : null);
+						}))//
+						.withColumn("Metal (KK)", Double.class, h -> {
+							if (h == theUpgradeTimeTrade) {
+								return h.getMetal() * 1.0;
+							} else {
+								return h.getMetal() / 1E6;
+							}
+						}, metalCol -> metalCol.formatText((h, m) -> {
+							if (h == theUpgradeTimeTrade) {
+								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(m.longValue()));
+							} else {
+								return OGameUtils.TWO_DIGIT_FORMAT.format(m);
+							}
+						}).withMutation(metalMutation -> {
+							metalMutation.mutateAttribute((h, m) -> h.setMetal((long) (m * 1E6))).editableIf((h, n) -> {
+								if (h instanceof SyntheticHolding) {
+									return false;
+								} else {
+									return h.getType() != ResourceType.Metal;
+								}
+							}).asText(Format.doubleFormat("0.00"));
+						}))//
+						.withColumn("Crystal (KK)", Double.class, h -> {
+							if (h == theUpgradeTimeTrade) {
+								return h.getCrystal() * 1.0;
+							} else {
+								return h.getCrystal() / 1E6;
+							}
+						}, crystalCol -> crystalCol.formatText((h, d) -> {
+							if (h == theUpgradeTimeTrade) {
+								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(d.longValue()));
+							} else {
+								return OGameUtils.TWO_DIGIT_FORMAT.format(d);
+							}
+						}).withMutation(crystalMutation -> {
+							crystalMutation.mutateAttribute((h, c) -> h.setCrystal((long) (c * 1E6))).editableIf((h, n) -> {
+								if (h instanceof SyntheticHolding) {
+									return false;
+								} else {
+									return h.getType() != ResourceType.Crystal;
+								}
+							}).asText(Format.doubleFormat("0.00"));
+						}))//
+						.withColumn("Deuterium (KK)", Double.class, h -> {
+							if (h == theUpgradeTimeTrade) {
+								return h.getDeuterium() * 1.0;
+							} else {
+								return h.getDeuterium() / 1E6;
+							}
+						}, deutCol -> deutCol.formatText((h, d) -> {
+							if (h == theUpgradeTimeTrade) {
+								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(d.longValue()));
+							} else {
+								return OGameUtils.TWO_DIGIT_FORMAT.format(d);
+							}
+						}).withMutation(metalMutation -> {
+							metalMutation.mutateAttribute((h, d) -> h.setDeuterium((long) (d * 1E6))).editableIf((h, n) -> {
+								if (h instanceof SyntheticHolding) {
+									return false;
+								} else {
+									return h.getType() != ResourceType.Deuterium;
+								}
+							}).asText(Format.doubleFormat("0.00"));
+						}))//
+						.withAdd(
+							() -> theUniGui.getSelectedAccount().get().getTrades().create()//
+								.with(Trade::getName, "").with(Trade::getType, ResourceType.Metal)//
+								.create(t -> t.getRate().set(theUniGui.getSelectedAccount().get().getUniverse().getTradeRatios())).get(),
+							addAction -> addAction.modifyButton(addBtn -> addBtn.withText("M")
+								.disableWith(theUniGui.getSelectedAccount().map(acct -> acct == null ? "No Account Selected" : null))))//
+						.withAdd(
+							() -> theUniGui.getSelectedAccount().get().getTrades().create()//
+								.with(Trade::getName, "").with(Trade::getType, ResourceType.Crystal)//
+								.create(t -> t.getRate().set(theUniGui.getSelectedAccount().get().getUniverse().getTradeRatios())).get(),
+							addAction -> addAction.modifyButton(addBtn -> addBtn.withText("C")
+								.disableWith(theUniGui.getSelectedAccount().map(acct -> acct == null ? "No Account Selected" : null))))//
+						.withAdd(
+							() -> theUniGui.getSelectedAccount().get().getTrades().create()//
+								.with(Trade::getName, "").with(Trade::getType, ResourceType.Deuterium)//
+								.create(t -> t.getRate().set(theUniGui.getSelectedAccount().get().getUniverse().getTradeRatios())).get(),
+							addAction -> addAction.modifyButton(addBtn -> addBtn.withText("D")
+								.disableWith(theUniGui.getSelectedAccount().map(acct -> acct == null ? "No Account Selected" : null))))//
+						.withRemove(trades -> theUniGui.getSelectedAccount().get().getHoldings().getValues().removeAll(trades),
+							remAction -> remAction.modifyButton(addBtn -> addBtn
+								.disableWith(theUniGui.getSelectedAccount().map(acct -> acct == null ? "No Account Selected" : null))))//
+			)//
 			)//
 		);
 	}
@@ -302,6 +632,43 @@ public class HoldingsPanel {
 
 		@Override
 		public Holding setDeuterium(long deuterium) {
+			throw new UnsupportedOperationException();
+		}
+	}
+
+	private static abstract class SyntheticTrade implements Trade {
+		@Override
+		public ResourceType getType() {
+			return null;
+		}
+
+		@Override
+		public TradeRatios getRate() {
+			return null;
+		}
+
+		@Override
+		public Nameable setName(String name) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public long getResource1() {
+			return 0;
+		}
+
+		@Override
+		public Trade setResource1(long res1) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public long getResource2() {
+			return 0;
+		}
+
+		@Override
+		public Trade setResource2(long res2) {
 			throw new UnsupportedOperationException();
 		}
 	}

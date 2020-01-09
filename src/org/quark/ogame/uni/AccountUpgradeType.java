@@ -5,6 +5,24 @@ import static org.quark.ogame.uni.UpgradeType.Research;
 import static org.quark.ogame.uni.UpgradeType.ShipyardItem;
 
 public enum AccountUpgradeType {
+	// Research
+	Energy(Research),
+	Laser(Research),
+	Ion(Research),
+	Hyperspace(Research), //
+	Plasma(Research),
+	Combustion(Research),
+	Impulse(Research),
+	Hyperdrive(Research), //
+	Espionage(Research),
+	Computer(Research),
+	Astrophysics(Research),
+	IntergalacticResearchNetwork(Research), //
+	Graviton(Research),
+	Weapons(Research),
+	Shielding(Research),
+	Armor(Research), //
+
 	// Buildings
 	MetalMine(Building),
 	CrystalMine(Building),
@@ -26,24 +44,6 @@ public enum AccountUpgradeType {
 	LunarBase(Building),
 	SensorPhalanx(Building),
 	JumpGate(Building), //
-
-	// Research
-	Energy(Research),
-	Laser(Research),
-	Ion(Research),
-	Hyperspace(Research), //
-	Plasma(Research),
-	Combustion(Research),
-	Impulse(Research),
-	Hyperdrive(Research), //
-	Espionage(Research),
-	Computer(Research),
-	Astrophysics(Research),
-	IntergalacticResearchNetwork(Research), //
-	Graviton(Research),
-	Weapons(Research),
-	Shielding(Research),
-	Armor(Research), //
 
 	// Ships
 	// Combat Ships

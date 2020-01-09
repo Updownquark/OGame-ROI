@@ -9,4 +9,8 @@ public interface TradeRatios {
 
 	double getDeuterium();
 	TradeRatios setDeuterium(double deuterium);
+
+	default TradeRatios set(TradeRatios other) {
+		return setMetal(other.getMetal()).setCrystal(other.getCrystal()).setDeuterium(other.getDeuterium());
+	}
 }

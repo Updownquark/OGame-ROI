@@ -9,8 +9,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -53,7 +51,6 @@ import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameRuleSet;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.PointType;
-import org.quark.ogame.uni.Research;
 import org.quark.ogame.uni.ResearchType;
 import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
@@ -72,6 +69,9 @@ public class OGameUniGui extends JPanel {
 	private final SimpleObservable<Void> thePlanetRefresh;
 	private final ObservableCollection<PlanetWithProduction> thePlanets;
 	private final ObservableCollection<AccountUpgrade> theGlobalUpgrades;
+
+	private final HoldingsPanel theHoldingsPanel;
+	private final PlanetTable thePlanetPanel;
 
 	public OGameUniGui(ObservableConfig config, List<OGameRuleSet> ruleSets, ObservableValueSet<Account> accounts) {
 		theConfig = config;
@@ -151,6 +151,9 @@ public class OGameUniGui extends JPanel {
 			}
 		});
 
+		thePlanetPanel = new PlanetTable(this);
+		theHoldingsPanel = new HoldingsPanel(this);
+
 		initComponents();
 	}
 
@@ -195,6 +198,14 @@ public class OGameUniGui extends JPanel {
 		return thePlanets.getElementsBySource(newPlanet.getElementId()).getFirst().get();
 	}
 
+	public PlanetTable getPlanetPanel() {
+		return thePlanetPanel;
+	}
+
+	public HoldingsPanel getHoldings() {
+		return theHoldingsPanel;
+	}
+
 	PlanetWithProduction productionFor(Planet planet) {
 		PlanetWithProduction p = new PlanetWithProduction(planet);
 		updateProduction(p);
@@ -229,9 +240,6 @@ public class OGameUniGui extends JPanel {
 			.filter(account -> account == theSelectedAccount.get() ? "Selected" : null).collect()//
 			).collect();
 
-		ObservableCollection<Research> researchColl = ObservableCollection.flattenValue(
-			theSelectedAccount.<ObservableCollection<Research>> map(account -> ObservableCollection.of(TypeTokens.get().of(Research.class),
-				account == null ? Collections.emptyList() : Arrays.asList(account.getResearch()))));
 		PanelPopulation.populateVPanel(this, Observable.empty())//
 		.addSplit(true,
 			mainSplit -> mainSplit.withSplitLocation(150).fill().fillV()//
@@ -403,52 +411,13 @@ public class OGameUniGui extends JPanel {
 								.spacer(3)//
 								)//
 							, acctSettingsTab -> acctSettingsTab.setName("Settings"))//
-								.withVTab("planets", acctBuildingsPanel -> new PlanetTable(this).addPlanetTable(acctBuildingsPanel)//
-							, acctBuildingsTab -> acctBuildingsTab.setName("Planets"))//
-						.withVTab("research", acctResearchPanel -> acctResearchPanel//
-							.addTable(researchColl, researchTable -> researchTable.fill()//
-								.withColumn(intResearchColumn("Energy", Research::getEnergy, Research::setEnergy, 60))//
-								.withColumn(intResearchColumn("Laser", Research::getLaser, Research::setLaser, 55))//
-								.withColumn(intResearchColumn("Ion", Research::getIon, Research::setIon, 35))//
-								.withColumn(intResearchColumn("Hyperspace", Research::getHyperspace, Research::setHyperspace, 75))//
-								.withColumn(intResearchColumn("Plasma", Research::getPlasma, Research::setPlasma, 60))//
-								.withColumn(
-									intResearchColumn("Combustion", Research::getCombustionDrive, Research::setCombustionDrive, 65))//
-								.withColumn(intResearchColumn("Impulse", Research::getImpulseDrive, Research::setImpulseDrive, 60))//
-								.withColumn(
-									intResearchColumn("Hyperdrive", Research::getHyperspaceDrive, Research::setHyperspaceDrive, 70))//
-								.withColumn(intResearchColumn("Espionage", Research::getEspionage, Research::setEspionage, 70))//
-								.withColumn(intResearchColumn("Computer", Research::getComputer, Research::setComputer, 70))//
-								.withColumn(intResearchColumn("Astro", Research::getAstrophysics, Research::setAstrophysics, 55))//
-								.withColumn(intResearchColumn("IRN", Research::getIntergalacticResearchNetwork,
-									Research::setIntergalacticResearchNetwork, 35))//
-								.withColumn(intResearchColumn("Graviton", Research::getGraviton, Research::setGraviton, 65))//
-								.withColumn(intResearchColumn("Weapons", Research::getWeapons, Research::setWeapons, 65))//
-								.withColumn(intResearchColumn("Shielding", Research::getShielding, Research::setShielding, 65))//
-								.withColumn(intResearchColumn("Armor", Research::getArmor, Research::setArmor, 55))//
-								)//
-									.addComponent(null, ObservableSwingUtils.label("Upgrade Costs").bold().withFontSize(16).label, null)//
-									.addTable(theGlobalUpgrades,
-										upgradeTable -> upgradeTable.fill()//
-											.visibleWhen(theReferenceAccount.map(a -> a != null))//
-											.withColumn("Upgrade", AccountUpgradeType.class, upgrade -> upgrade.type, null)//
-											.withColumn("From", int.class, upgrade -> upgrade.fromLevel, null)//
-											.withColumn("To", int.class, upgrade -> upgrade.toLevel, null)//
-											.withColumn("Metal", String.class,
-												upgrade -> OGameUtils.printResourceAmount(upgrade.cost.getMetal()), null)//
-											.withColumn("Crystal", String.class,
-												upgrade -> OGameUtils.printResourceAmount(upgrade.cost.getCrystal()), null)//
-											.withColumn("Deut", String.class,
-												upgrade -> OGameUtils.printResourceAmount(upgrade.cost.getDeuterium()), null)//
-											.withColumn("Time", String.class, upgrade -> printUpgradeTime(upgrade.cost.getUpgradeTime()),
-												null))//
-							, acctResearchTab -> acctResearchTab.setName("Research")//
-								)//
+								.withVTab("planets", acctBuildingsPanel -> thePlanetPanel.addPlanetTable(acctBuildingsPanel)//
+									, acctBuildingsTab -> acctBuildingsTab.setName("Builds"))//
 				// .withVTab("construction",
 				// constructionPanel -> new ConstructionPanel(theConfig, theSelectedRuleSet, theSelectedAccount)
 				// .addPanel(constructionPanel),
 				// constructionTab -> constructionTab.setName("Construction"))//
-								.withVTab("resources", resPanel -> new HoldingsPanel(this).addPanel(resPanel),
+								.withVTab("resources", resPanel -> theHoldingsPanel.addPanel(resPanel),
 									resTab -> resTab.setName("Resources"))//
 						))//
 			);
@@ -538,36 +507,6 @@ public class OGameUniGui extends JPanel {
 		return column;
 	}
 
-	<T> CategoryRenderStrategy<Research, T> researchColumn(String name, Class<T> type, Function<Research, T> getter,
-		BiConsumer<Research, T> setter, int width) {
-		CategoryRenderStrategy<Research, T> column = new CategoryRenderStrategy<Research, T>(name, TypeTokens.get().of(type), getter);
-		column.withWidths(width, width, width);
-		if (setter != null) {
-			column.withMutation(m -> m.mutateAttribute((p, v) -> {
-				setter.accept(p, v);
-				theSelectedAccount.set(theSelectedAccount.get(), null);
-			}).withRowUpdate(false));
-		}
-		return column;
-	}
-
-	CategoryRenderStrategy<Research, Integer> intResearchColumn(String name, Function<Research, Integer> getter,
-		BiConsumer<Research, Integer> setter, int width) {
-		CategoryRenderStrategy<Research, Integer> column = researchColumn(name, int.class, getter, setter, width);
-		decorateDiffColumn(column, __ -> {
-			Account refAccount = theReferenceAccount.get();
-			if (refAccount == null) {
-				return null;
-			}
-			return getter.apply(refAccount.getResearch());
-		});
-		if (setter != null) {
-			column.withMutation(
-				m -> m.asText(SpinnerFormat.INT).clicks(1).filterAccept((p, value) -> value >= 0 ? null : "Must not be negative"));
-		}
-		return column;
-	}
-
 	String printPoints(Account account, PointType type) {
 		if (account.getPlanets().getValues().isEmpty()) {
 			return "0";
@@ -602,6 +541,9 @@ public class OGameUniGui extends JPanel {
 	private static final Duration WEEK = Duration.ofDays(7);
 
 	static String printUpgradeTime(Duration upgradeTime) {
+		if (upgradeTime == null) {
+			return "";
+		}
 		if (upgradeTime.compareTo(WEEK) < 0) {
 			return QommonsUtils.printDuration(upgradeTime, true);
 		} else {

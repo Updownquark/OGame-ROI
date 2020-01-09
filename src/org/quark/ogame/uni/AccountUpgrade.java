@@ -1,12 +1,12 @@
 package org.quark.ogame.uni;
 
 public class AccountUpgrade {
-	public final AccountUpgradeType type;
-	public final Planet planet;
-	public final int fromLevel;
-	public final int toLevel;
+	private final AccountUpgradeType type;
+	private final Planet planet;
+	private final int fromLevel;
+	private final int toLevel;
 
-	public final UpgradeCost cost;
+	private final UpgradeCost cost;
 
 	public AccountUpgrade(AccountUpgradeType upgradeType, Planet planet, int fromLevel, int toLevel, UpgradeCost cost) {
 		this.type = upgradeType;
@@ -14,6 +14,26 @@ public class AccountUpgrade {
 		this.fromLevel = fromLevel;
 		this.toLevel = toLevel;
 		this.cost = cost;
+	}
+
+	public AccountUpgradeType getType() {
+		return type;
+	}
+
+	public Planet getPlanet() {
+		return planet;
+	}
+
+	public int getFromLevel() {
+		return fromLevel;
+	}
+
+	public int getToLevel() {
+		return toLevel;
+	}
+
+	public UpgradeCost getCost() {
+		return cost;
 	}
 
 	@Override
@@ -24,6 +44,7 @@ public class AccountUpgrade {
 			return false;
 		}
 		AccountUpgrade other = (AccountUpgrade) o;
-		return type == other.type && planet == other.planet && fromLevel == other.fromLevel && toLevel == other.toLevel;
+		return getType() == other.getType() && getPlanet() == other.getPlanet() && getFromLevel() == other.getFromLevel()
+			&& getToLevel() == other.getToLevel();
 	}
 }

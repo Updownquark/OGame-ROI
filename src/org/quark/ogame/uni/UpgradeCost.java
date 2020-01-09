@@ -22,6 +22,7 @@ public interface UpgradeCost {
 
 	boolean isZero();
 
+	UpgradeCost negate();
 	UpgradeCost plus(UpgradeCost cost);
 	UpgradeCost times(int mult);
 
@@ -154,6 +155,15 @@ public interface UpgradeCost {
 		}
 
 		@Override
+		public SimpleUpgradeCost negate() {
+			if (isZero()) {
+				return this;
+			}
+			return new SimpleUpgradeCost(theType, thePointType, -theMetal, -theCrystal, -theDeuterium, -theEnergy,
+				theTime == null ? null : theTime.negated());
+		}
+
+		@Override
 		public UpgradeCost plus(UpgradeCost cost) {
 			if (isZero()) {
 				return cost;
@@ -231,7 +241,7 @@ public interface UpgradeCost {
 				.append(OGameUtils.printResourceAmount(theCrystal)).append(", ")//
 				.append(OGameUtils.printResourceAmount(theDeuterium));
 			if (theTime == null) {
-				str.append(" (long time)");
+				str.append(" (unknown time)");
 			} else {
 				str.append(' ').append(QommonsUtils.printDuration(theTime, true));
 			}
@@ -325,6 +335,18 @@ public interface UpgradeCost {
 				}
 			}
 			return true;
+		}
+
+		@Override
+		public UpgradeCost negate() {
+			if (isZero()) {
+				return this;
+			}
+			List<SimpleUpgradeCost> components = new ArrayList<>(theComponents.size() + 1);
+			for (SimpleUpgradeCost c : theComponents) {
+				components.add(c.negate());
+			}
+			return new CompositeUpgradeCost(components);
 		}
 
 		@Override

@@ -1,8 +1,7 @@
 package org.quark.ogame.uni.ui;
 
+import java.awt.Color;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -37,6 +36,7 @@ import org.quark.ogame.uni.Research;
 import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.UpgradeCost;
+import org.quark.ogame.uni.UpgradeType;
 
 import com.google.common.reflect.TypeToken;
 
@@ -56,72 +56,68 @@ public class PlanetTable {
 	private final SettableValue<Boolean> showOtherFacilities;
 	private final SettableValue<Boolean> showMoonBuildings;
 
-	private final ObservableCollection<AccountUpgrade> theSelectedPlanetUpgrades;
+	private final ObservableCollection<AccountUpgrade> theUpgrades;
+	private final AccountUpgrade thePlanetTotalUpgrade;
+	private final AccountUpgrade theTotalUpgrade;
 
 	public PlanetTable(OGameUniGui uniGui) {
 		theUniGui = uniGui;
 
 		ObservableConfig config = uniGui.getConfig();
-		showFields = config.asValue(boolean.class).at("planet-categories/fields").withFormat(Format.BOOLEAN, () -> false)
-			.buildValue(null);
+		showFields = config.asValue(boolean.class).at("planet-categories/fields").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
 		showTemps = config.asValue(boolean.class).at("planet-categories/temps").withFormat(Format.BOOLEAN, () -> true).buildValue(null);
 		showMines = config.asValue(boolean.class).at("planet-categories/mines").withFormat(Format.BOOLEAN, () -> true).buildValue(null);
-		showEnergy = config.asValue(boolean.class).at("planet-categories/energy").withFormat(Format.BOOLEAN, () -> false)
-			.buildValue(null);
+		showEnergy = config.asValue(boolean.class).at("planet-categories/energy").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
 		showStorage = config.asValue(boolean.class).at("planet-categories/storage").withFormat(Format.BOOLEAN, () -> false)
 			.buildValue(null);
-		showMainFacilities = config.asValue(boolean.class).at("planet-categories/main-facilities")
-			.withFormat(Format.BOOLEAN, () -> false).buildValue(null);
-		showOtherFacilities = config.asValue(boolean.class).at("planet-categories/other-facilities")
-			.withFormat(Format.BOOLEAN, () -> false).buildValue(null);
+		showMainFacilities = config.asValue(boolean.class).at("planet-categories/main-facilities").withFormat(Format.BOOLEAN, () -> false)
+			.buildValue(null);
+		showOtherFacilities = config.asValue(boolean.class).at("planet-categories/other-facilities").withFormat(Format.BOOLEAN, () -> false)
+			.buildValue(null);
 		showMoonBuildings = config.asValue(boolean.class).at("planet-categories/moon-buildings").withFormat(Format.BOOLEAN, () -> false)
 			.buildValue(null);
 		productionType = config.asValue(ProductionDisplayType.class).at("planet-categories/production")
 			.withFormat(ObservableConfigFormat.enumFormat(ProductionDisplayType.class, () -> ProductionDisplayType.Hourly))
 			.buildValue(null);
 
-		ObservableCollection<Research> researchColl = ObservableCollection.flattenValue(theUniGui.getSelectedAccount()
-			.<ObservableCollection<Research>> map(account -> ObservableCollection.of(TypeTokens.get().of(Research.class),
-				account == null ? Collections.emptyList() : Arrays.asList(account.getResearch()))));
-		// TODO Do I need this?
-		// researchColl.simpleChanges().act(__ -> theUniGui.refreshProduction());
-
 		selectedPlanets = theUniGui.getPlanets().flow().refresh(productionType.noInitChanges()).collect();
 
 		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).build();
-		
-		theSelectedPlanetUpgrades=ObservableCollection.build(AccountUpgrade.class).safe(false).build();
-		Observable.or(theSelectedPlanet.changes(), theUniGui.getReferenceAccount().noInitChanges()).act(__ -> {
-			PlanetWithProduction p=theSelectedPlanet.get();
+
+		ObservableCollection<AccountUpgrade> upgrades = ObservableCollection.build(AccountUpgrade.class).safe(false).build();
+		Observable.or(theUniGui.getSelectedAccount().changes(), theUniGui.getReferenceAccount().noInitChanges()).act(__ -> {
+			Account account = theUniGui.getSelectedAccount().get();
 			Account refAcct = theUniGui.getReferenceAccount().get();
-			if(p==null || refAcct==null){
-				theSelectedPlanetUpgrades.clear();
+			if (account == null || refAcct == null) {
+				upgrades.clear();
 				return;
 			}
-			Account account = theUniGui.getSelectedAccount().get();
-			int pIdx=account.getPlanets().getValues().indexOf(p.planet);
-			Planet refPlanet=refAcct.getPlanets().getValues().size()<=pIdx ? null : refAcct.getPlanets().getValues().get(pIdx);
-			List<AccountUpgrade> upgrades=new ArrayList<>();
-			for(BuildingType bdg : BuildingType.values()){
-				int fromLevel=refPlanet==null ? 0 : refPlanet.getBuildingLevel(bdg);
-				int toLevel=p.planet.getBuildingLevel(bdg);
-				if(fromLevel!=toLevel){
-					AccountUpgradeType type=AccountUpgradeType.getBuildingUpgrade(bdg);
-					UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, p.planet, type, fromLevel, toLevel);
-					upgrades.add(new AccountUpgrade(type, p.planet, fromLevel, toLevel, cost));
+			List<AccountUpgrade> newUpgrades = new ArrayList<>();
+			for (AccountUpgradeType type : AccountUpgradeType.values()) {
+				if (type.type == UpgradeType.Research) {
+					int fromLevel = refAcct.getResearch().getResearchLevel(type.research);
+					int toLevel = account.getResearch().getResearchLevel(type.research);
+					if (fromLevel != toLevel) {
+						UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, null, type, fromLevel, toLevel);
+						newUpgrades.add(new AccountUpgrade(type, null, fromLevel, toLevel, cost));
+					}
+				} else {
+					for (int p = 0; p < account.getPlanets().getValues().size(); p++) {
+						Planet planet = account.getPlanets().getValues().get(p);
+						Planet refPlanet = p < refAcct.getPlanets().getValues().size() ? refAcct.getPlanets().getValues().get(p) : null;
+
+						int fromLevel = refPlanet == null ? 0 : type.getLevel(refAcct, refPlanet);
+						int toLevel = type.getLevel(account, planet);
+						if (fromLevel != toLevel) {
+							UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, planet, type, fromLevel,
+								toLevel);
+							newUpgrades.add(new AccountUpgrade(type, planet, fromLevel, toLevel, cost));
+						}
+					}
 				}
 			}
-			for (ShipyardItemType ship : ShipyardItemType.values()) {
-				int fromLevel = refPlanet == null ? 0 : refPlanet.getStationedShips(ship);
-				int toLevel = p.planet.getStationedShips(ship);
-				if (fromLevel != toLevel) {
-					AccountUpgradeType type = AccountUpgradeType.getShipyardItemUpgrade(ship);
-					UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, p.planet, type, fromLevel, toLevel);
-					upgrades.add(new AccountUpgrade(type, p.planet, fromLevel, toLevel, cost));
-				}
-			}
-			
-			ArrayUtils.adjust(theSelectedPlanetUpgrades, upgrades, new ArrayUtils.DifferenceListener<AccountUpgrade, AccountUpgrade>(){
+
+			ArrayUtils.adjust(upgrades, newUpgrades, new ArrayUtils.DifferenceListener<AccountUpgrade, AccountUpgrade>() {
 				@Override
 				public boolean identity(AccountUpgrade o1, AccountUpgrade o2) {
 					return o1.equals(o2);
@@ -143,6 +139,47 @@ public class PlanetTable {
 				}
 			});
 		});
+		thePlanetTotalUpgrade = new AccountUpgrade(null, null, 0, 0, null) {
+			@Override
+			public UpgradeCost getCost() {
+				UpgradeCost cost = UpgradeCost.ZERO;
+				PlanetWithProduction selectedPlanet = theSelectedPlanet.get();
+				if (selectedPlanet != null) {
+					for (AccountUpgrade upgrade : upgrades) {
+						if (upgrade.getPlanet() == selectedPlanet.planet) {
+							cost = cost.plus(upgrade.getCost());
+						}
+					}
+				}
+				return cost;
+			}
+		};
+		theTotalUpgrade = new AccountUpgrade(null, null, 0, 0, null) {
+			@Override
+			public UpgradeCost getCost() {
+				UpgradeCost cost = UpgradeCost.ZERO;
+				for (AccountUpgrade upgrade : upgrades) {
+					cost = cost.plus(upgrade.getCost());
+				}
+				return cost;
+			}
+		};
+		ObservableCollection<AccountUpgrade> totalUpgrades = ObservableCollection.build(AccountUpgrade.class).safe(false).build();
+		totalUpgrades.add(theTotalUpgrade);
+		theSelectedPlanet.changes().act(p -> {
+			if (p != null && totalUpgrades.size() == 1) {
+				totalUpgrades.add(0, thePlanetTotalUpgrade);
+			} else if (p == null && totalUpgrades.size() == 2) {
+				totalUpgrades.remove(0);
+			}
+		});
+		theUpgrades = ObservableCollection.flattenCollections(TypeTokens.get().of(AccountUpgrade.class), //
+			upgrades.flow().refresh(theSelectedPlanet.noInitChanges()).collect(), //
+			totalUpgrades).collect();
+	}
+
+	public AccountUpgrade getTotalUpgrades() {
+		return theTotalUpgrade;
 	}
 
 	public void addPlanetTable(PanelPopulation.PanelPopulator<?, ?> panel) {
@@ -182,14 +219,14 @@ public class PlanetTable {
 			intPlanetColumn("Free Fields", false, planet -> {
 				return theUniGui.getRules().get().economy().getFields(planet) - planet.getUsedFields();
 			}, null, 80)//
-			);
+		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonFieldColumns = ObservableCollection.of(planetColumnType,
 			intMoonColumn("Moon Fields", moon -> theUniGui.getRules().get().economy().getFields(moon), null, 80), //
 			intMoonColumn("Bonus Fields", Moon::getFieldBonus, Moon::setFieldBonus, 80), //
 			intMoonColumn("Free Fields", moon -> {
 				return theUniGui.getRules().get().economy().getFields(moon) - moon.getUsedFields();
 			}, null, 80)//
-			);
+		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> tempColumns = ObservableCollection.of(planetColumnType,
 			intPlanetColumn("Min T", true, Planet::getMinimumTemperature, (planet, t) -> {
 				planet.setMinimumTemperature(t);
@@ -199,7 +236,7 @@ public class PlanetTable {
 				planet.setMaximumTemperature(t);
 				planet.setMinimumTemperature(t - 40);
 			}, 40)//
-			);
+		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mineColumns = ObservableCollection.of(planetColumnType,
 			intPlanetColumn("M Mine", false, Planet::getMetalMine, Planet::setMetalMine, 55), //
 			intPlanetColumn("C Mine", false, Planet::getCrystalMine, Planet::setCrystalMine, 55), //
@@ -210,42 +247,43 @@ public class PlanetTable {
 				str.append(theUniGui.getRules().get().economy().getMaxCrawlers(theUniGui.getSelectedAccount().get(), planet.planet));
 				return str.toString();
 			}) //
-			);
+		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> energyBldgs = ObservableCollection.of(planetColumnType,
 			intPlanetColumn("Sats", false, Planet::getSolarSatellites, Planet::setSolarSatellites, 75), //
 			intPlanetColumn("Solar", false, Planet::getSolarPlant, Planet::setSolarPlant, 55), //
-			intPlanetColumn("Fusion", false, Planet::getFusionReactor, Planet::setFusionReactor, 55));
+			intPlanetColumn("Fusion", false, Planet::getFusionReactor, Planet::setFusionReactor, 55),
+			planetColumn("Net Energy", int.class, p -> p.getEnergy().totalNet, null, 60));
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> storageColumns = ObservableCollection.of(planetColumnType,
 			intPlanetColumn("M Stor", false, Planet::getMetalStorage, Planet::setMetalStorage, 55), //
 			intPlanetColumn("C Stor", false, Planet::getCrystalStorage, Planet::setCrystalStorage, 55), //
 			intPlanetColumn("D Stor", false, Planet::getDeuteriumStorage, Planet::setDeuteriumStorage, 55)//
-			);
+		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> productionColumns = ObservableCollection.of(planetColumnType,
 			planetColumn("M Prod", String.class, planet -> printProduction(planet.getMetal().totalNet, productionType.get()), null, 80), //
 			planetColumn("C Prod", String.class, planet -> printProduction(planet.getCrystal().totalNet, productionType.get()), null, 80), //
 			planetColumn("D Prod", String.class, planet -> printProduction(planet.getDeuterium().totalNet, productionType.get()), null, 80), //
 			planetColumn("Cargoes", int.class, planet -> getCargoes(planet, false, productionType.get()), null, 80), //
 			planetColumn("SS Cargoes", int.class, planet -> getCargoes(planet, true, productionType.get()), null, 80)//
-			).flow().refresh(productionType.noInitChanges()).collect();
+		).flow().refresh(productionType.noInitChanges()).collect();
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mainFacilities = ObservableCollection.of(planetColumnType,
 			intPlanetColumn("Robotics", false, Planet::getRoboticsFactory, Planet::setRoboticsFactory, 60), //
 			intPlanetColumn("Shipyard", false, Planet::getShipyard, Planet::setShipyard, 60), //
 			intPlanetColumn("Lab", false, Planet::getResearchLab, Planet::setResearchLab, 55), //
 			intPlanetColumn("Nanite", false, Planet::getNaniteFactory, Planet::setNaniteFactory, 55)//
-			);
+		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> otherFacilities = ObservableCollection.of(planetColumnType,
 			intPlanetColumn("Ally Depot", false, Planet::getAllianceDepot, Planet::setAllianceDepot, 65), //
 			intPlanetColumn("Silo", false, Planet::getMissileSilo, Planet::setMissileSilo, 45), //
 			intPlanetColumn("Terraformer", false, Planet::getTerraformer, Planet::setTerraformer, 65), //
 			intPlanetColumn("Space Dock", false, Planet::getSpaceDock, Planet::setSpaceDock, 65)//
-			);
+		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonBuildings = ObservableCollection.of(planetColumnType,
 			intMoonColumn("Lunar Base", Moon::getLunarBase, Moon::setLunarBase, 60), //
 			intMoonColumn("Phalanx", Moon::getSensorPhalanx, Moon::setSensorPhalanx, 55), //
 			intMoonColumn("Jump Gate", Moon::getJumpGate, Moon::setJumpGate, 60), //
 			intMoonColumn("Shipyard", Moon::getShipyard, Moon::setShipyard, 55), //
 			intMoonColumn("Robotics", Moon::getRoboticsFactory, Moon::setRoboticsFactory, 55)//
-			);
+		);
 
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> emptyColumns = ObservableCollection.of(planetColumnType);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> planetColumns = ObservableCollection
@@ -261,57 +299,89 @@ public class PlanetTable {
 				ObservableCollection.flattenValue(showOtherFacilities.map(show -> show ? otherFacilities : emptyColumns)), //
 				ObservableCollection.flattenValue(showFields.map(show -> show ? moonFieldColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(showMoonBuildings.map(show -> show ? moonBuildings : emptyColumns))//
-				).collect();
+			).collect();
+
+		ObservableCollection<Research> researchColl = ObservableCollection.flattenValue(theUniGui.getSelectedAccount()
+			.<ObservableCollection<Research>> map(ObservableCollection.TYPE_KEY.getCompoundType(Research.class), account -> {
+				ObservableCollection<Research> rsrch = ObservableCollection.build(Research.class).safe(false).build();
+				if (account != null) {
+					rsrch.with(account.getResearch());
+				}
+				return rsrch;
+			}, opts -> opts.cache(true).reEvalOnUpdate(false)));
+		researchColl.simpleChanges().act(__ -> theUniGui.refreshProduction());
 
 		panel.fill().fillV()//
-		.addHPanel("Show Properties:", new JustifiedBoxLayout(false).setMainAlignment(JustifiedBoxLayout.Alignment.LEADING),
-			fieldPanel -> fieldPanel//
-			.addCheckField("Fields:", showFields, null).spacer(3)//
-			.addCheckField("Temps:", showTemps, null).spacer(3)//
-			.addCheckField("Mines:", showMines, null).spacer(3)//
-			.addCheckField("Energy:", showEnergy, null).spacer(3)//
-			.addCheckField("Storage:", showStorage, null).spacer(3)//
-			.addComboField("Production:", productionType, null, ProductionDisplayType.values())//
-			.addCheckField("Main Facilities:", showMainFacilities, null).spacer(3)//
-			.addCheckField("Other Facilities:", showOtherFacilities, null).spacer(3)//
-			.addCheckField("Moon Buildings:", showMoonBuildings, null).spacer(3)//
+			.addTable(researchColl,
+				researchTable -> researchTable.fill().withAdaptiveHeight(1, 1, 1).decorate(d -> d.withTitledBorder("Research", Color.black))//
+					.withColumn(intResearchColumn("Energy", Research::getEnergy, Research::setEnergy, 60))//
+					.withColumn(intResearchColumn("Laser", Research::getLaser, Research::setLaser, 55))//
+					.withColumn(intResearchColumn("Ion", Research::getIon, Research::setIon, 35))//
+					.withColumn(intResearchColumn("Hyperspace", Research::getHyperspace, Research::setHyperspace, 75))//
+					.withColumn(intResearchColumn("Plasma", Research::getPlasma, Research::setPlasma, 60))//
+					.withColumn(intResearchColumn("Combustion", Research::getCombustionDrive, Research::setCombustionDrive, 65))//
+					.withColumn(intResearchColumn("Impulse", Research::getImpulseDrive, Research::setImpulseDrive, 60))//
+					.withColumn(intResearchColumn("Hyperdrive", Research::getHyperspaceDrive, Research::setHyperspaceDrive, 70))//
+					.withColumn(intResearchColumn("Espionage", Research::getEspionage, Research::setEspionage, 70))//
+					.withColumn(intResearchColumn("Computer", Research::getComputer, Research::setComputer, 70))//
+					.withColumn(intResearchColumn("Astro", Research::getAstrophysics, Research::setAstrophysics, 55))//
+					.withColumn(
+						intResearchColumn("IRN", Research::getIntergalacticResearchNetwork, Research::setIntergalacticResearchNetwork, 35))//
+					.withColumn(intResearchColumn("Graviton", Research::getGraviton, Research::setGraviton, 65))//
+					.withColumn(intResearchColumn("Weapons", Research::getWeapons, Research::setWeapons, 65))//
+					.withColumn(intResearchColumn("Shielding", Research::getShielding, Research::setShielding, 65))//
+					.withColumn(intResearchColumn("Armor", Research::getArmor, Research::setArmor, 55))//
 			)//
-		.addTable(selectedPlanets,
-				planetTable -> planetTable.fill().withItemName("planet")//
-			// This is a little hacky, but the next line tells the column the item name
-			.withColumns(basicPlanetColumns)
-			// function
-			.withNameColumn(p -> p.planet.getName(), (p, name) -> p.planet.setName(name), false,
-				nameCol -> nameCol.withWidths(50, 100, 150))//
-			.withColumn("Upgrd", Object.class, p -> p.planet.getCurrentUpgrade(), upgradeCol -> upgradeCol.withWidths(40, 40, 40)
-				.formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName).withMutation(m -> m.asCombo(bdg -> {
-					if (bdg instanceof BuildingType) {
-						return ((BuildingType) bdg).shortName;
-					} else {
-						return "None";
-					}
+			.addHPanel("Show Properties:", new JustifiedBoxLayout(false).setMainAlignment(JustifiedBoxLayout.Alignment.LEADING),
+				fieldPanel -> fieldPanel//
+					.addCheckField("Fields:", showFields, null).spacer(3)//
+					.addCheckField("Temps:", showTemps, null).spacer(3)//
+					.addCheckField("Mines:", showMines, null).spacer(3)//
+					.addCheckField("Energy:", showEnergy, null).spacer(3)//
+					.addCheckField("Storage:", showStorage, null).spacer(3)//
+					.addComboField("Production:", productionType, null, ProductionDisplayType.values())//
+					.addCheckField("Main Facilities:", showMainFacilities, null).spacer(3)//
+					.addCheckField("Other Facilities:", showOtherFacilities, null).spacer(3)//
+					.addCheckField("Moon Buildings:", showMoonBuildings, null).spacer(3)//
+			)//
+			.addTable(selectedPlanets,
+				planetTable -> planetTable.fill().withItemName("planet").withAdaptiveHeight(6, 12, 17)//
+					.decorate(d -> d.withTitledBorder("Planets", Color.black))//
+					// This is a little hacky, but the next line tells the column the item name
+					.withColumns(basicPlanetColumns)
+					// function
+					.withNameColumn(p -> p.planet.getName(), (p, name) -> p.planet.setName(name), false,
+						nameCol -> nameCol.withWidths(50, 100, 150))//
+					.withColumn("Upgrd", Object.class, p -> p.planet.getCurrentUpgrade(), upgradeCol -> upgradeCol.withWidths(40, 40, 40)
+						.formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName).withMutation(m -> m.asCombo(bdg -> {
+							if (bdg instanceof BuildingType) {
+								return ((BuildingType) bdg).shortName;
+							} else {
+								return "None";
+							}
 						}, planetUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
-					if (bdg instanceof BuildingType) {
-						p.planet.setCurrentUpgrade((BuildingType) bdg);
-					} else {
-						p.planet.setCurrentUpgrade(null);
-					}
-				})))//
-			.withColumns(planetColumns)//
-			.withSelection(theSelectedPlanet, false)//
+							if (bdg instanceof BuildingType) {
+								p.planet.setCurrentUpgrade((BuildingType) bdg);
+							} else {
+								p.planet.setCurrentUpgrade(null);
+							}
+						})))//
+					.withColumns(planetColumns)//
+					.withSelection(theSelectedPlanet, false)//
 					.withAdd(() -> theUniGui.createPlanet(), null)//
 					.withRemove(planets -> theUniGui.getSelectedAccount().get().getPlanets().getValues().removeAll(planets),
 						action -> action//
-				.confirmForItems("Delete Planets?", "Are you sure you want to delete ", null, true))//
+							.confirmForItems("Delete Planets?", "Are you sure you want to delete ", null, true))//
 			)//
 			.addHPanel(null, new JustifiedBoxLayout(false).mainJustified().crossJustified(),
 				bottomSplit -> bottomSplit.fill()//
 					.addVPanel(resPanel -> resPanel.fill().fillV()//
-						.addComponent(null, ObservableSwingUtils.label("Resources").bold().withFontSize(16).label, null)//
+						.visibleWhen(theSelectedPlanet.map(p -> p != null))
+						.addComponent(null, ObservableSwingUtils.label("Production").bold().withFontSize(16).label, null)//
 						.addTable(
 							ObservableCollection.of(TypeTokens.get().of(ResourceRow.class), ResourceRow.values()).flow()
 								.refresh(theSelectedPlanet.noInitChanges()).collect(),
-							resTable -> resTable.fill().visibleWhen(theSelectedPlanet.map(p -> p != null))//
+							resTable -> resTable.fill()//
 								.withColumn("Type", ResourceRow.class, t -> t, typeCol -> typeCol.withWidths(100, 100, 100))//
 								.withColumn(resourceColumn("", int.class, this::getPSValue, this::setPSValue, theSelectedPlanet, 0, 35)
 									.formatText((row, v) -> renderResourceRow(row, v))//
@@ -337,21 +407,86 @@ public class PlanetTable {
 											.clicks(1)))//
 					)//
 					)//
-					.addVPanel(upgradePanel -> upgradePanel.fill().fillV()// ;
+					.addVPanel(upgradePanel -> upgradePanel.fill().fillV()//
 						.addComponent(null, ObservableSwingUtils.label("Upgrade Costs").bold().withFontSize(16).label, null)//
-						.addTable(theSelectedPlanetUpgrades, upgradeTable -> upgradeTable.fill()//
-							.visibleWhen(theSelectedPlanet.combine((p, a) -> p != null && a != null, theUniGui.getReferenceAccount()))//
-								.withColumn("Planet", String.class, upgrade -> upgrade.planet.getName(), null)//
-								.withColumn("Upgrade", AccountUpgradeType.class, upgrade -> upgrade.type, null)//
-								.withColumn("From", int.class, upgrade -> upgrade.fromLevel, null)//
-								.withColumn("To", int.class, upgrade -> upgrade.toLevel, null)//
-							.withColumn("Metal", String.class, upgrade -> OGameUtils.printResourceAmount(upgrade.cost.getMetal()), null)//
-							.withColumn("Crystal", String.class, upgrade -> OGameUtils.printResourceAmount(upgrade.cost.getCrystal()), null)//
-							.withColumn("Deut", String.class, upgrade -> OGameUtils.printResourceAmount(upgrade.cost.getDeuterium()), null)//
-							.withColumn("Time", String.class, upgrade -> OGameUniGui.printUpgradeTime(upgrade.cost.getUpgradeTime()), null)//
+						.visibleWhen(theUniGui.getReferenceAccount().map(a -> a != null))//
+						.addTable(theUpgrades, upgradeTable -> upgradeTable.fill()//
+							.withColumn("Planet", String.class, upgrade -> {
+								if (upgrade.getType() == null) {
+									return "Total";
+								} else if (upgrade.getPlanet() != null) {
+									return upgrade.getPlanet().getName();
+								} else {
+									return "";
+								}
+							}, planetCol -> {
+								planetCol.decorate((cell, d) -> {
+									PlanetWithProduction p = theSelectedPlanet.get();
+									if (p != null && cell.getModelValue().getPlanet() == p.planet) {
+										d.bold();
+									}
+								});
+							})//
+							.withColumn("Upgrade", AccountUpgradeType.class, upgrade -> upgrade.getType(), null)//
+							.withColumn("From", int.class, upgrade -> upgrade.getFromLevel(),
+								fromCol -> fromCol.withWidths(25, 35, 40)//
+									.formatText((u, i) -> u.getType() == null ? "" : ("" + i)))//
+							.withColumn("To", int.class, upgrade -> upgrade.getToLevel(),
+								toCol -> toCol.withWidths(25, 35, 40)//
+									.formatText((u, i) -> u.getType() == null ? "" : ("" + i)))//
+							.withColumn("Metal", String.class, upgrade -> OGameUtils.printResourceAmount(upgrade.getCost().getMetal()),
+								metalCol -> metalCol.decorate((cell, d) -> {
+									if (cell.getModelValue().getType() == null) {
+										d.bold();
+									}
+								}))//
+							.withColumn("Crystal", String.class, upgrade -> OGameUtils.printResourceAmount(upgrade.getCost().getCrystal()),
+								crystalCol -> crystalCol.decorate((cell, d) -> {
+									if (cell.getModelValue().getType() == null) {
+										d.bold();
+									}
+								}))//
+							.withColumn("Deut", String.class, upgrade -> OGameUtils.printResourceAmount(upgrade.getCost().getDeuterium()),
+								deutCol -> deutCol.decorate((cell, d) -> {
+									if (cell.getModelValue().getType() == null) {
+										d.bold();
+									}
+								}))//
+							.withColumn("Time", String.class, upgrade -> OGameUniGui.printUpgradeTime(upgrade.getCost().getUpgradeTime()),
+								timeCol -> timeCol.withWidths(40, 100, 120))//
 				)//
 				)//
-			);
+		);
+	}
+
+	<T> CategoryRenderStrategy<Research, T> researchColumn(String name, Class<T> type, Function<Research, T> getter,
+		BiConsumer<Research, T> setter, int width) {
+		CategoryRenderStrategy<Research, T> column = new CategoryRenderStrategy<Research, T>(name, TypeTokens.get().of(type), getter);
+		column.withWidths(width, width, width);
+		if (setter != null) {
+			column.withMutation(m -> m.mutateAttribute((p, v) -> {
+				setter.accept(p, v);
+				theUniGui.getSelectedAccount().set(theUniGui.getSelectedAccount().get(), null);
+			}).withRowUpdate(false));
+		}
+		return column;
+	}
+
+	CategoryRenderStrategy<Research, Integer> intResearchColumn(String name, Function<Research, Integer> getter,
+		BiConsumer<Research, Integer> setter, int width) {
+		CategoryRenderStrategy<Research, Integer> column = researchColumn(name, int.class, getter, setter, width);
+		OGameUniGui.decorateDiffColumn(column, __ -> {
+			Account refAccount = theUniGui.getReferenceAccount().get();
+			if (refAccount == null) {
+				return null;
+			}
+			return getter.apply(refAccount.getResearch());
+		});
+		if (setter != null) {
+			column.withMutation(m -> m.asText(SpinnerFormat.INT).withRowUpdate(true).clicks(1)
+				.filterAccept((p, value) -> value >= 0 ? null : "Must not be negative"));
+		}
+		return column;
 	}
 
 	static <T> CategoryRenderStrategy<PlanetWithProduction, T> planetColumn(String name, Class<T> type,
