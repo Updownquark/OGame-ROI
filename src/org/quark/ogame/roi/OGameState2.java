@@ -1,4 +1,4 @@
-package org.quark.ogame;
+package org.quark.ogame.roi;
 
 import java.util.LinkedList;
 import java.util.List;

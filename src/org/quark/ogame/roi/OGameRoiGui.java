@@ -1,4 +1,4 @@
-package org.quark.ogame;
+package org.quark.ogame.roi;
 
 import java.awt.Component;
 import java.awt.Font;
@@ -31,6 +31,7 @@ import org.qommons.BiTuple;
 import org.qommons.QommonsUtils;
 import org.qommons.Transaction;
 import org.qommons.io.Format;
+import org.quark.ogame.OGameUtils;
 import org.quark.ogame.uni.PointType;
 
 import com.google.common.reflect.TypeToken;
@@ -38,7 +39,7 @@ import com.google.common.reflect.TypeToken;
 public class OGameRoiGui extends JPanel {
 	private final OGameROI theROI;
 	private final ObservableCollection<OGameImprovement> theSequence;
-	private OGameROI.ROIComputation theComputation;
+	private ROIComputation theComputation;
 
 	private final SettableValue<Integer> theFieldOffset;
 	private final SettableValue<TableContentControl> theUpgradeFilter;
