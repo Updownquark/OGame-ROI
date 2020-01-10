@@ -3,6 +3,7 @@ package org.quark.ogame.uni.ui;
 import java.awt.Color;
 import java.time.Duration;
 
+import org.observe.Observable;
 import org.observe.collect.ObservableCollection;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.JustifiedBoxLayout;
@@ -284,34 +285,57 @@ public class HoldingsPanel {
 				return "Trades Needed";
 			}
 
-			@Override
-			public long getMetal() {
+			// At the moment, this is a colossal waste of computation, as this value is calculated for each resource type and duration
+			// But it's only done once (for each resource) when anything changes, so it may not be worth the trouble of optimizing
+			private double[] calcNeededTrade() {
 				UpgradeCost cost = theUniGui.getPlanetPanel().getTotalUpgrades().getCost();
 				cost = cost.plus(UpgradeCost.of('b', 'e', theTotalHolding.getMetal(), theTotalHolding.getCrystal(),
 					theTotalHolding.getDeuterium(), 0, Duration.ZERO).negate());
+				cost = cost.plus(UpgradeCost
+					.of('b', 'e', theTotalTrade.getMetal(), theTotalTrade.getCrystal(), theTotalTrade.getDeuterium(), 0, Duration.ZERO)
+					.negate());
 				UpgradeCost production = UpgradeCost.ZERO;
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
 					production = production.plus(UpgradeCost.of('b', 'e', planet.getMetal().totalNet, planet.getCrystal().totalNet,
 						planet.getDeuterium().totalNet, 0, Duration.ZERO));
 				}
-				double metalTime = cost.getMetal() * 1.0 / production.getMetal();
-				double crystalTime = cost.getCrystal() * 1.0 / production.getCrystal();
-				double deutTime = cost.getDeuterium() * 1.0 / production.getDeuterium();
+				// Trade rates
+				double rM = theUniGui.getSelectedAccount().get().getUniverse().getTradeRatios().getMetal();
+				double rC = theUniGui.getSelectedAccount().get().getUniverse().getTradeRatios().getCrystal();
+				double rD = theUniGui.getSelectedAccount().get().getUniverse().getTradeRatios().getDeuterium();
+				// The amount needed beyond holdings and planned trades to achieve all goals
+				double nM = cost.getMetal();
+				double nC = cost.getCrystal();
+				double nD = cost.getDeuterium();
+				// Production rates
+				double pM = production.getMetal();
+				double pC = production.getCrystal();
+				double pD = production.getDeuterium();
 
-				// TODO Auto-generated method stub
-				return 0;
+				double x = rM * pC / rC / pM + rM * pD / rD / pM;
+				// The amount of resources needed via additional, as yet unplanned, trades
+				double tM, tC, tD;
+				tM = (nM * x - rM * nC / rC - rM * nD / rD) / (x + 1);
+				double t = (nM - tM) / pM; // The amount of time (in hours) needed to achieve all goals (with all planned and unplanned
+											// trades)
+				tC = nC - pC * t;
+				tD = nD - pD * t;
+				return new double[] { tM, tC, tD, t };
+			}
+
+			@Override
+			public long getMetal() {
+				return Math.round(calcNeededTrade()[0]);
 			}
 
 			@Override
 			public long getCrystal() {
-				// TODO Auto-generated method stub
-				return 0;
+				return Math.round(calcNeededTrade()[1]);
 			}
 
 			@Override
 			public long getDeuterium() {
-				// TODO Auto-generated method stub
-				return 0;
+				return Math.round(calcNeededTrade()[2]);
 			}
 		};
 		ObservableCollection<Trade> synthTrades = ObservableCollection.build(TypeTokens.get().of(Trade.class)).safe(false).build()
@@ -319,7 +343,7 @@ public class HoldingsPanel {
 		ElementId totalTradeId = synthTrades.getElement(0).getElementId();
 		ElementId upgradeTimeTradeId = synthTrades.getElement(1).getElementId();
 		ElementId tradesNeededId = synthTrades.getElement(2).getElementId();
-		flatTrades.simpleChanges().act(__ -> {
+		Observable.or(flatTrades.simpleChanges(), flatHoldings.simpleChanges()).act(__ -> {
 			synthTrades.mutableElement(totalTradeId).set(theTotalTrade);
 			synthTrades.mutableElement(upgradeTimeTradeId).set(theUpgradeTimeTrade);
 			synthTrades.mutableElement(tradesNeededId).set(theTradesNeeded);
@@ -586,7 +610,7 @@ public class HoldingsPanel {
 								.create(t -> t.getRate().set(theUniGui.getSelectedAccount().get().getUniverse().getTradeRatios())).get(),
 							addAction -> addAction.modifyButton(addBtn -> addBtn.withText("D")
 								.disableWith(theUniGui.getSelectedAccount().map(acct -> acct == null ? "No Account Selected" : null))))//
-						.withRemove(trades -> theUniGui.getSelectedAccount().get().getHoldings().getValues().removeAll(trades),
+						.withRemove(trades -> theUniGui.getSelectedAccount().get().getTrades().getValues().removeAll(trades),
 							remAction -> remAction.modifyButton(addBtn -> addBtn
 								.disableWith(theUniGui.getSelectedAccount().map(acct -> acct == null ? "No Account Selected" : null))))//
 			)//

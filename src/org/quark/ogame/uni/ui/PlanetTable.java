@@ -412,8 +412,10 @@ public class PlanetTable {
 						.visibleWhen(theUniGui.getReferenceAccount().map(a -> a != null))//
 						.addTable(theUpgrades, upgradeTable -> upgradeTable.fill()//
 							.withColumn("Planet", String.class, upgrade -> {
-								if (upgrade.getType() == null) {
+								if (upgrade == theTotalUpgrade) {
 									return "Total";
+								} else if (upgrade == thePlanetTotalUpgrade) {
+									return "Planet Total";
 								} else if (upgrade.getPlanet() != null) {
 									return upgrade.getPlanet().getName();
 								} else {
