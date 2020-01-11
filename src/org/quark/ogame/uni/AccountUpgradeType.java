@@ -166,4 +166,17 @@ public enum AccountUpgradeType {
 		}
 		throw new IllegalStateException();
 	}
+
+	public static AccountUpgradeType getStorage(ResourceType resType) {
+		switch (resType) {
+		case Metal:
+			return MetalStorage;
+		case Crystal:
+			return AccountUpgradeType.CrystalStorage;
+		case Deuterium:
+			return DeuteriumStorage;
+		default:
+			throw new IllegalArgumentException(resType + " does not have storage");
+		}
+	}
 }

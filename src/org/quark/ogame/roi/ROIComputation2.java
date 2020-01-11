@@ -1,11 +1,7 @@
 package org.quark.ogame.roi;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 
 import org.quark.ogame.uni.AccountUpgrade;
@@ -16,8 +12,7 @@ public class ROIComputation2 implements Spliterator<AccountUpgrade> {
 	private long[] theCurrentProduction;
 	private final boolean isWithAggressiveHelpers;
 
-	ROIComputation2(UpgradableAccount account, boolean aggressiveHelpers, //
-		double metalTradeRate, double crystalTradeRate, double deutTradeRate) {
+	ROIComputation2(UpgradableAccount account, boolean aggressiveHelpers) {
 		theState = account;
 		isWithAggressiveHelpers = aggressiveHelpers;
 		theCurrentProduction = theState.getProduction();
@@ -91,8 +86,8 @@ public class ROIComputation2 implements Spliterator<AccountUpgrade> {
 
 		theState.upgrade(bestUpgrade.getType(), bestUpgrade.getToLevel());
 		action.accept(bestUpgrade);
-		theCurrentProduction = postUpgradeProduction;
 		theState.postUpgradeCheck(postUpgradeProduction, bestROI);
+		theCurrentProduction = theState.getProduction();
 		return true;
 	}
 
@@ -116,17 +111,17 @@ public class ROIComputation2 implements Spliterator<AccountUpgrade> {
 	}
 
 	private double calcValue(long metal, long crystal, long deuterium) {
-		return metal / theState.getAccount().getUniverse().getTradeRatios().getMetal()//
-			+ crystal / theState.getAccount().getUniverse().getTradeRatios().getCrystal()//
-			+ deuterium / theState.getAccount().getUniverse().getTradeRatios().getDeuterium();
+		return metal / theState.getTradeRates().getMetal()//
+			+ crystal / theState.getTradeRates().getCrystal()//
+			+ deuterium / theState.getTradeRates().getDeuterium();
 	}
 
 	private Duration calculateROI(UpgradeCost upgradeCost, long[] previousProduction, long[] postProduction) {
 		double valueCost = calcValueCost(upgradeCost);
 		double productionValueDiff = (postProduction[0] - previousProduction[0])
-			/ theState.getAccount().getUniverse().getTradeRatios().getMetal()//
-			+ (postProduction[1] - previousProduction[1]) / theState.getAccount().getUniverse().getTradeRatios().getCrystal()//
-			+ (postProduction[2] - previousProduction[2]) / theState.getAccount().getUniverse().getTradeRatios().getDeuterium();
+			/ theState.getTradeRates().getMetal()//
+			+ (postProduction[1] - previousProduction[1]) / theState.getTradeRates().getCrystal()//
+			+ (postProduction[2] - previousProduction[2]) / theState.getTradeRates().getDeuterium();
 		double hours = valueCost / productionValueDiff;
 		if (hours < 0) {
 			return Duration.ofDays(365000000);

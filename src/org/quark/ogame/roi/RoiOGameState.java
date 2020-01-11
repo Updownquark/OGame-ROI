@@ -1,14 +1,11 @@
 package org.quark.ogame.roi;
 
+import java.time.Duration;
+
 import org.observe.config.ObservableConfig;
-import org.quark.ogame.uni.Account;
-import org.quark.ogame.uni.AccountUpgradeType;
+import org.quark.ogame.uni.*;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
-import org.quark.ogame.uni.OGameRuleSet;
-import org.quark.ogame.uni.Planet;
-import org.quark.ogame.uni.ResourceType;
-import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.ui.OGameUniGui;
 
 public class RoiOGameState implements UpgradableAccount {
@@ -19,7 +16,7 @@ public class RoiOGameState implements UpgradableAccount {
 	private UpgradeCost theAccountValue;
 
 	private double theFusionContribution;
-	private double theDaysProductionStorage;
+	private double theDailyStorageRequirement;
 
 	public RoiOGameState(OGameRuleSet rules) {
 		theRules = rules;
@@ -28,13 +25,22 @@ public class RoiOGameState implements UpgradableAccount {
 		theAccount = OGameUniGui.getAccounts(config, "state/account").create().create().get();
 		thePlanet = theAccount.getPlanets().create().create().get(); // Add the initial planet
 		thePlanet.setMetalUtilization(100).setCrystalUtilization(100).setDeuteriumUtilization(100)//
-			.setSolarPlantUtilization(100).setFusionReactorUtilization(100).setSolarSatelliteUtilization(100).setCrawlerUtilization(100);
+		.setSolarPlantUtilization(100).setFusionReactorUtilization(100).setSolarSatelliteUtilization(100).setCrawlerUtilization(100);
 		thePlanetCount = 1;
 		theAccountValue = UpgradeCost.ZERO;
 	}
 
-	public void init(int ecoSpeed, int researchSpeed, int planetTemp, boolean miningClass, double fusionContribution,
-		double dailyStorage) {}
+	public RoiOGameState init(int ecoSpeed, int researchSpeed, int planetTemp, boolean miningClass, double fusionContribution,
+		double dailyStorage, double metalTradeRate, double crystalTradeRate, double deutTradeRate) {
+		theFusionContribution = fusionContribution;
+		theDailyStorageRequirement = dailyStorage;
+		theAccount.setGameClass(miningClass ? AccountClass.Collector : AccountClass.Unselected)//
+		.getUniverse().setCollectorEnergyBonus(10).setCollectorProductionBonus(25).setCrawlerCap(8)//
+		.setEconomySpeed(ecoSpeed).setResearchSpeed(researchSpeed)//
+		.getTradeRatios().setMetal(metalTradeRate).setCrystal(crystalTradeRate).setDeuterium(deutTradeRate);
+		thePlanet.setMinimumTemperature(planetTemp - 20).setMaximumTemperature(planetTemp + 20);
+		return this;
+	}
 
 	public Account getAccount() {
 		return theAccount;
@@ -67,6 +73,12 @@ public class RoiOGameState implements UpgradableAccount {
 	}
 
 	@Override
+	public TradeRatios getTradeRates() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
 	public Iterable<Upgrade> getAvailableProductionUpgrades() {
 
 		// TODO Auto-generated method stub
@@ -84,8 +96,8 @@ public class RoiOGameState implements UpgradableAccount {
 
 	@Override
 	public void postUpgradeCheck(long[] production, Duration upgradeROI) {
-		if (theState.getPlanetCount() >= OGameROI.PLANETS_BEFORE_FUSION && theFusionContribution > 0.0) {
-			Production energy = theState.getEnergy();
+		if (thePlanetCount >= OGameROI.PLANETS_BEFORE_FUSION && theFusionContribution > 0.0) {
+			Production energy = getEnergy();
 			double fusionEnergy = energy.byType.get(ProductionSource.Fusion);
 			int newFusion = 0;
 			int newEnergy = 0;
@@ -103,59 +115,49 @@ public class RoiOGameState implements UpgradableAccount {
 			boolean fusionInit = thePlanet.getFusionReactor() == 0;
 			while (fusionEnergy / (fusionEnergy + otherEnergy) < theFusionContribution) {
 				// More fusion power
-				OGameState2.Upgrade energyUpgrade = upgrade(OGameImprovementType.Fusion);
-				UpgradeCost fusionCost = energyUpgrade.getCost();
-				double fusionBuildingCost = calcValueCost(fusionCost);
+				Upgrade energyUpgrade = upgrade(AccountUpgradeType.FusionReactor, thePlanet.getFusionReactor() + 1);
+				UpgradeCost fusionCost = energyUpgrade.getUpgrade().getCost();
+				double fusionBuildingCost = getTradeRates().calcValueCost(fusionCost);
 				double fusionDeutCost = (production[2] - getProduction()[2])
-					/ theState.getAccount().getUniverse().getTradeRatios().getDeuterium() * bestROI.getSeconds() / 3600.0;
+					/ getTradeRates().getDeuterium() * upgradeROI.getSeconds() / 3600.0;
 				double fusionTotalCost = fusionBuildingCost + fusionDeutCost;
-				int newFusionEnergy1 = theState.getEnergy().byType.get(ProductionSource.Fusion);
-				double fusionEfficiency = (newFusionEnergy1 - fusionEnergy) * theState.getPlanetCount() / fusionTotalCost;
-				energyUpgrade.undo();
-				energyUpgrade = theState.upgrade(OGameImprovementType.Energy);
-				UpgradeCost energyCost = energyUpgrade.getCost();
+				int newFusionEnergy1 = getEnergy().byType.get(ProductionSource.Fusion);
+				double fusionEfficiency = (newFusionEnergy1 - fusionEnergy) * thePlanetCount / fusionTotalCost;
+				energyUpgrade.revert();
+				energyUpgrade = upgrade(AccountUpgradeType.Energy, theAccount.getResearch().getEnergy());
+				UpgradeCost energyCost = energyUpgrade.getUpgrade().getCost();
 				double energyTotalCost = calcValueCost(energyCost);
-				int newFusionEnergy2 = theState.getEnergy().byType.get(ProductionSource.Fusion);
-				double energyEfficiency = (newFusionEnergy2 - fusionEnergy) * theState.getPlanetCount() / energyTotalCost;
-				energyUpgrade.undo();
+				int newFusionEnergy2 = getEnergy().byType.get(ProductionSource.Fusion);
+				double energyEfficiency = (newFusionEnergy2 - fusionEnergy) * thePlanetCount / energyTotalCost;
+				energyUpgrade.revert();
 				int newFusionEnergy3;
 				double fusionUtilEfficiency;
-				if (theState.getPlanet().getFusionReactorUtilization() < 100) {
-					theState.getPlanet().setFusionReactorUtilization(theState.getPlanet().getFusionReactorUtilization() + 10);
-					fusionDeutCost = (production[2] - theState.getProduction()[2])
-						/ theState.getAccount().getUniverse().getTradeRatios().getDeuterium() * bestROI.getSeconds() / 3600.0;
-					newFusionEnergy3 = theState.getEnergy().byType.get(ProductionSource.Fusion);
-					fusionUtilEfficiency = (newFusionEnergy3 - fusionEnergy) * theState.getPlanetCount() / fusionDeutCost;
-					theState.getPlanet().setFusionReactorUtilization(theState.getPlanet().getFusionReactorUtilization() - 10);
+				if (thePlanet.getFusionReactorUtilization() < 100) {
+					thePlanet.setFusionReactorUtilization(thePlanet.getFusionReactorUtilization() + 10);
+					fusionDeutCost = (production[2] - getProduction()[2]) / getTradeRates().getDeuterium() * upgradeROI.getSeconds()
+						/ 3600.0;
+					newFusionEnergy3 = getEnergy().byType.get(ProductionSource.Fusion);
+					fusionUtilEfficiency = (newFusionEnergy3 - fusionEnergy) * thePlanetCount / fusionDeutCost;
+					thePlanet.setFusionReactorUtilization(thePlanet.getFusionReactorUtilization() - 10);
 				} else {
 					newFusionEnergy3 = 0;
 					fusionUtilEfficiency = 0;
 				}
 				if (fusionEfficiency >= energyEfficiency && fusionEfficiency > fusionUtilEfficiency) {
-					energyUpgrade = theState.upgrade(OGameImprovementType.Fusion);
-					newFusion = energyUpgrade.effect();
-					if (!fusionInit) {
-						action.accept(new OGameImprovement(theState, OGameImprovementType.Fusion, newFusion, null));
-						System.out.println(OGameImprovementType.Fusion + " " + newFusion);
-					}
+					energyUpgrade = upgrade(AccountUpgradeType.FusionReactor, thePlanet.getFusionReactor() + 1);
 					fusionEnergy = newFusionEnergy1;
 				} else if (energyEfficiency > fusionUtilEfficiency) {
-					energyUpgrade = theState.upgrade(OGameImprovementType.Energy);
-					newEnergy = energyUpgrade.effect();
-					if (!fusionInit) {
-						action.accept(new OGameImprovement(theState, OGameImprovementType.Energy, newEnergy, null));
-						System.out.println(OGameImprovementType.Energy + " " + newEnergy);
-					}
+					energyUpgrade = upgrade(AccountUpgradeType.Energy, theAccount.getResearch().getEnergy());
 					fusionEnergy = newFusionEnergy2;
 				} else {
-					theState.getPlanet().setFusionReactorUtilization(theState.getPlanet().getFusionReactorUtilization() + 10);
+					thePlanet.setFusionReactorUtilization(thePlanet.getFusionReactorUtilization() + 10);
 					fusionEnergy = newFusionEnergy3;
 				}
-				energy = theState.getEnergy();
-				if (theState.getPlanet().getSolarSatellites() > 0 && energy.totalProduction > energy.totalConsumption) {
-					int satEnergy = theRules.economy().getSatelliteEnergy(theState.getAccount(), theState.getPlanet());
+				energy = getEnergy();
+				if (thePlanet.getSolarSatellites() > 0 && energy.totalProduction > energy.totalConsumption) {
+					int satEnergy = theRules.economy().getSatelliteEnergy(getAccount(), thePlanet);
 					int dropped = (energy.totalProduction - energy.totalConsumption) / satEnergy;
-					theState.getPlanet().setSolarSatellites(theState.getPlanet().getSolarSatellites() - dropped);
+					thePlanet.setSolarSatellites(thePlanet.getSolarSatellites() - dropped);
 				}
 				otherEnergy = 0;
 				for (ProductionSource src : ProductionSource.values()) {
@@ -168,28 +170,19 @@ public class RoiOGameState implements UpgradableAccount {
 						break;
 					}
 				}
-				postUpgradeProduction = theState.getProduction();
-			}
-			if (fusionInit) {
-				action.accept(new OGameImprovement(theState, OGameImprovementType.Fusion, newFusion, null));
-				System.out.println(OGameImprovementType.Fusion + " " + newFusion);
-				action.accept(new OGameImprovement(theState, OGameImprovementType.Energy, newEnergy, null));
-				System.out.println(OGameImprovementType.Energy + " " + newEnergy);
 			}
 		}
 		// See if we need to upgrade storage
 		if (theDailyStorageRequirement > 0) {
-			ResourceType resType = bestType.get(0).isMine();
-			if (resType != null) {
-				double storageAmount = theRules.economy().getStorage(theState.getPlanet(), resType);
+			for (ResourceType resType : ResourceType.values()) {
+				if (resType == ResourceType.Energy)
+					continue;
+				double storageAmount = theRules.economy().getStorage(thePlanet, resType);
 				// No way a single mine upgrade would cause the need for 2 storage levels, but this is for completeness
-				while (storageAmount < theDailyStorageRequirement / theState.getPlanetCount() * 24
-					* theCurrentProduction[resType.ordinal()]) {
-					OGameImprovementType upgradeType = OGameImprovementType.getStorageImprovement(resType);
-					int level = theState.upgrade(upgradeType).effect();
-					action.accept(new OGameImprovement(theState, upgradeType, level, null));
-					System.out.println(upgradeType + " " + level);
-					storageAmount = theRules.economy().getStorage(theState.getPlanet(), resType);
+				while (storageAmount < theDailyStorageRequirement / thePlanetCount * 24 * production[resType.ordinal()]) {
+					AccountUpgradeType upgradeType = AccountUpgradeType.getStorage(resType);
+					upgrade(upgradeType, upgradeType.getLevel(theAccount, thePlanet));
+					storageAmount = theRules.economy().getStorage(thePlanet, resType);
 				}
 			}
 		}
