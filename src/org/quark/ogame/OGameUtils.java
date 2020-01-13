@@ -2,28 +2,22 @@ package org.quark.ogame;
 
 import java.text.DecimalFormat;
 
+import org.qommons.io.Format;
+
 public class OGameUtils {
+	private static final Format<Double> FORMAT = Format.doubleFormat(5).withExpCondition(4, 0)//
+		.withPrefix("K", 3)//
+		.withPrefix("M", 6)//
+		.withPrefix("B", 9)//
+		.withPrefix("T", 12)//
+		.withPrefix("Q", 12)//
+		.build();
 
 	public static String printResourceAmount(double amount) {
-		StringBuilder str = new StringBuilder();
-		if (amount < 0) {
-			str.append('-');
-			amount = -amount;
-		}
-		if (amount < 1E6) {
-			str.append(OGameUtils.WHOLE_FORMAT.format(amount));
-		} else if (amount < 1E9) {
-			str.append(OGameUtils.THREE_DIGIT_FORMAT.format(amount / 1E6)).append('M');
-		} else if (amount < 1E12) {
-			str.append(OGameUtils.THREE_DIGIT_FORMAT.format(amount / 1E9)).append('B');
-		} else {
-			str.append(OGameUtils.THREE_DIGIT_FORMAT.format(amount / 1E12)).append('T');
-		}
-		return str.toString();
+		return FORMAT.format(amount);
 	}
 
 	public static final DecimalFormat WHOLE_FORMAT = new DecimalFormat("#,##0");
 	public static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("#,##0.00");
 	public static final DecimalFormat THREE_DIGIT_FORMAT = new DecimalFormat("#,##0.000");
-
 }

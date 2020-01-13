@@ -227,10 +227,7 @@ public class OGameUniGui extends JPanel {
 	void initComponents() {
 		/* TODO
 		 * ROI sequence
-		 * Costs
 		 * Production value in account table
-		 * Total Upgrade Cost
-		 * Trading
 		 * Spitballing (general upgrade costs without reference to an account)
 		 * Hyperspace tech guide
 		 */

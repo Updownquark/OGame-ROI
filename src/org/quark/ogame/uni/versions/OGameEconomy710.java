@@ -743,6 +743,9 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		double hours = 0;
 		switch (upgrade.type) {
 		case Building:
+			if (planetOrMoon == null) {
+				return 0; //Null planet means they don't care about the time
+			}
 			hours = (resAmounts[0] + resAmounts[1]) / 2500 / account.getUniverse().getEconomySpeed();
 			hours /= (1 + planetOrMoon.getRoboticsFactory());
 			int nanite = planetOrMoon.getBuildingLevel(BuildingType.NaniteFactory);
@@ -756,6 +759,9 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			hours/=labLevels;
 			break;
 		case ShipyardItem:
+			if (planetOrMoon == null) {
+				return 0; //Null planet means they don't care about the time
+			}
 			hours = (resAmounts[0] + resAmounts[1]) / 2500 / account.getUniverse().getEconomySpeed();
 			hours /= (1 + planetOrMoon.getShipyard());
 			nanite = planetOrMoon.getBuildingLevel(BuildingType.NaniteFactory);

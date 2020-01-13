@@ -2,6 +2,7 @@ package org.quark.ogame.uni.ui;
 
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -35,6 +36,7 @@ import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.Research;
 import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
+import org.quark.ogame.uni.TradeRatios;
 import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.UpgradeType;
 
@@ -52,10 +54,12 @@ public class PlanetTable {
 	private final SettableValue<Boolean> showEnergy;
 	private final SettableValue<Boolean> showStorage;
 	private final SettableValue<ProductionDisplayType> productionType;
+	private final SettableValue<Boolean> showProductionTotals;
 	private final SettableValue<Boolean> showMainFacilities;
 	private final SettableValue<Boolean> showOtherFacilities;
 	private final SettableValue<Boolean> showMoonBuildings;
 
+	private final ObservableCollection<PlanetWithProduction> theTotalProduction;
 	private final ObservableCollection<AccountUpgrade> theUpgrades;
 	private final AccountUpgrade thePlanetTotalUpgrade;
 	private final AccountUpgrade theTotalUpgrade;
@@ -79,8 +83,22 @@ public class PlanetTable {
 		productionType = config.asValue(ProductionDisplayType.class).at("planet-categories/production")
 			.withFormat(ObservableConfigFormat.enumFormat(ProductionDisplayType.class, () -> ProductionDisplayType.Hourly))
 			.buildValue(null);
+		showProductionTotals = config.asValue(boolean.class).at("planet-categories/productionTotals")
+			.withFormat(Format.BOOLEAN, () -> false).buildValue(null)
+			.combine(TypeTokens.get().BOOLEAN, (totals, type) -> type == null ? false : totals, productionType,
+				(newTotals, type) -> newTotals, opts -> {})
+			.disableWith(productionType.map(type -> type == null ? "Production is not selected" : null));
 
-		selectedPlanets = theUniGui.getPlanets().flow().refresh(productionType.noInitChanges()).collect();
+		Production zero = new Production(Collections.emptyMap(), 0, 0);
+		PlanetWithProduction total = new PlanetWithProduction(null)//
+			.setProduction(zero, zero, zero, zero);
+		theTotalProduction = ObservableCollection.build(PlanetWithProduction.class).safe(false).build().with(total);
+		// Update total for each change
+		updateTotalProduction(total, zero);
+		theUniGui.getPlanets().simpleChanges().act(__ -> updateTotalProduction(total, zero));
+		selectedPlanets = ObservableCollection.flattenCollections(TypeTokens.get().of(PlanetWithProduction.class), //
+			theUniGui.getPlanets().flow().refresh(productionType.noInitChanges()).collect(), //
+			theTotalProduction).collect();
 
 		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).build();
 
@@ -178,8 +196,31 @@ public class PlanetTable {
 			totalUpgrades).collect();
 	}
 
+	/** @return An ObservableCollection with a single element that is the total production of the selected account */
+	public ObservableCollection<PlanetWithProduction> getTotalProduction() {
+		return theTotalProduction;
+	}
+
 	public AccountUpgrade getTotalUpgrades() {
 		return theTotalUpgrade;
+	}
+
+	private void updateTotalProduction(PlanetWithProduction total, Production zero) {
+		// At some point there may be a use case for adding each component of production,
+		// e.g. to see how much deuterium you're using on fusion throughout the empire.
+		// But at the moment, all that's needed is the total net production of material resources
+		// and the calculation for all that detail is cumbersome.
+		int metal = 0, crystal = 0, deuterium = 0;
+		for (PlanetWithProduction planet : theUniGui.getPlanets()) {
+			metal += planet.getMetal().totalNet;
+			crystal += planet.getCrystal().totalNet;
+			deuterium += planet.getDeuterium().totalNet;
+		}
+		total.setProduction(zero, //
+			new Production(Collections.emptyMap(), metal, 0), //
+			new Production(Collections.emptyMap(), crystal, 0), //
+			new Production(Collections.emptyMap(), deuterium, 0));
+		theTotalProduction.mutableElement(theTotalProduction.getTerminalElement(true).getElementId()).set(total);
 	}
 
 	public void addPlanetTable(PanelPopulation.PanelPopulator<?, ?> panel) {
@@ -197,7 +238,7 @@ public class PlanetTable {
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> basicPlanetColumns = ObservableCollection
 			.create(planetColumnType);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> fieldColumns = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("Total Fields", false, p -> theUniGui.getRules().get().economy().getFields(p), (p, f) -> {
+			intPlanetColumn("Total Fields", false, false, p -> theUniGui.getRules().get().economy().getFields(p), (p, f) -> {
 				int currentTotal = theUniGui.getRules().get().economy().getFields(p);
 				int currentBase = p.getBaseFields();
 				int diff = f - currentTotal;
@@ -216,47 +257,50 @@ public class PlanetTable {
 				}
 				return null;
 			})), //
-			intPlanetColumn("Free Fields", false, planet -> {
+			intPlanetColumn("Free Fields", false, false, planet -> {
 				return theUniGui.getRules().get().economy().getFields(planet) - planet.getUsedFields();
 			}, null, 80)//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonFieldColumns = ObservableCollection.of(planetColumnType,
-			intMoonColumn("Moon Fields", moon -> theUniGui.getRules().get().economy().getFields(moon), null, 80), //
-			intMoonColumn("Bonus Fields", Moon::getFieldBonus, Moon::setFieldBonus, 80), //
-			intMoonColumn("Free Fields", moon -> {
+			intMoonColumn("Moon Fields", false, moon -> theUniGui.getRules().get().economy().getFields(moon), null, 80), //
+			intMoonColumn("Bonus Fields", false, Moon::getFieldBonus, Moon::setFieldBonus, 80), //
+			intMoonColumn("Free Fields", false, moon -> {
 				return theUniGui.getRules().get().economy().getFields(moon) - moon.getUsedFields();
 			}, null, 80)//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> tempColumns = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("Min T", true, Planet::getMinimumTemperature, (planet, t) -> {
+			intPlanetColumn("Min T", true, false, Planet::getMinimumTemperature, (planet, t) -> {
 				planet.setMinimumTemperature(t);
 				planet.setMaximumTemperature(t + 40);
 			}, 40), //
-			intPlanetColumn("Max T", true, Planet::getMaximumTemperature, (planet, t) -> {
+			intPlanetColumn("Max T", true, false, Planet::getMaximumTemperature, (planet, t) -> {
 				planet.setMaximumTemperature(t);
 				planet.setMinimumTemperature(t - 40);
 			}, 40)//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mineColumns = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("M Mine", false, Planet::getMetalMine, Planet::setMetalMine, 55), //
-			intPlanetColumn("C Mine", false, Planet::getCrystalMine, Planet::setCrystalMine, 55), //
-			intPlanetColumn("D Synth", false, Planet::getDeuteriumSynthesizer, Planet::setDeuteriumSynthesizer, 50), //
-			intPlanetColumn("Crawlers", false, Planet::getCrawlers, Planet::setCrawlers, 60).formatText((planet, crawlers) -> {
+			intPlanetColumn("M Mine", false, true, Planet::getMetalMine, Planet::setMetalMine, 55), //
+			intPlanetColumn("C Mine", false, true, Planet::getCrystalMine, Planet::setCrystalMine, 55), //
+			intPlanetColumn("D Synth", false, true, Planet::getDeuteriumSynthesizer, Planet::setDeuteriumSynthesizer, 50), //
+			intPlanetColumn("Crawlers", false, true, Planet::getCrawlers, Planet::setCrawlers, 60).formatText((planet, crawlers) -> {
 				StringBuilder str = new StringBuilder();
-				str.append(crawlers).append('/');
-				str.append(theUniGui.getRules().get().economy().getMaxCrawlers(theUniGui.getSelectedAccount().get(), planet.planet));
+				str.append(crawlers);
+				if (planet.planet != null) {
+					str.append('/');
+					str.append(theUniGui.getRules().get().economy().getMaxCrawlers(theUniGui.getSelectedAccount().get(), planet.planet));
+				}
 				return str.toString();
 			}) //
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> energyBldgs = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("Sats", false, Planet::getSolarSatellites, Planet::setSolarSatellites, 75), //
-			intPlanetColumn("Solar", false, Planet::getSolarPlant, Planet::setSolarPlant, 55), //
-			intPlanetColumn("Fusion", false, Planet::getFusionReactor, Planet::setFusionReactor, 55),
-			planetColumn("Net Energy", int.class, p -> p.getEnergy().totalNet, null, 60));
+			intPlanetColumn("Sats", false, true, Planet::getSolarSatellites, Planet::setSolarSatellites, 75), //
+			intPlanetColumn("Solar", false, true, Planet::getSolarPlant, Planet::setSolarPlant, 55), //
+			intPlanetColumn("Fusion", false, true, Planet::getFusionReactor, Planet::setFusionReactor, 55),
+			planetColumn("Net Energy", int.class, p -> p.planet == null ? null : p.getEnergy().totalNet, null, 60));
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> storageColumns = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("M Stor", false, Planet::getMetalStorage, Planet::setMetalStorage, 55), //
-			intPlanetColumn("C Stor", false, Planet::getCrystalStorage, Planet::setCrystalStorage, 55), //
-			intPlanetColumn("D Stor", false, Planet::getDeuteriumStorage, Planet::setDeuteriumStorage, 55)//
+			intPlanetColumn("M Stor", false, true, Planet::getMetalStorage, Planet::setMetalStorage, 55), //
+			intPlanetColumn("C Stor", false, true, Planet::getCrystalStorage, Planet::setCrystalStorage, 55), //
+			intPlanetColumn("D Stor", false, true, Planet::getDeuteriumStorage, Planet::setDeuteriumStorage, 55)//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> productionColumns = ObservableCollection.of(planetColumnType,
 			planetColumn("M Prod", String.class, planet -> printProduction(planet.getMetal().totalNet, productionType.get()), null, 80), //
@@ -265,24 +309,38 @@ public class PlanetTable {
 			planetColumn("Cargoes", int.class, planet -> getCargoes(planet, false, productionType.get()), null, 80), //
 			planetColumn("SS Cargoes", int.class, planet -> getCargoes(planet, true, productionType.get()), null, 80)//
 		).flow().refresh(productionType.noInitChanges()).collect();
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> productionTotalColumns = ObservableCollection
+			.of(planetColumnType,
+				planetColumn("P. Total", String.class,
+					planet -> printProduction(planet.getMetal().totalNet + planet.getCrystal().totalNet + planet.getDeuterium().totalNet,
+						productionType.get()),
+					null, 80), //
+				planetColumn("P. Value", String.class, planet -> {
+					TradeRatios ratios = theUniGui.getSelectedAccount().get().getUniverse().getTradeRatios();
+					return printProduction((long) (//
+					planet.getMetal().totalNet//
+						+ planet.getCrystal().totalNet / ratios.getCrystal() * ratios.getMetal()//
+						+ planet.getDeuterium().totalNet / ratios.getDeuterium() * ratios.getMetal()), productionType.get());
+				}, null, 80).withHeaderTooltip("Metal-equivalent value of each planet's production")//
+			).flow().refresh(productionType.noInitChanges()).collect();
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mainFacilities = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("Robotics", false, Planet::getRoboticsFactory, Planet::setRoboticsFactory, 60), //
-			intPlanetColumn("Shipyard", false, Planet::getShipyard, Planet::setShipyard, 60), //
-			intPlanetColumn("Lab", false, Planet::getResearchLab, Planet::setResearchLab, 55), //
-			intPlanetColumn("Nanite", false, Planet::getNaniteFactory, Planet::setNaniteFactory, 55)//
+			intPlanetColumn("Robotics", false, true, Planet::getRoboticsFactory, Planet::setRoboticsFactory, 60), //
+			intPlanetColumn("Shipyard", false, true, Planet::getShipyard, Planet::setShipyard, 60), //
+			intPlanetColumn("Lab", false, true, Planet::getResearchLab, Planet::setResearchLab, 55), //
+			intPlanetColumn("Nanite", false, true, Planet::getNaniteFactory, Planet::setNaniteFactory, 55)//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> otherFacilities = ObservableCollection.of(planetColumnType,
-			intPlanetColumn("Ally Depot", false, Planet::getAllianceDepot, Planet::setAllianceDepot, 65), //
-			intPlanetColumn("Silo", false, Planet::getMissileSilo, Planet::setMissileSilo, 45), //
-			intPlanetColumn("Terraformer", false, Planet::getTerraformer, Planet::setTerraformer, 65), //
-			intPlanetColumn("Space Dock", false, Planet::getSpaceDock, Planet::setSpaceDock, 65)//
+			intPlanetColumn("Ally Depot", false, true, Planet::getAllianceDepot, Planet::setAllianceDepot, 65), //
+			intPlanetColumn("Silo", false, true, Planet::getMissileSilo, Planet::setMissileSilo, 45), //
+			intPlanetColumn("Terraformer", false, true, Planet::getTerraformer, Planet::setTerraformer, 65), //
+			intPlanetColumn("Space Dock", false, true, Planet::getSpaceDock, Planet::setSpaceDock, 65)//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonBuildings = ObservableCollection.of(planetColumnType,
-			intMoonColumn("Lunar Base", Moon::getLunarBase, Moon::setLunarBase, 60), //
-			intMoonColumn("Phalanx", Moon::getSensorPhalanx, Moon::setSensorPhalanx, 55), //
-			intMoonColumn("Jump Gate", Moon::getJumpGate, Moon::setJumpGate, 60), //
-			intMoonColumn("Shipyard", Moon::getShipyard, Moon::setShipyard, 55), //
-			intMoonColumn("Robotics", Moon::getRoboticsFactory, Moon::setRoboticsFactory, 55)//
+			intMoonColumn("Lunar Base", true, Moon::getLunarBase, Moon::setLunarBase, 60), //
+			intMoonColumn("Phalanx", true, Moon::getSensorPhalanx, Moon::setSensorPhalanx, 55), //
+			intMoonColumn("Jump Gate", true, Moon::getJumpGate, Moon::setJumpGate, 60), //
+			intMoonColumn("Shipyard", true, Moon::getShipyard, Moon::setShipyard, 55), //
+			intMoonColumn("Robotics", true, Moon::getRoboticsFactory, Moon::setRoboticsFactory, 55)//
 		);
 
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> emptyColumns = ObservableCollection.of(planetColumnType);
@@ -295,6 +353,7 @@ public class PlanetTable {
 				ObservableCollection.flattenValue(showEnergy.map(show -> show ? energyBldgs : emptyColumns)), //
 				ObservableCollection.flattenValue(showStorage.map(show -> show ? storageColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(productionType.map(type -> type.type == null ? emptyColumns : productionColumns)), //
+				ObservableCollection.flattenValue(showProductionTotals.map(show -> show ? productionTotalColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(showMainFacilities.map(show -> show ? mainFacilities : emptyColumns)), //
 				ObservableCollection.flattenValue(showOtherFacilities.map(show -> show ? otherFacilities : emptyColumns)), //
 				ObservableCollection.flattenValue(showFields.map(show -> show ? moonFieldColumns : emptyColumns)), //
@@ -339,7 +398,8 @@ public class PlanetTable {
 					.addCheckField("Mines:", showMines, null).spacer(3)//
 					.addCheckField("Energy:", showEnergy, null).spacer(3)//
 					.addCheckField("Storage:", showStorage, null).spacer(3)//
-					.addComboField("Production:", productionType, null, ProductionDisplayType.values())//
+					.addComboField("Production:", productionType, null, ProductionDisplayType.values()).spacer(3)//
+					.addCheckField("P. Totals:", showProductionTotals, null).spacer(3)//
 					.addCheckField("Main Facilities:", showMainFacilities, null).spacer(3)//
 					.addCheckField("Other Facilities:", showOtherFacilities, null).spacer(3)//
 					.addCheckField("Moon Buildings:", showMoonBuildings, null).spacer(3)//
@@ -350,22 +410,27 @@ public class PlanetTable {
 					// This is a little hacky, but the next line tells the column the item name
 					.withColumns(basicPlanetColumns)
 					// function
-					.withNameColumn(p -> p.planet.getName(), (p, name) -> p.planet.setName(name), false,
-						nameCol -> nameCol.withWidths(50, 100, 150))//
-					.withColumn("Upgrd", Object.class, p -> p.planet.getCurrentUpgrade(), upgradeCol -> upgradeCol.withWidths(40, 40, 40)
-						.formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName).withMutation(m -> m.asCombo(bdg -> {
-							if (bdg instanceof BuildingType) {
-								return ((BuildingType) bdg).shortName;
-							} else {
-								return "None";
+					.withNameColumn(p -> p.planet == null ? "Totals" : p.planet.getName(), (p, name) -> p.planet.setName(name), false,
+						nameCol -> nameCol.withWidths(50, 100, 150).decorate((cell, decorator) -> {
+							if (cell.getModelValue().planet == null) {
+								decorator.bold();
 							}
-						}, planetUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
-							if (bdg instanceof BuildingType) {
-								p.planet.setCurrentUpgrade((BuildingType) bdg);
-							} else {
-								p.planet.setCurrentUpgrade(null);
-							}
-						})))//
+						}))//
+					.withColumn("Upgrd", Object.class, p -> p.planet == null ? null : p.planet.getCurrentUpgrade(),
+						upgradeCol -> upgradeCol.withWidths(40, 40, 40).formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName)
+							.withMutation(m -> m.asCombo(bdg -> {
+								if (bdg instanceof BuildingType) {
+									return ((BuildingType) bdg).shortName;
+								} else {
+									return "None";
+								}
+							}, planetUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
+								if (bdg instanceof BuildingType) {
+									p.planet.setCurrentUpgrade((BuildingType) bdg);
+								} else {
+									p.planet.setCurrentUpgrade(null);
+								}
+							})))//
 					.withColumns(planetColumns)//
 					.withSelection(theSelectedPlanet, false)//
 					.withAdd(() -> theUniGui.createPlanet(), null)//
@@ -376,7 +441,7 @@ public class PlanetTable {
 			.addHPanel(null, new JustifiedBoxLayout(false).mainJustified().crossJustified(),
 				bottomSplit -> bottomSplit.fill()//
 					.addVPanel(resPanel -> resPanel.fill().fillV()//
-						.visibleWhen(theSelectedPlanet.map(p -> p != null))
+						.visibleWhen(theSelectedPlanet.map(p -> p != null && p.planet != null))
 						.addComponent(null, ObservableSwingUtils.label("Production").bold().withFontSize(16).label, null)//
 						.addTable(
 							ObservableCollection.of(TypeTokens.get().of(ResourceRow.class), ResourceRow.values()).flow()
@@ -497,16 +562,36 @@ public class PlanetTable {
 			TypeTokens.get().of(type), getter);
 		column.withWidths(width, width, width);
 		if (setter != null) {
-			column.withMutation(m -> m.mutateAttribute((p, v) -> setter.accept(p.planet, v)).withRowUpdate(true));
+			column.withMutation(
+				m -> m.editableIf((p, v) -> p.planet != null).mutateAttribute((p, v) -> setter.accept(p.planet, v)).withRowUpdate(true));
 		}
+		column.decorate((cell, decorator) -> {
+			if (cell.getModelValue().planet == null) {
+				decorator.bold();
+			}
+		});
 		return column;
 	}
 
-	CategoryRenderStrategy<PlanetWithProduction, Integer> intPlanetColumn(String name, boolean allowNegative,
+	CategoryRenderStrategy<PlanetWithProduction, Integer> intPlanetColumn(String name, boolean allowNegative, boolean useTotal,
 		Function<Planet, Integer> getter, BiConsumer<Planet, Integer> setter, int width) {
-		CategoryRenderStrategy<PlanetWithProduction, Integer> column = planetColumn(name, int.class, p -> getter.apply(p.planet), setter,
-			width);
+		CategoryRenderStrategy<PlanetWithProduction, Integer> column = planetColumn(name, int.class, p -> {
+			if (p.planet != null) {
+				return getter.apply(p.planet);
+			} else if (!useTotal) {
+				return null;
+			} else {
+				int total = 0;
+				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
+					total += getter.apply(planet.planet);
+				}
+				return total;
+			}
+		}, setter, width);
 		OGameUniGui.decorateDiffColumn(column, planetIdx -> {
+			if (planetIdx >= theUniGui.getPlanets().size()) {
+				return null;
+			}
 			Account refAccount = theUniGui.getReferenceAccount().get();
 			if (refAccount == null) {
 				return null;
@@ -526,24 +611,9 @@ public class PlanetTable {
 		return column;
 	}
 
-	CategoryRenderStrategy<PlanetWithProduction, Integer> intMoonColumn(String name, Function<Moon, Integer> getter,
+	CategoryRenderStrategy<PlanetWithProduction, Integer> intMoonColumn(String name, boolean useTotal, Function<Moon, Integer> getter,
 		BiConsumer<Moon, Integer> setter, int width) {
-		CategoryRenderStrategy<PlanetWithProduction, Integer> column = planetColumn(name, int.class, p -> getter.apply(p.planet.getMoon()),
-			(p, v) -> setter.accept(p.getMoon(), v), width);
-		OGameUniGui.decorateDiffColumn(column, planetIdx -> {
-			Account refAccount = theUniGui.getReferenceAccount().get();
-			if (refAccount == null) {
-				return null;
-			} else if (refAccount.getPlanets().getValues().size() <= planetIdx) {
-				return 0;
-			}
-			return getter.apply(refAccount.getPlanets().getValues().get(planetIdx).getMoon());
-		});
-		if (setter != null) {
-			column.withMutation(
-				m -> m.asText(SpinnerFormat.INT).clicks(1).filterAccept((p, value) -> value >= 0 ? null : "Must not be negative"));
-		}
-		return column;
+		return intPlanetColumn(name, false, useTotal, p -> getter.apply(p.getMoon()), (p, v) -> setter.accept(p.getMoon(), v), width);
 	}
 
 	interface TriConsumer<T, U, V> {
@@ -606,6 +676,7 @@ public class PlanetTable {
 	}
 
 	static String printProduction(double production, ProductionDisplayType time) {
+
 		switch (time.type) {
 		case Year:
 			production *= TimeUtils.getDaysInYears(1) * 24;
