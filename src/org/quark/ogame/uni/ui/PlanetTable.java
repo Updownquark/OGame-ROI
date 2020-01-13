@@ -305,10 +305,16 @@ public class PlanetTable {
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> productionColumns = ObservableCollection.of(planetColumnType,
 			planetColumn("M Prod", String.class, planet -> printProduction(planet.getMetal().totalNet, productionType.get()), null, 80), //
 			planetColumn("C Prod", String.class, planet -> printProduction(planet.getCrystal().totalNet, productionType.get()), null, 80), //
-			planetColumn("D Prod", String.class, planet -> printProduction(planet.getDeuterium().totalNet, productionType.get()), null, 80), //
-			planetColumn("Cargoes", int.class, planet -> getCargoes(planet, false, productionType.get()), null, 80), //
-			planetColumn("SS Cargoes", int.class, planet -> getCargoes(planet, true, productionType.get()), null, 80)//
+			planetColumn("D Prod", String.class, planet -> printProduction(planet.getDeuterium().totalNet, productionType.get()), null, 80) //
 		).flow().refresh(productionType.noInitChanges()).collect();
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> productionCargoColumns = ObservableCollection
+			.of(planetColumnType,
+				planetColumn("Cargoes", int.class, planet -> getCargoes(planet, false, productionType.get()), null, 80)
+					.withHeaderTooltip("The number of Large Cargo ships required to carry away the planet's production"), //
+				planetColumn("SS Cargoes", int.class, planet -> getCargoes(planet, true, productionType.get()), null, 80)
+					.withHeaderTooltip("The number of Large Cargo ships, built from the production resources of the planet,"
+						+ " required to carry away the planet's production")//
+			).flow().refresh(productionType.noInitChanges()).collect();
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> productionTotalColumns = ObservableCollection
 			.of(planetColumnType,
 				planetColumn("P. Total", String.class,
@@ -354,6 +360,7 @@ public class PlanetTable {
 				ObservableCollection.flattenValue(showStorage.map(show -> show ? storageColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(productionType.map(type -> type.type == null ? emptyColumns : productionColumns)), //
 				ObservableCollection.flattenValue(showProductionTotals.map(show -> show ? productionTotalColumns : emptyColumns)), //
+				ObservableCollection.flattenValue(productionType.map(type -> type.type == null ? emptyColumns : productionCargoColumns)), //
 				ObservableCollection.flattenValue(showMainFacilities.map(show -> show ? mainFacilities : emptyColumns)), //
 				ObservableCollection.flattenValue(showOtherFacilities.map(show -> show ? otherFacilities : emptyColumns)), //
 				ObservableCollection.flattenValue(showFields.map(show -> show ? moonFieldColumns : emptyColumns)), //
