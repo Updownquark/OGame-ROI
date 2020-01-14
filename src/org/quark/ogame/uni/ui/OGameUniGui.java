@@ -236,6 +236,8 @@ public class OGameUniGui extends JPanel {
 			theAccounts.getValues().flow().refresh(theSelectedAccount.noInitChanges())
 			.filter(account -> account == theSelectedAccount.get() ? "Selected" : null).collect()//
 			).collect();
+		SettableValue<String> selectedTab = theConfig.asValue(String.class).at("selected-tab").withFormat(Format.TEXT, () -> "settings")
+			.buildValue(null);
 
 		PanelPopulation.populateVPanel(this, Observable.empty())//
 		.addSplit(true,
@@ -284,7 +286,7 @@ public class OGameUniGui extends JPanel {
 					)//
 				).lastV(selectedAccountPanel -> selectedAccountPanel.visibleWhen(theSelectedAccount.map(account -> account != null))//
 					.addTabs(
-						tabs -> tabs.fill().fillV()
+							tabs -> tabs.fill().fillV().withSelectedTab(selectedTab)//
 						.withVTab("settings",
 							acctSettingsPanel -> acctSettingsPanel//
 							.fill()//
