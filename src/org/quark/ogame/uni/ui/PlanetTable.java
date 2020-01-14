@@ -412,7 +412,7 @@ public class PlanetTable {
 					.addCheckField("Moon Buildings:", showMoonBuildings, null).spacer(3)//
 			)//
 			.addTable(selectedPlanets,
-				planetTable -> planetTable.fill().withItemName("planet").withAdaptiveHeight(6, 12, 17)//
+				planetTable -> planetTable.fill().withItemName("planet").withAdaptiveHeight(6, 30, 50)//
 					.decorate(d -> d.withTitledBorder("Planets", Color.black))//
 					// This is a little hacky, but the next line tells the column the item name
 					.withColumns(basicPlanetColumns)
