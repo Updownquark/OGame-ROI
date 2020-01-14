@@ -460,10 +460,10 @@ public class PlanetTable {
 									.withMutation(m -> m.asText(SpinnerFormat.INT).editableIf((row, v) -> canEditPSValue(row))))
 								.withColumn(resourceColumn("Metal", String.class,
 									(planet, row) -> printProductionBySource(planet, row, ResourceType.Metal), null, theSelectedPlanet, "0",
-									45))//
+									55))//
 								.withColumn(resourceColumn("Crystal", String.class,
 									(planet, row) -> printProductionBySource(planet, row, ResourceType.Crystal), null, theSelectedPlanet,
-									"0", 45))//
+									"0", 55))//
 								.withColumn(resourceColumn("Deuterium", String.class,
 									(planet, row) -> printProductionBySource(planet, row, ResourceType.Deuterium), null, theSelectedPlanet,
 									"0", 65))//
@@ -662,7 +662,7 @@ public class PlanetTable {
 		Collector("Collector"),
 		Storage("Storage Capacity"),
 		Divider("-------------------"),
-		Hourly("Total per hour:"),
+		Hourly("Total per Hour"),
 		Daily("Total per Day"),
 		Weeky("Total per Week");
 
@@ -683,7 +683,6 @@ public class PlanetTable {
 	}
 
 	static String printProduction(double production, ProductionDisplayType time) {
-
 		switch (time.type) {
 		case Year:
 			production *= TimeUtils.getDaysInYears(1) * 24;
