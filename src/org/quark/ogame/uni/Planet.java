@@ -167,40 +167,23 @@ public interface Planet extends RockyBody {
 		}
 	}
 
-	// Stationary Ships
-	int getSolarSatellites();
-	void setSolarSatellites(int satellites);
+	default int getSolarSatellites() {
+		return getStationaryStructures().getSolarSatellites();
+	}
+	default Planet setSolarSatellites(int solarSatellites) {
+		getStationaryStructures().setSolarSatellites(solarSatellites);
+		return this;
+	}
 
-	int getCrawlers();
-	void setCrawlers(int crawlers);
+	default int getCrawlers() {
+		return getStationaryStructures().getCrawlers();
+	}
+	default Planet setCrawlers(int crawlers) {
+		getStationaryStructures().setCrawlers(crawlers);
+		return this;
+	}
 
 	// Active Items
-
-	@Override
-	default int getStationedShips(ShipyardItemType type) {
-		switch (type) {
-		case SolarSatellite:
-			return getSolarSatellites();
-		case Crawler:
-			return getCrawlers();
-		default:
-			return 0;
-		}
-	}
-
-	@Override
-	default void setStationedShips(ShipyardItemType type, int count) {
-		switch (type) {
-		case SolarSatellite:
-			setSolarSatellites(count);
-			break;
-		case Crawler:
-			setCrawlers(count);
-			break;
-		default:
-			break;
-		}
-	}
 
 	int getMetalBonus();
 	void setMetalBonus(int metalBonus);

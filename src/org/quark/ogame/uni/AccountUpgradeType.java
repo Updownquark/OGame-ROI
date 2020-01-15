@@ -50,13 +50,13 @@ public enum AccountUpgradeType {
 	LightFighter(ShipyardItem),
 	HeavyFighter(ShipyardItem),
 	Cruiser(ShipyardItem),
-	Battleship(ShipyardItem), //
-	Battlecruiser(ShipyardItem),
+	BattleShip(ShipyardItem), //
+	BattleCruiser(ShipyardItem),
 	Bomber(ShipyardItem),
 	Destroyer(ShipyardItem),
-	Deathstar(ShipyardItem), //
+	DeathStar(ShipyardItem), //
 	Reaper(ShipyardItem),
-	Pathfinder(ShipyardItem), //
+	PathFinder(ShipyardItem), //
 	// Civil Ships
 	SmallCargo(ShipyardItem),
 	LargeCargo(ShipyardItem), //
@@ -90,14 +90,7 @@ public enum AccountUpgradeType {
 		case Research:
 			return account.getResearch().getResearchLevel(research);
 		case ShipyardItem:
-			switch (shipyardItem) {
-			case SolarSatellite:
-				return planetOrMoon instanceof Planet ? ((Planet) planetOrMoon).getSolarSatellites() : 0;
-			case Crawler:
-				return planetOrMoon instanceof Planet ? ((Planet) planetOrMoon).getCrawlers() : 0;
-			default:
-				return 0;
-			}
+			return planetOrMoon.getStationedShips(shipyardItem);
 		}
 		throw new IllegalStateException();
 	}

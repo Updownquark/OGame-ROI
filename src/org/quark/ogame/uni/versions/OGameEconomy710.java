@@ -290,13 +290,13 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 						.withRequirement(AccountUpgradeType.Impulse, 4)//
 						.withRequirement(AccountUpgradeType.Ion, 2));
 				break;
-			case Battleship:
+			case BattleShip:
 				costs.put(upgrade,
 					new CostDescrip(45000, 15000, 0).withEcoWeight(0)//
 						.withRequirement(AccountUpgradeType.Shipyard, 7)//
 						.withRequirement(AccountUpgradeType.Hyperdrive, 4));
 				break;
-			case Battlecruiser:
+			case BattleCruiser:
 				costs.put(upgrade,
 					new CostDescrip(30000, 40000, 15000).withEcoWeight(0)//
 						.withRequirement(AccountUpgradeType.Shipyard, 8)//
@@ -318,7 +318,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 						.withRequirement(AccountUpgradeType.Hyperspace, 5)//
 						.withRequirement(AccountUpgradeType.Hyperdrive, 6));
 				break;
-			case Deathstar:
+			case DeathStar:
 				costs.put(upgrade,
 					new CostDescrip(5000000, 4000000, 1000000).withEcoWeight(0)//
 						.withRequirement(AccountUpgradeType.Shipyard, 12)//
@@ -334,7 +334,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 						.withRequirement(AccountUpgradeType.Hyperdrive, 7)//
 						.withRequirement(AccountUpgradeType.Shielding, 6));
 				break;
-			case Pathfinder:
+			case PathFinder:
 				costs.put(upgrade,
 					new CostDescrip(8000, 15000, 8000).withEcoWeight(.5)//
 						.withRequirement(AccountUpgradeType.Shipyard, 5)//
@@ -385,7 +385,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 						.withRequirement(AccountUpgradeType.Armor, 4)//
 						.withRequirement(AccountUpgradeType.Laser, 4));
 				break;
-			// Defense
+			// StationaryStructures
 			case RocketLauncher:
 				costs.put(upgrade, new CostDescrip(2000, 0, 0).withEcoWeight(0)//
 					.withRequirement(AccountUpgradeType.Shipyard, 1));

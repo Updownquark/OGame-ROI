@@ -61,15 +61,6 @@ public interface Moon extends RockyBody {
 	void setFieldBonus(int fieldBonus);
 
 	@Override
-	default int getStationedShips(ShipyardItemType type) {
-		return 0;
-	}
-
-	@Override
-	default void setStationedShips(ShipyardItemType type, int count) {
-	}
-
-	@Override
 	default int getUsedFields() {
 		return RockyBody.super.getUsedFields()//
 			+ getLunarBase() + getSensorPhalanx() + getJumpGate();

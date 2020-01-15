@@ -2,40 +2,42 @@ package org.quark.ogame.uni;
 
 public enum ShipyardItemType {
 	// Combat Ships
-	LightFighter(false),
-	HeavyFighter(false),
-	Cruiser(false),
-	Battleship(false), //
-	Battlecruiser(false),
-	Bomber(false),
-	Destroyer(false),
-	Deathstar(false), //
-	Reaper(false),
-	Pathfinder(false), //
+	LightFighter(true, false),
+	HeavyFighter(true, false),
+	Cruiser(true, false),
+	BattleShip(true, false), //
+	BattleCruiser(true, false),
+	Bomber(true, false),
+	Destroyer(true, false),
+	DeathStar(true, false), //
+	Reaper(true, false),
+	PathFinder(true, false), //
 	// Civil Ships
-	SmallCargo(false),
-	LargeCargo(false), //
-	ColonyShip(false),
-	Recycler(false),
-	EspionageProbe(false), //
-	SolarSatellite(false),
-	Crawler(false), //
+	SmallCargo(true, false),
+	LargeCargo(true, false), //
+	ColonyShip(true, false),
+	Recycler(true, false),
+	EspionageProbe(true, false), //
+	SolarSatellite(false, false),
+	Crawler(false, false), //
 
 	// Defenses
-	RocketLauncher(true), //
-	LightLaser(true), //
-	HeavyLaser(true), //
-	GaussCannon(true), //
-	IonCannon(true), //
-	PlasmaTurret(true), //
-	SmallShield(true), //
-	LargeSheild(true), //
-	AntiBallisticMissile(true), //
-	InterPlanetaryMissile(true);
+	RocketLauncher(false, true), //
+	LightLaser(false, true), //
+	HeavyLaser(false, true), //
+	GaussCannon(false, true), //
+	IonCannon(false, true), //
+	PlasmaTurret(false, true), //
+	SmallShield(false, true), //
+	LargeSheild(false, true), //
+	AntiBallisticMissile(false, true), //
+	InterPlanetaryMissile(false, true);
 
+	public final boolean mobile;
 	public final boolean defense;
 
-	private ShipyardItemType(boolean defense) {
+	private ShipyardItemType(boolean mobile, boolean defense) {
+		this.mobile = mobile;
 		this.defense = defense;
-	};
+	}
 }
