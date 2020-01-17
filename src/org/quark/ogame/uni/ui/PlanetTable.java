@@ -123,7 +123,7 @@ public class PlanetTable {
 					int toLevel = account.getResearch().getResearchLevel(type.research);
 					if (fromLevel != toLevel) {
 						UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, null, type, fromLevel, toLevel);
-						newUpgrades.add(new AccountUpgrade(type, null, fromLevel, toLevel, cost));
+						newUpgrades.add(new AccountUpgrade(type, null, false, fromLevel, toLevel, cost));
 					}
 				} else {
 					for (int p = 0; p < account.getPlanets().getValues().size(); p++) {
@@ -135,7 +135,16 @@ public class PlanetTable {
 						if (fromLevel != toLevel) {
 							UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, planet, type, fromLevel,
 								toLevel);
-							newUpgrades.add(new AccountUpgrade(type, planet, fromLevel, toLevel, cost));
+							newUpgrades.add(new AccountUpgrade(type, planet, false, fromLevel, toLevel, cost));
+						}
+
+						Moon moon = planet.getMoon();
+						Moon refMoon = refPlanet == null ? null : refPlanet.getMoon();
+						fromLevel = refMoon == null ? 0 : type.getLevel(refAcct, refMoon);
+						toLevel = type.getLevel(account, moon);
+						if (fromLevel != toLevel) {
+							UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, moon, type, fromLevel, toLevel);
+							newUpgrades.add(new AccountUpgrade(type, planet, true, fromLevel, toLevel, cost));
 						}
 					}
 				}
@@ -163,7 +172,7 @@ public class PlanetTable {
 				}
 			});
 		});
-		thePlanetTotalUpgrade = new AccountUpgrade(null, null, 0, 0, null) {
+		thePlanetTotalUpgrade = new AccountUpgrade(null, null, false, 0, 0, null) {
 			@Override
 			public UpgradeCost getCost() {
 				UpgradeCost cost = UpgradeCost.ZERO;
@@ -178,7 +187,7 @@ public class PlanetTable {
 				return cost;
 			}
 		};
-		theTotalUpgrade = new AccountUpgrade(null, null, 0, 0, null) {
+		theTotalUpgrade = new AccountUpgrade(null, null, false, 0, 0, null) {
 			@Override
 			public UpgradeCost getCost() {
 				UpgradeCost cost = UpgradeCost.ZERO;
@@ -520,7 +529,7 @@ public class PlanetTable {
 								} else if (upgrade == thePlanetTotalUpgrade) {
 									return "Planet Total";
 								} else if (upgrade.getPlanet() != null) {
-									return upgrade.getPlanet().getName();
+									return upgrade.getPlanet().getName() + (upgrade.isMoon() ? " Moon" : "");
 								} else {
 									return "";
 								}
@@ -724,6 +733,9 @@ public class PlanetTable {
 	}
 
 	static String printProduction(double production, ProductionDisplayType time) {
+		if (time.type == null) {
+			return "";
+		}
 		switch (time.type) {
 		case Year:
 			production *= TimeUtils.getDaysInYears(1) * 24;

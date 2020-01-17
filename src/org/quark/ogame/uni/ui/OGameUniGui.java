@@ -109,7 +109,7 @@ public class OGameUniGui extends JPanel {
 				if (fromLevel != toLevel) {
 					AccountUpgradeType type = AccountUpgradeType.getResearchUpgrade(rsrch);
 					UpgradeCost cost = theSelectedRuleSet.get().economy().getUpgradeCost(account, null, type, fromLevel, toLevel);
-					upgrades.add(new AccountUpgrade(type, null, fromLevel, toLevel, cost));
+					upgrades.add(new AccountUpgrade(type, null, false, fromLevel, toLevel, cost));
 				}
 			}
 
