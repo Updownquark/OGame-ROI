@@ -18,6 +18,7 @@ import org.quark.ogame.OGameUtils;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.Holding;
 import org.quark.ogame.uni.ResourceType;
+import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.Trade;
 import org.quark.ogame.uni.TradeRatios;
 import org.quark.ogame.uni.UpgradeCost;
@@ -37,6 +38,7 @@ public class HoldingsPanel {
 	private final Trade theTotalTrade;
 	private final Trade theUpgradeTimeTrade;
 	private final SyntheticTrade theTradesNeeded;
+	private final Trade theTotalTradesUpgradeTime;
 
 	public HoldingsPanel(OGameUniGui uniGui) {
 		theUniGui = uniGui;
@@ -338,19 +340,67 @@ public class HoldingsPanel {
 				return Math.round(calcNeededTrade()[2]);
 			}
 		};
+		theTotalTradesUpgradeTime = new SyntheticTrade() {
+			@Override
+			public String getName() {
+				return "Goal Completion 2";
+			}
+
+			@Override
+			public long getMetal() {
+				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getMetal();
+				needed -= theTotalHolding.getMetal();
+				needed -= theTotalTrade.getMetal();
+				needed -= theTradesNeeded.getMetal();
+				long production = 0;
+				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
+					production += planet.getMetal().totalNet;
+				}
+				return needed * 3600 / production; // seconds
+			}
+
+			@Override
+			public long getCrystal() {
+				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getCrystal();
+				needed -= theTotalHolding.getCrystal();
+				needed -= theTotalTrade.getCrystal();
+				needed -= theTradesNeeded.getCrystal();
+				long production = 0;
+				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
+					production += planet.getCrystal().totalNet;
+				}
+				return needed * 3600 / production; // seconds
+			}
+
+			@Override
+			public long getDeuterium() {
+				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getDeuterium();
+				needed -= theTotalHolding.getDeuterium();
+				needed -= theTotalTrade.getDeuterium();
+				needed -= theTradesNeeded.getDeuterium();
+				long production = 0;
+				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
+					production += planet.getDeuterium().totalNet;
+				}
+				return needed * 3600 / production; // seconds
+			}
+		};
 		ObservableCollection<Trade> synthTrades = ObservableCollection.build(TypeTokens.get().of(Trade.class)).safe(false).build()
-			.with(theTotalTrade, theUpgradeTimeTrade, theTradesNeeded);
+			.with(theTotalTrade, theUpgradeTimeTrade, theTradesNeeded, theTotalTradesUpgradeTime);
 		ElementId totalTradeId = synthTrades.getElement(0).getElementId();
 		ElementId upgradeTimeTradeId = synthTrades.getElement(1).getElementId();
 		ElementId tradesNeededId = synthTrades.getElement(2).getElementId();
+		ElementId totalTradesUpgradeId = synthTrades.getElement(3).getElementId();
 		Observable.or(flatTrades.simpleChanges(), flatHoldings.simpleChanges()).act(__ -> {
 			synthTrades.mutableElement(totalTradeId).set(theTotalTrade);
 			synthTrades.mutableElement(upgradeTimeTradeId).set(theUpgradeTimeTrade);
 			synthTrades.mutableElement(tradesNeededId).set(theTradesNeeded);
+			synthTrades.mutableElement(totalTradesUpgradeId).set(theTotalTradesUpgradeTime);
 		});
 		theUniGui.getPlanets().simpleChanges().act(__ -> {
 			synthTrades.mutableElement(upgradeTimeTradeId).set(theUpgradeTimeTrade);
 			synthTrades.mutableElement(tradesNeededId).set(theTradesNeeded);
+			synthTrades.mutableElement(totalTradesUpgradeId).set(theTotalTradesUpgradeTime);
 		});
 		theTrades = ObservableCollection.flattenCollections(TypeTokens.get().of(Trade.class), flatTrades, synthTrades).collect();
 	}
@@ -479,6 +529,12 @@ public class HoldingsPanel {
 								}
 							}).asText(Format.doubleFormat("0.00"));
 						}))//
+						.withColumn("Cargoes", Integer.class, h -> {
+							long total = h.getMetal() + h.getCrystal() + h.getDeuterium();
+							long cap = theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.LargeCargo,
+								theUniGui.getSelectedAccount().get());
+							return (int) Math.ceil(total * 1.0 / cap);
+						}, col -> col.formatText(cargoes -> Format.INT.format(cargoes)))//
 						.withAdd(
 							() -> theUniGui.getSelectedAccount().get().getHoldings().create()//
 								.with(Holding::getName, "").create().get(),
@@ -530,13 +586,13 @@ public class HoldingsPanel {
 								.filterAccept((t, r) -> r <= 0 ? "Rate must be positive" : null);
 						}))//
 						.withColumn("Metal (KK)", Double.class, h -> {
-							if (h == theUpgradeTimeTrade) {
+							if (h == theUpgradeTimeTrade || h == theTotalTradesUpgradeTime) {
 								return h.getMetal() * 1.0;
 							} else {
 								return h.getMetal() / 1E6;
 							}
 						}, metalCol -> metalCol.formatText((h, m) -> {
-							if (h == theUpgradeTimeTrade) {
+							if (h == theUpgradeTimeTrade || h == theTotalTradesUpgradeTime) {
 								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(m.longValue()));
 							} else {
 								return OGameUtils.TWO_DIGIT_FORMAT.format(m);
@@ -551,13 +607,13 @@ public class HoldingsPanel {
 							}).asText(Format.doubleFormat("0.00"));
 						}))//
 						.withColumn("Crystal (KK)", Double.class, h -> {
-							if (h == theUpgradeTimeTrade) {
+							if (h == theUpgradeTimeTrade || h == theTotalTradesUpgradeTime) {
 								return h.getCrystal() * 1.0;
 							} else {
 								return h.getCrystal() / 1E6;
 							}
 						}, crystalCol -> crystalCol.formatText((h, d) -> {
-							if (h == theUpgradeTimeTrade) {
+							if (h == theUpgradeTimeTrade || h == theTotalTradesUpgradeTime) {
 								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(d.longValue()));
 							} else {
 								return OGameUtils.TWO_DIGIT_FORMAT.format(d);
@@ -572,13 +628,13 @@ public class HoldingsPanel {
 							}).asText(Format.doubleFormat("0.00"));
 						}))//
 						.withColumn("Deuterium (KK)", Double.class, h -> {
-							if (h == theUpgradeTimeTrade) {
+							if (h == theUpgradeTimeTrade || h == theTotalTradesUpgradeTime) {
 								return h.getDeuterium() * 1.0;
 							} else {
 								return h.getDeuterium() / 1E6;
 							}
 						}, deutCol -> deutCol.formatText((h, d) -> {
-							if (h == theUpgradeTimeTrade) {
+							if (h == theUpgradeTimeTrade || h == theTotalTradesUpgradeTime) {
 								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(d.longValue()));
 							} else {
 								return OGameUtils.TWO_DIGIT_FORMAT.format(d);

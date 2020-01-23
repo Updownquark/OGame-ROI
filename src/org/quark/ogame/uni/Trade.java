@@ -40,7 +40,7 @@ public interface Trade extends NamedEntity {
 	default long getMetal() {
 		switch (getType()) {
 		case Metal:
-			return getRequiredResource();
+			return -getRequiredResource();
 		default:
 			return getResource1();
 		}
@@ -61,7 +61,7 @@ public interface Trade extends NamedEntity {
 		case Metal:
 			return getResource1();
 		case Crystal:
-			return getRequiredResource();
+			return -getRequiredResource();
 		default:
 			return getResource2();
 		}
@@ -83,7 +83,7 @@ public interface Trade extends NamedEntity {
 	default long getDeuterium() {
 		switch (getType()) {
 		case Deuterium:
-			return getRequiredResource();
+			return -getRequiredResource();
 		default:
 			return getResource2();
 		}

@@ -34,6 +34,7 @@ import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.Research;
+import org.quark.ogame.uni.ResearchType;
 import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.RockyBody;
 import org.quark.ogame.uni.ShipyardItemType;
@@ -120,6 +121,9 @@ public class PlanetTable {
 			for (AccountUpgradeType type : AccountUpgradeType.values()) {
 				if (type.type == UpgradeType.Research) {
 					int fromLevel = refAcct.getResearch().getResearchLevel(type.research);
+					if (refAcct.getResearch().getCurrentUpgrade() == type.research) {
+						fromLevel++;
+					}
 					int toLevel = account.getResearch().getResearchLevel(type.research);
 					if (fromLevel != toLevel) {
 						UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, null, type, fromLevel, toLevel);
@@ -131,6 +135,9 @@ public class PlanetTable {
 						Planet refPlanet = p < refAcct.getPlanets().getValues().size() ? refAcct.getPlanets().getValues().get(p) : null;
 
 						int fromLevel = refPlanet == null ? 0 : type.getLevel(refAcct, refPlanet);
+						if (refPlanet != null && refPlanet.getCurrentUpgrade() == type.building) {
+							fromLevel++;
+						}
 						int toLevel = type.getLevel(account, planet);
 						if (fromLevel != toLevel) {
 							UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, planet, type, fromLevel,
@@ -240,14 +247,29 @@ public class PlanetTable {
 
 	public void addPlanetTable(PanelPopulation.PanelPopulator<?, ?> panel) {
 		List<Object> planetUpgradeList = new ArrayList<>();
+		List<Object> moonUpgradeList = new ArrayList<>();
 		planetUpgradeList.add("None");
+		moonUpgradeList.add("None");
 		for (BuildingType b : BuildingType.values()) {
 			if (b.isPlanetBuilding) {
 				planetUpgradeList.add(b);
 			}
+			if (b.isMoonBuilding) {
+				moonUpgradeList.add(b);
+			}
 		}
 		ObservableCollection<Object> planetUpgrades = ObservableCollection.build(Object.class).withBacking(BetterList.of(planetUpgradeList))
 			.build();
+		ObservableCollection<Object> moonUpgrades = ObservableCollection.build(Object.class).withBacking(BetterList.of(moonUpgradeList))
+			.build();
+
+		List<Object> researchUpgradeList = new ArrayList<>();
+		researchUpgradeList.add("None");
+		for (ResearchType r : ResearchType.values()) {
+			researchUpgradeList.add(r);
+		}
+		ObservableCollection<Object> researchUpgrades = ObservableCollection.build(Object.class)
+			.withBacking(BetterList.of(researchUpgradeList)).build();
 
 		TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>> planetColumnType = new TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>>() {};
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> basicPlanetColumns = ObservableCollection
@@ -263,12 +285,12 @@ public class PlanetTable {
 				}
 				p.setBaseFields(newBase);
 			}, 80).withMutation(m -> m.filterAccept((p, f) -> {
-				int currentTotal = theUniGui.getRules().get().economy().getFields(((PlanetWithProduction) p.get()).planet);
-				int currentBase = ((PlanetWithProduction) p.get()).planet.getBaseFields();
+				int currentTotal = theUniGui.getRules().get().economy().getFields(p.get().planet);
+				int currentBase = p.get().planet.getBaseFields();
 				int diff = f - currentTotal;
 				int newBase = currentBase + diff;
 				if (newBase < 0) {
-					return ((PlanetWithProduction) p.get()).planet.getUsedFields() + " fields are used";
+					return p.get().planet.getUsedFields() + " fields are used";
 				}
 				return null;
 			})), //
@@ -357,6 +379,22 @@ public class PlanetTable {
 			intPlanetColumn("Space Dock", false, true, Planet::getSpaceDock, Planet::setSpaceDock, 65)//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonBuildings = ObservableCollection.of(planetColumnType,
+			new CategoryRenderStrategy<PlanetWithProduction, Object>("Upgrd", TypeTokens.get().OBJECT,
+				p -> p.planet == null ? null : p.planet.getMoon().getCurrentUpgrade())//
+					.withWidths(40, 40, 40).formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName)
+					.withMutation(m -> m.asCombo(bdg -> {
+						if (bdg instanceof BuildingType) {
+							return ((BuildingType) bdg).shortName;
+						} else {
+							return "None";
+						}
+					}, moonUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
+						if (bdg instanceof BuildingType) {
+							p.planet.getMoon().setCurrentUpgrade((BuildingType) bdg);
+						} else {
+							p.planet.getMoon().setCurrentUpgrade(null);
+						}
+					})), //
 			intMoonColumn("Lunar Base", true, Moon::getLunarBase, Moon::setLunarBase, 60), //
 			intMoonColumn("Phalanx", true, Moon::getSensorPhalanx, Moon::setSensorPhalanx, 55), //
 			intMoonColumn("Jump Gate", true, Moon::getJumpGate, Moon::setJumpGate, 60), //
@@ -419,6 +457,20 @@ public class PlanetTable {
 		panel.fill().fillV()//
 			.addTable(researchColl,
 				researchTable -> researchTable.fill().withAdaptiveHeight(1, 1, 1).decorate(d -> d.withTitledBorder("Research", Color.black))//
+					.withColumn("Upgrd", Object.class, r -> r.getCurrentUpgrade(), upgradeCol -> upgradeCol.withWidths(60, 60, 60)
+						.formatText(rsrch -> rsrch == null ? "" : ((ResearchType) rsrch).shortName).withMutation(m -> m.asCombo(bdg -> {
+							if (bdg instanceof ResearchType) {
+								return ((ResearchType) bdg).shortName;
+							} else {
+								return "None";
+							}
+						}, researchUpgrades).clicks(1).mutateAttribute((r, rsrch) -> {
+							if (rsrch instanceof ResearchType) {
+								r.setCurrentUpgrade((ResearchType) rsrch);
+							} else {
+								r.setCurrentUpgrade(null);
+							}
+						})))//
 					.withColumn(intResearchColumn("Energy", Research::getEnergy, Research::setEnergy, 60))//
 					.withColumn(intResearchColumn("Laser", Research::getLaser, Research::setLaser, 55))//
 					.withColumn(intResearchColumn("Ion", Research::getIon, Research::setIon, 35))//

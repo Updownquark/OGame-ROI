@@ -49,6 +49,9 @@ public interface Research {
 	int getArmor();
 	void setArmor(int armor);
 
+	ResearchType getCurrentUpgrade();
+	Research setCurrentUpgrade(ResearchType activeResearch);
+
 	default int getResearchLevel(ResearchType type) {
 		switch (type) {
 		case Energy:
