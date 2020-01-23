@@ -135,7 +135,7 @@ public class PlanetTable {
 						Planet refPlanet = p < refAcct.getPlanets().getValues().size() ? refAcct.getPlanets().getValues().get(p) : null;
 
 						int fromLevel = refPlanet == null ? 0 : type.getLevel(refAcct, refPlanet);
-						if (refPlanet != null && refPlanet.getCurrentUpgrade() == type.building) {
+						if (refPlanet != null && type.building != null && refPlanet.getCurrentUpgrade() == type.building) {
 							fromLevel++;
 						}
 						int toLevel = type.getLevel(account, planet);
@@ -148,6 +148,9 @@ public class PlanetTable {
 						Moon moon = planet.getMoon();
 						Moon refMoon = refPlanet == null ? null : refPlanet.getMoon();
 						fromLevel = refMoon == null ? 0 : type.getLevel(refAcct, refMoon);
+						if (refMoon != null && type.building != null && refMoon.getCurrentUpgrade() == type.building) {
+							fromLevel++;
+						}
 						toLevel = type.getLevel(account, moon);
 						if (fromLevel != toLevel) {
 							UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, moon, type, fromLevel, toLevel);
