@@ -3,8 +3,10 @@ package org.quark.ogame.uni.ui;
 import java.awt.Color;
 import java.awt.Component;
 import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
@@ -14,10 +16,13 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.border.LineBorder;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
 import org.observe.Observable;
 import org.observe.SettableValue;
@@ -47,6 +52,7 @@ import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.AccountUpgrade;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
+import org.quark.ogame.uni.EmpireViewReader;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameRuleSet;
 import org.quark.ogame.uni.Planet;
@@ -69,6 +75,9 @@ public class OGameUniGui extends JPanel {
 	private final SimpleObservable<Void> thePlanetRefresh;
 	private final ObservableCollection<PlanetWithProduction> thePlanets;
 	private final ObservableCollection<AccountUpgrade> theGlobalUpgrades;
+
+	private final SettableValue<File> thePlanetEmpireFile;
+	private final SettableValue<File> theMoonEmpireFile;
 
 	private final HoldingsPanel theHoldingsPanel;
 	private final PlanetTable thePlanetPanel;
@@ -150,6 +159,9 @@ public class OGameUniGui extends JPanel {
 				}
 			}
 		});
+
+		thePlanetEmpireFile = SettableValue.build(File.class).safe(false).build();
+		theMoonEmpireFile = SettableValue.build(File.class).safe(false).build();
 
 		thePlanetPanel = new PlanetTable(this);
 		theHoldingsPanel = new HoldingsPanel(this);
@@ -409,6 +421,28 @@ public class OGameUniGui extends JPanel {
 									null)
 								.spacer(3)//
 								)//
+										.addHPanel("Import Empire View:", "box", empirePanel -> empirePanel//
+											.addButton("Planet View", this::browsePlanetFile, pv -> pv
+												.withText(thePlanetEmpireFile.map(file -> file == null ? "Planet View" : file.getName()))
+												.withTooltip("<html><ul>"//
+													+ "<li>Select your Empire View</li>"//
+													+ "<li>Save the page (e.g. Ctrl+S)</li>"//
+													+ "<li>Choose the HTML Only option, select a location, and click Save</li>"//
+													+ "<li>Click this button and select the saved file</li>"//
+													+ "</li></ul></html>"))//
+											.addButton("Moon View", this::browseMoonFile,
+												pv -> pv
+													.withText(theMoonEmpireFile.map(file -> file == null ? "Moon View" : file.getName()))
+													.withTooltip("<html><ul>"//
+														+ "<li>Select your Empire View</li>"//
+														+ "<li>Select the \"Moons\" tab</li>"//
+														+ "<li>Save the page (e.g. Ctrl+S)</li>"//
+														+ "<li>Choose the HTML Only option, select a location, and click Save</li>"//
+														+ "<li>Click this button and select the saved file</li>"//
+														+ "</li></ul></html>"))//
+											.addButton("Import", this::importEmpireView, pv -> pv.disableWith(thePlanetEmpireFile
+												.map(f -> f == null ? "Download and select the planet empire view file" : null)))//
+									)//
 							, acctSettingsTab -> acctSettingsTab.setName("Settings"))//
 								.withVTab("planets", acctBuildingsPanel -> thePlanetPanel.addPlanetTable(acctBuildingsPanel)//
 									, acctBuildingsTab -> acctBuildingsTab.setName("Builds"))//
@@ -680,6 +714,51 @@ public class OGameUniGui extends JPanel {
 		}
 
 		return dest;
+	}
+
+	private void browsePlanetFile(Object cause) {
+		JFileChooser chooser = new JFileChooser();
+		chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+		chooser.setFileFilter(new FileNameExtensionFilter("HTML Files", "html"));
+		if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+			thePlanetEmpireFile.set(null, null);
+			return;
+		}
+		thePlanetEmpireFile.set(chooser.getSelectedFile(), null);
+	}
+
+	private void browseMoonFile(Object cause) {
+		JFileChooser chooser = new JFileChooser();
+		chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+		chooser.setFileFilter(new FileNameExtensionFilter("HTML Files", "html"));
+		if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+			theMoonEmpireFile.set(null, null);
+			return;
+		}
+		theMoonEmpireFile.set(chooser.getSelectedFile(), null);
+	}
+
+	private void importEmpireView(Object cause) {
+		int planets;
+		try (BufferedReader reader = new BufferedReader(new FileReader(thePlanetEmpireFile.get()))) {
+			planets = EmpireViewReader.readEmpireView(theSelectedAccount.get(), reader, () -> createPlanet().planet);
+		} catch (IOException | RuntimeException e) {
+			e.printStackTrace();
+			JOptionPane.showMessageDialog(this, "Empire view parsing failed", "Unable to Import Empire View", JOptionPane.ERROR_MESSAGE);
+			return;
+		}
+
+		if (theMoonEmpireFile.get() != null) {
+			try (BufferedReader reader = new BufferedReader(new FileReader(theMoonEmpireFile.get()))) {
+				EmpireViewReader.readEmpireMoonView(theSelectedAccount.get(), reader);
+			} catch (IOException | RuntimeException e) {
+				e.printStackTrace();
+				JOptionPane.showMessageDialog(this, "Moon empire view parsing failed", "Unable to Import Moon Empire View",
+					JOptionPane.ERROR_MESSAGE);
+			}
+		}
+		JOptionPane.showMessageDialog(this, "Successfully imported " + planets + " planets from Empire View", "Empire View Imported",
+			JOptionPane.INFORMATION_MESSAGE);
 	}
 
 	public static void main(String[] args) {

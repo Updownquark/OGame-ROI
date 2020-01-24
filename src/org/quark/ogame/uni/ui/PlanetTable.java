@@ -251,8 +251,8 @@ public class PlanetTable {
 	public void addPlanetTable(PanelPopulation.PanelPopulator<?, ?> panel) {
 		List<Object> planetUpgradeList = new ArrayList<>();
 		List<Object> moonUpgradeList = new ArrayList<>();
-		planetUpgradeList.add("None");
-		moonUpgradeList.add("None");
+		planetUpgradeList.add("All");
+		moonUpgradeList.add("All");
 		for (BuildingType b : BuildingType.values()) {
 			if (b.isPlanetBuilding) {
 				planetUpgradeList.add(b);
@@ -267,7 +267,7 @@ public class PlanetTable {
 			.build();
 
 		List<Object> researchUpgradeList = new ArrayList<>();
-		researchUpgradeList.add("None");
+		researchUpgradeList.add("All");
 		for (ResearchType r : ResearchType.values()) {
 			researchUpgradeList.add(r);
 		}
@@ -389,7 +389,7 @@ public class PlanetTable {
 						if (bdg instanceof BuildingType) {
 							return ((BuildingType) bdg).shortName;
 						} else {
-							return "None";
+							return "All";
 						}
 					}, moonUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
 						if (bdg instanceof BuildingType) {
@@ -465,7 +465,7 @@ public class PlanetTable {
 							if (bdg instanceof ResearchType) {
 								return ((ResearchType) bdg).shortName;
 							} else {
-								return "None";
+								return "All";
 							}
 						}, researchUpgrades).clicks(1).mutateAttribute((r, rsrch) -> {
 							if (rsrch instanceof ResearchType) {
@@ -524,7 +524,7 @@ public class PlanetTable {
 								if (bdg instanceof BuildingType) {
 									return ((BuildingType) bdg).shortName;
 								} else {
-									return "None";
+									return "All";
 								}
 							}, planetUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
 								if (bdg instanceof BuildingType) {

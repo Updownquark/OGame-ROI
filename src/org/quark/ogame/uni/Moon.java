@@ -41,14 +41,19 @@ public interface Moon extends RockyBody {
 		switch (type) {
 		case RoboticsFactory:
 			setRoboticsFactory(buildingLevel);
+			break;
 		case Shipyard:
 			setShipyard(buildingLevel);
+			break;
 		case LunarBase:
 			setLunarBase(buildingLevel);
+			break;
 		case SensorPhalanx:
 			setSensorPhalanx(buildingLevel);
+			break;
 		case JumpGate:
 			setJumpGate(buildingLevel);
+			break;
 		default:
 			if (buildingLevel != 0) {
 				throw new IllegalArgumentException();
