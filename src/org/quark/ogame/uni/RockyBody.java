@@ -1,8 +1,14 @@
 package org.quark.ogame.uni;
 
+import org.observe.util.ObjectMethodOverride;
+import org.observe.util.ObjectMethodOverride.ObjectMethod;
 import org.qommons.Nameable;
 
 public interface RockyBody extends Nameable {
+	@Override
+	@ObjectMethodOverride(ObjectMethod.toString)
+	String getName();
+
 	// Facilities
 	int getRoboticsFactory();
 	void setRoboticsFactory(int roboticsFactory);

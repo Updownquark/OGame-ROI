@@ -741,7 +741,8 @@ public class OGameUniGui extends JPanel {
 	private void importEmpireView(Object cause) {
 		int planets;
 		try (BufferedReader reader = new BufferedReader(new FileReader(thePlanetEmpireFile.get()))) {
-			planets = EmpireViewReader.readEmpireView(theSelectedAccount.get(), reader, () -> createPlanet().planet);
+			planets = EmpireViewReader.readEmpireView(theSelectedAccount.get(), reader, theSelectedRuleSet.get(),
+				() -> createPlanet().planet);
 		} catch (IOException | RuntimeException e) {
 			e.printStackTrace();
 			JOptionPane.showMessageDialog(this, "Empire view parsing failed", "Unable to Import Empire View", JOptionPane.ERROR_MESSAGE);
@@ -750,7 +751,7 @@ public class OGameUniGui extends JPanel {
 
 		if (theMoonEmpireFile.get() != null) {
 			try (BufferedReader reader = new BufferedReader(new FileReader(theMoonEmpireFile.get()))) {
-				EmpireViewReader.readEmpireMoonView(theSelectedAccount.get(), reader);
+				EmpireViewReader.readEmpireMoonView(theSelectedAccount.get(), theSelectedRuleSet.get(), reader);
 			} catch (IOException | RuntimeException e) {
 				e.printStackTrace();
 				JOptionPane.showMessageDialog(this, "Moon empire view parsing failed", "Unable to Import Moon Empire View",

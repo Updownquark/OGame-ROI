@@ -62,7 +62,6 @@ public interface Moon extends RockyBody {
 	}
 
 	int getFieldBonus();
-
 	void setFieldBonus(int fieldBonus);
 
 	@Override

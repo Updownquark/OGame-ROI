@@ -1,12 +1,7 @@
 package org.quark.ogame.uni;
 
-import org.observe.util.ObjectMethodOverride;
-import org.observe.util.ObjectMethodOverride.ObjectMethod;
-
 public interface Planet extends RockyBody {
-	@Override
-	@ObjectMethodOverride(ObjectMethod.toString)
-	String getName();
+	Coordinate getCoordinates();
 
 	// Planet properties
 	int getBaseFields();
@@ -147,7 +142,7 @@ public interface Planet extends RockyBody {
 			setAllianceDepot(buildingLevel);
 			break;
 		case MissileSilo:
-			setMetalStorage(buildingLevel);
+			setMissileSilo(buildingLevel);
 			break;
 		case NaniteFactory:
 			setNaniteFactory(buildingLevel);

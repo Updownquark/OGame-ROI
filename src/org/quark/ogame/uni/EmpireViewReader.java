@@ -8,259 +8,88 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.qommons.io.HtmlNavigator;
+import org.qommons.io.HtmlNavigator.Tag;
 
 public class EmpireViewReader {
-	public static int readEmpireView(Account account, Reader reader, Supplier<Planet> createPlanet) throws IOException {
+	public static int readEmpireView(Account account, Reader reader, OGameRuleSet rules, Supplier<Planet> createPlanet) throws IOException {
+		HtmlNavigator nav = new HtmlNavigator(reader);
 		int planetIdx = 0;
-		while (find("div", "planet", reader)) {
-			if (planetIdx == account.getPlanets().getValues().size()) {
-				createPlanet.get();
+		while (nav.find("div", "planet") != null) {
+			if (nav.getTop().getClasses().contains("summary")) {
+				continue;
 			}
-			parsePlanet(account, //
-				account.getPlanets().getValues().get(planetIdx), reader);
+			Planet planet;
+			if (planetIdx == account.getPlanets().getValues().size()) {
+				planet = createPlanet.get();
+			} else {
+				planet = account.getPlanets().getValues().get(planetIdx);
+			}
+			parsePlanet(account, planet, nav);
+			int terraformerDiff = rules.economy().getFields(planet) - planet.getBaseFields();
+			planet.setBaseFields(planet.getBaseFields() - terraformerDiff);
 			planetIdx++;
 		}
 		return planetIdx;
 	}
 
-	public static void readEmpireMoonView(Account account, Reader reader) throws IOException {
-		int planetIdx = 0;
-		while (planetIdx < account.getPlanets().getValues().size() && find("div", "planet", reader)) {
-			parsePlanet(account, //
-				account.getPlanets().getValues().get(planetIdx).getMoon(), reader);
-			planetIdx++;
+	public static void readEmpireMoonView(Account account, OGameRuleSet rules, Reader reader) throws IOException {
+		HtmlNavigator nav = new HtmlNavigator(reader);
+		while (nav.find("div", "planet") != null) {
+			if (nav.getTop().getClasses().contains("summary")) {
+				continue;
+			}
+			Tag tag = nav.descend();
+			Moon moon = null;
+			while (tag != null) {
+				if (tag.matches("div")) {
+					if (tag.getClasses().contains("planetHead")) {
+						moon = parseMoonHead(account, nav);
+					}
+				}
+			}
+			if (moon != null) {
+				parsePlanet(account, moon, nav);
+				int totalFields = moon.getFieldBonus();
+				moon.setFieldBonus(0);
+				moon.setFieldBonus(Math.min(0, totalFields - rules.economy().getFields(moon)));
+			}
 		}
 	}
 
-	private static void parsePlanet(Account account, RockyBody place, Reader reader) throws IOException {
-		Tag tag = getNextTag(reader, null);
+	private static void parsePlanet(Account account, RockyBody place, HtmlNavigator reader) throws IOException {
+		Tag tag = reader.descend();
 		while (tag != null) {
-			if (tag.name.equals("div")) {
-				if (tag.classes.contains("planethead")) {
-					parsePlanetHead(place, reader);
-				} else if (place instanceof Planet && tag.classes.contains("items")) {
+			if (tag.matches("div")) {
+				if (place instanceof Planet && tag.getClasses().contains("planetHead")) {
+					parsePlanetHead((Planet) place, reader);
+				} else if (place instanceof Planet && tag.getClasses().contains("items")) {
 					parseItems((Planet) place, reader);
-				} else if (tag.classes.contains("supply")) {
+				} else if (tag.getClasses().contains("supply")) {
 					parseBuildings(place, "supply", reader);
-				} else if (tag.classes.contains("station")) {
+				} else if (tag.getClasses().contains("station")) {
 					parseBuildings(place, "station", reader);
-				} else if (tag.classes.contains("defence")) {
+				} else if (tag.getClasses().contains("defence")) {
 					parseShipyardItems(place, "defense", reader);
-				} else if (tag.classes.contains("research")) {
+				} else if (tag.getClasses().contains("research")) {
 					parseResearch(account, reader);
-				} else if (tag.classes.contains("ships")) {
+				} else if (tag.getClasses().contains("ships")) {
 					parseShipyardItems(place, "ships", reader);
-				} else {
-					findEndTag(reader);
-				}
-			} else {
-				findEndTag(reader);
-			}
-			tag = getNextTag(reader, null);
-		}
-	}
-
-	enum ContentType {
-		tag, clazz, attr;
-	}
-
-	private static boolean find(String tagName, String className, Reader reader) throws IOException {
-		StringBuilder tagNameTemp = new StringBuilder();
-		String[] attrName = new String[1];
-		int r = reader.read();
-		boolean found = false;
-		while (r >= 0) {
-			if (!found && r == '<') {
-				r = reader.read();
-				if (r != '/') {
-					while (r >= 0 && Character.isAlphabetic(r)) {
-						tagNameTemp.append((char) r);
-						r = reader.read();
-					}
-					if (tagNameTemp.toString().toLowerCase().equals(tagName)) {
-						String clazz = getAttribute(reader, attrName);
-						while (clazz != null && !attrName[0].toLowerCase().equals("class")) {
-							clazz = getAttribute(reader, attrName);
-						}
-						if (clazz != null) {
-							String[] clazzSplit = clazz.split(" ");
-							for (String c : clazzSplit) {
-								if (c.toLowerCase().equals(className)) {
-									found = true;
-									break;
-								}
-							}
-						}
-					}
-					tagNameTemp.setLength(0);
-				}
-			} else if (found && r == '>') {
-				break;
-			}
-			r = reader.read();
-		}
-		return found;
-	}
-
-	private static Tag getNextTag(Reader reader, StringBuilder currentTagContent) throws IOException {
-		StringBuilder tagNameTemp = new StringBuilder();
-		String[] attrName = new String[1];
-		int r = reader.read();
-		while (r >= 0) {
-			if (r == '<') {
-				r = reader.read();
-				if (r == '/') {
-					while (r != '>') {
-						r=reader.read();
-					}
-					return null;
-				}
-				while (r >= 0 && Character.isAlphabetic(r)) {
-					tagNameTemp.append((char) r);
-					r = reader.read();
-				}
-				Map<String, String> attributes = null;
-				Set<String> classes = null;
-				if (r != '>') {
-					String attr = getAttribute(reader, attrName);
-					while (attr != null) {
-						if (attrName[0].toLowerCase().equals("class")) {
-							classes = new HashSet<>();
-							for (String c : attr.split(" ")) {
-								if (c.length() > 0) {
-									classes.add(c.toLowerCase());
-								}
-							}
-						} else {
-							if (attributes == null) {
-								attributes = new LinkedHashMap<>();
-							}
-							attributes.put(attrName[0].toLowerCase(), attr);
-						}
-						attr = getAttribute(reader, attrName);
-					}
-				}
-				return new Tag(tagNameTemp.toString(), //
-					classes == null ? Collections.emptySet() : classes, //
-					attributes == null ? Collections.emptyMap() : attributes);
-			} else if (currentTagContent != null) {
-				currentTagContent.append((char) r);
-			}
-			r = reader.read();
-		}
-		return null;
-	}
-
-	private static String getAttribute(Reader reader, String[] attrName) throws IOException {
-		int r = reader.read();
-		while (r >= 0 && r != '>' && !Character.isAlphabetic(r)) {
-			r = reader.read();
-		}
-		if (Character.isAlphabetic(r)) {
-			StringBuilder str = new StringBuilder();
-			do {
-				str.append((char) r);
-				r = reader.read();
-			} while (r >= 0 && Character.isAlphabetic(r));
-			while (Character.isWhitespace((char) r)) {
-				r = reader.read();
-			}
-			if (r != '=') {
-				return null;
-			}
-			r = reader.read();
-			while (Character.isWhitespace((char) r)) {
-				r = reader.read();
-			}
-			if (r != '"') {
-				return null;
-			}
-			r = reader.read();
-			attrName[0] = str.toString();
-			str.setLength(0);
-			while (r >= 0 && r != '"') {
-				str.append((char) r);
-				r = reader.read();
-			}
-			return str.toString();
-		} else {
-			return null;
-		}
-	}
-
-	private static Set<String> NON_CLOSING_TAGS = new HashSet<>(Arrays.asList("img"));
-
-	private static void findEndTag(Reader reader) throws IOException {
-		StringBuilder tagName = new StringBuilder();
-		int depth = 0;
-		int r = reader.read();
-		while (r >= 0) {
-			if (r == '<') {
-				if ((r = reader.read()) == '/') {
-					while (r != '>') {
-						r = reader.read();
-					}
-					if (depth == 0) {
-						return;
-					} else {
-						depth--;
-					}
-				} else { // New tag
-					while (Character.isAlphabetic(r)) {
-						tagName.append((char) r);
-						r = reader.read();
-					}
-					if (!NON_CLOSING_TAGS.contains(tagName.toString().toLowerCase())) {
-						depth++;
-					}
-					tagName.setLength(0);
-					while (r >= 0 && r != '>') {
-						r = reader.read();
-					}
 				}
 			}
-			r = reader.read();
+			reader.close(tag);
+			tag = reader.descend();
 		}
-	}
-
-	private static String getTagContent(Reader reader) throws IOException {
-		StringBuilder content = new StringBuilder();
-		int r = reader.read();
-		while (r >= 0 && r != '<') {
-			content.append((char) r);
-			r = reader.read();
-		}
-		while (r >= 0 && r != '>') {
-			r = reader.read();
-		}
-		return content.toString();
-	}
-
-	private static String getEmphasizedContent(Reader reader) throws IOException {
-		StringBuilder content = new StringBuilder();
-		Tag tag = getNextTag(reader, content);
-		int depth = 0;
-		while (tag != null) {
-			if (!NON_CLOSING_TAGS.contains(tag.name)) {
-				depth++;
-			}
-			content.setLength(0);
-			tag = getNextTag(reader, content);
-		}
-		while (depth > 0) {
-			findEndTag(reader);
-			depth--;
-		}
-		return content.toString();
 	}
 
 	private static int parseFirstInt(String content) {
+		content = content.trim().replaceAll("\\.", "");
 		int start, end;
 		for (start = 0; start < content.length() && !Character.isDigit(content.charAt(start)); start++) {}
 		for (end = start; end < content.length() && Character.isDigit(content.charAt(end)); end++) {}
@@ -271,76 +100,135 @@ public class EmpireViewReader {
 		}
 	}
 
-	private static void parsePlanetHead(RockyBody place, Reader reader) throws IOException {
-		Tag tag = getNextTag(reader, null);
+	private static void parsePlanetHead(Planet planet, HtmlNavigator reader) throws IOException {
+		Tag tag = reader.descend();
 		while (tag != null) {
-			if (tag.name.equals("div")) {
-				if (tag.classes.contains("planetname")) {
-					place.setName(getTagContent(reader).trim());
-				} else if (place instanceof Planet && tag.classes.contains("planetdata")) {
-					parsePlanetData((Planet) place, reader);
-				} else {
-					findEndTag(reader);
+			if (tag.matches("div")) {
+				if (tag.getClasses().contains("planetname")) {
+					reader.close(tag);
+					planet.setName(reader.getLastContent());
+				} else if (tag.getClasses().contains("planetData")) {
+					parsePlanetData(planet, reader);
 				}
-			} else {
-				findEndTag(reader);
 			}
-			tag = getNextTag(reader, null);
+			reader.close(tag);
+			tag = reader.descend();
 		}
 	}
 
-	private static void parsePlanetData(Planet planet, Reader reader) throws IOException {
-		Tag tag = getNextTag(reader, null);
+	private static Moon parseMoonHead(Account account, HtmlNavigator reader) throws IOException {
+		Moon moon = null;
+		String moonName = null;
+		Tag tag = reader.descend();
 		while (tag != null) {
-			if (tag.name.equals("div")) {
-				if (tag.classes.contains("planetdatatop")) {
-					tag = getNextTag(reader, null);
-					if (tag == null) {//
-					} else if (tag.name.equals("ul")) {
-						tag = getNextTag(reader, null);
-						while (tag != null) {
-							if (tag.name.equals("li") && tag.classes.contains("fields")) {
-								parseFields(planet, getTagContent(reader));
-							} else {
-								findEndTag(reader);
-							}
-							tag = getNextTag(reader, null);
-						}
-						findEndTag(reader);
-					} else {
-						findEndTag(reader);
+			if (tag.matches("div")) {
+				if (tag.getClasses().contains("planetname")) {
+					reader.close(tag);
+					moonName = reader.getLastContent();
+				} else if (tag.getClasses().contains("planetData")) {
+					moon = parseMoonData(account, reader);
+					if (moon != null && moonName != null) {
+						moon.setName(moonName);
 					}
-				} else if (tag.classes.contains("planetdatabottom")) {
-					tag = getNextTag(reader, null);
-					if (tag == null) {//
-					} else if (tag.name.equals("ul")) {
-						tag = getNextTag(reader, null);
-						while (tag != null) {
-							if (tag.name.equals("li") && tag.classes.contains("fields")) {
-								parseTemperature(planet, getTagContent(reader));
-							} else {
-								findEndTag(reader);
-							}
-							tag = getNextTag(reader, null);
-						}
-						findEndTag(reader);
-					} else {
-						findEndTag(reader);
-					}
-				} else {
-					findEndTag(reader);
 				}
-			} else {
-				findEndTag(reader);
 			}
-			tag = getNextTag(reader, null);
+			reader.close(tag);
+			tag = reader.descend();
+		}
+		return moon;
+	}
+
+	private static void parsePlanetData(Planet planet, HtmlNavigator reader) throws IOException {
+		Tag tag = reader.descend();
+		while (tag != null) {
+			if (tag.matches("div", "planetDataTop")) {
+				if (reader.find("ul") != null) {
+					Tag li = reader.find("li");
+					while (li != null) {
+						if (li.getClasses().contains("coords")) {
+							String content = reader.getEmphasizedContent();
+							int[] coords = tryParseCoords(content.trim());
+							if (coords != null) {
+								planet.getCoordinates().set(coords[0], coords[1], coords[2]);
+							}
+						} else if (li.getClasses().contains("fields")) {
+							int fields = parseFields(reader.getEmphasizedContent());
+							if (fields > 0) {
+								planet.setBaseFields(fields);
+							}
+						}
+						li = reader.find("li");
+					}
+				}
+			} else if (tag.matches("div", "planetDataBottom")) {
+				if (reader.find("ul") != null) {
+					Tag li = reader.find("li", "fields");
+					if (li != null) {
+						parseTemperature(planet, reader.getEmphasizedContent());
+					}
+				}
+			}
+			reader.close(tag);
+			tag = reader.descend();
 		}
 	}
 
-	private static void parseFields(Planet planet, String fieldsText) {
+	private static Moon parseMoonData(Account account, HtmlNavigator reader) throws IOException {
+		Tag tag = reader.descend();
+		Moon moon = null;
+		int fields = -1;
+		while (tag != null) {
+			if (tag.matches("div", "planetDataTop")) {
+				if (reader.find("ul") != null) {
+					Tag li = reader.find("li");
+					while (li != null) {
+						if (li.getClasses().contains("coords")) {
+							String content = reader.getEmphasizedContent();
+							int[] coords = tryParseCoords(content.trim());
+							if (coords != null) {
+								for (Planet planet : account.getPlanets().getValues()) {
+									if (planet.getCoordinates().getGalaxy() == coords[0]//
+										&& planet.getCoordinates().getSystem() == coords[1]//
+										&& planet.getCoordinates().getSystem() == coords[2]) {
+										moon = planet.getMoon();
+										break;
+									}
+								}
+							}
+						} else if (li.getClasses().contains("fields")) {
+							fields = parseFields(reader.getEmphasizedContent());
+						}
+						li = reader.find("li");
+					}
+				}
+			}
+			reader.close(tag);
+			tag = reader.descend();
+		}
+		if (moon != null && fields > 0) {
+			moon.setFieldBonus(fields);
+		}
+		return moon;
+	}
+
+	private static final Pattern COORD_PATTERN = Pattern.compile("\\[(?<galaxy>\\d)\\:(?<system>\\d)\\:(?<slot>\\d)\\]");
+
+	private static int[] tryParseCoords(String text) {
+		Matcher matcher = COORD_PATTERN.matcher(text);
+		if (matcher.find()) {
+			return new int[] { Integer.parseInt(matcher.group("galaxy")), //
+				Integer.parseInt(matcher.group("system")), Integer.parseInt(matcher.group("slot")) };
+		} else {
+			return null;
+		}
+	}
+
+	private static int parseFields(String fieldsText) {
 		int slashIdx = fieldsText.indexOf('/');
 		if (slashIdx >= 0) {
-			planet.setBaseFields(Integer.parseInt(fieldsText.substring(slashIdx + 1).trim()));
+			return Integer.parseInt(fieldsText.substring(slashIdx + 1).trim());
+		} else {
+			return -1;
 		}
 	}
 
@@ -360,58 +248,100 @@ public class EmpireViewReader {
 		}
 	}
 
-	private static void parseItems(Planet planet, Reader reader) throws IOException {
+	private static void parseItems(Planet planet, HtmlNavigator reader) throws IOException {
 		int metalBonus = 0, crystalBonus = 0, deutBonus = 0;
-		Tag tag = getNextTag(reader, null);
+		Tag tag = reader.descend();
 		while (tag != null) {
-			int depth = 0;
-			while (tag != null && !tag.classes.contains("item_img")) {
-				depth++;
-				tag = getNextTag(reader, null);
-			}
-			if (tag != null) {
-				String title = tag.attributes.get("title");
-				if (title != null) {
-					int level = 0;
-					if (title.contains("Bronze")) {
-						level = 10;
-					} else if (title.contains("Silver")) {
-						level = 20;
-					} else {
-						level = 30;
-					}
-					if (title.contains("Metal")) {
-						metalBonus = level;
-					} else if (title.contains("Crystal")) {
-						crystalBonus = level;
-					} else {
-						deutBonus = level;
+			Tag uncommon = reader.find("div", "r_uncommon");
+			while (uncommon != null) {
+				Tag itemTag = reader.find("div", "item_img");
+				if (itemTag != null) {
+					String title = itemTag.getAttributes().get("title");
+					if (title != null) {
+						int level = 0;
+						if (title.contains("Bronze")) {
+							level = 10;
+						} else if (title.contains("Silver")) {
+							level = 20;
+						} else {
+							level = 30;
+						}
+						if (title.contains("Metal")) {
+							metalBonus = level;
+						} else if (title.contains("Crystal")) {
+							crystalBonus = level;
+						} else {
+							deutBonus = level;
+						}
 					}
 				}
+				reader.close(uncommon);
+				uncommon = reader.find("div", "r_uncommon");
 			}
-			depth--;
-			while (depth > 0) {
-				findEndTag(reader);
-				depth--;
-			}
-			tag = getNextTag(reader, null);
+			reader.close(tag);
+			tag = reader.descend();
 		}
 		planet.setMetalBonus(metalBonus).setCrystalBonus(crystalBonus).setDeuteriumBonus(deutBonus);
 	}
 
-	private static void parseBuildings(RockyBody place, String buildingClass, Reader reader) throws IOException {
-		Tag tag = getNextTag(reader, null);
+	private static void parseBuildings(RockyBody place, String buildingClass, HtmlNavigator reader) throws IOException {
+		Tag tag = reader.descend();
 		while (tag != null) {
-			if (tag.name.equals("div")) {
-				int buildingNumber = tag.getIntClass();
-				String content = getEmphasizedContent(reader);
-				int level = parseFirstInt(content);
+			int id;
+			if (tag.getName().equals("div") && (id = getIntClass(tag)) >= 0) {
+				int level = parseFirstInt(reader.getEmphasizedContent());
 				if (level >= 0) {
-					setBuilding(place, buildingNumber, level);
+					setBuilding(place, id, level);
 				}
 			}
-			tag = getNextTag(reader, null);
+			reader.close(tag);
+			tag = reader.descend();
 		}
+	}
+
+	private static void parseShipyardItems(RockyBody place, String itemClass, HtmlNavigator reader) throws IOException {
+		Tag tag = reader.descend();
+		while (tag != null) {
+			int id;
+			if (tag.getName().equals("div") && (id = getIntClass(tag)) >= 0) {
+				int level = parseFirstInt(reader.getEmphasizedContent());
+				if (level >= 0) {
+					setShipyardItem(place, id, level);
+				}
+			}
+			reader.close(tag);
+			tag = reader.descend();
+		}
+	}
+
+	private static void parseResearch(Account account, HtmlNavigator reader) throws IOException {
+		Tag tag = reader.descend();
+		while (tag != null) {
+			int id;
+			if (tag.getName().equals("div") && (id = getIntClass(tag)) >= 0) {
+				int level = parseFirstInt(reader.getEmphasizedContent());
+				if (level >= 0) {
+					setResearch(account, id, level);
+				}
+			}
+			reader.close(tag);
+			tag = reader.descend();
+		}
+	}
+
+	private static int getIntClass(Tag tag) {
+		for (String clazz : tag.getClasses()) {
+			int i;
+			for (i = 0; i < clazz.length(); i++) {
+				if (!Character.isDigit(clazz.charAt(i))) {
+					break;
+				}
+			}
+			if (i == clazz.length()) {
+				return Integer.parseInt(clazz);
+			}
+		}
+		return -1;
 	}
 
 	private static void setBuilding(RockyBody place, int buildingNumber, int level) {
@@ -480,30 +410,6 @@ public class EmpireViewReader {
 			place.setBuildingLevel(type, level);
 		} else {
 			System.err.println("Unrecognized building ID: " + buildingNumber);
-		}
-	}
-
-	private static void parseShipyardItems(RockyBody place, String itemClass, Reader reader) throws IOException {
-		Tag tag = getNextTag(reader, null);
-		while (tag != null) {
-			int defNumber = tag.getIntClass();
-			String content = getEmphasizedContent(reader);
-			int level = parseFirstInt(content);
-			setShipyardItem(place, defNumber, level);
-			tag = getNextTag(reader, null);
-		}
-	}
-
-	private static void parseResearch(Account account, Reader reader) throws IOException {
-		Tag tag = getNextTag(reader, null);
-		while (tag != null) {
-			if (tag.name.equals("div")) {
-				int researchId = tag.getIntClass();
-				String content = getEmphasizedContent(reader);
-				int level = parseFirstInt(content);
-				setResearch(account, researchId, level);
-			}
-			tag = getNextTag(reader, null);
 		}
 	}
 
@@ -657,54 +563,6 @@ public class EmpireViewReader {
 			account.getResearch().setResearchLevel(type, level);
 		} else {
 			System.err.println("Unrecognized research ID: " + researchId);
-		}
-	}
-
-	private static class Tag {
-		final String name;
-		final Set<String> classes;
-		final Map<String, String> attributes;
-
-		Tag(String name, Set<String> classes, Map<String, String> attributes) {
-			this.name = name;
-			this.classes = classes;
-			this.attributes = attributes;
-		}
-
-		int getIntClass() {
-			int number = -1;
-			for (String clazz : classes) {
-				if (Character.isDigit(clazz.charAt(0))) {
-					number = Integer.parseInt(clazz);
-				}
-			}
-			return number;
-		}
-
-		@Override
-		public String toString() {
-			StringBuilder str = new StringBuilder();
-			str.append('<').append(name);
-			if (!classes.isEmpty()) {
-				str.append(" class=\"");
-				boolean first = true;
-				for (String c : classes) {
-					if (first) {
-						first = false;
-					} else {
-						str.append(' ');
-					}
-					str.append(c);
-				}
-				str.append('"');
-			}
-			if (!attributes.isEmpty()) {
-				for (Map.Entry<String, String> attr : attributes.entrySet()) {
-					str.append(' ').append(attr.getKey()).append("=\"").append(attr.getValue()).append('"');
-				}
-			}
-			str.append('>');
-			return str.toString();
 		}
 	}
 
