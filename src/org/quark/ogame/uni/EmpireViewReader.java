@@ -1,12 +1,6 @@
 package org.quark.ogame.uni;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.Reader;
-import java.io.Writer;
+import java.io.*;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -45,15 +39,10 @@ public class EmpireViewReader {
 			if (nav.getTop().getClasses().contains("summary")) {
 				continue;
 			}
-			Tag tag = nav.descend();
-			Moon moon = null;
-			while (tag != null) {
-				if (tag.matches("div")) {
-					if (tag.getClasses().contains("planetHead")) {
-						moon = parseMoonHead(account, nav);
-					}
-				}
-			}
+			Tag tag = nav.find("div", "planetHead");
+			if (tag == null)
+				continue;
+			Moon moon = parseMoonHead(account, nav);
 			if (moon != null) {
 				parsePlanet(account, moon, nav);
 				int totalFields = moon.getFieldBonus();
@@ -189,7 +178,7 @@ public class EmpireViewReader {
 								for (Planet planet : account.getPlanets().getValues()) {
 									if (planet.getCoordinates().getGalaxy() == coords[0]//
 										&& planet.getCoordinates().getSystem() == coords[1]//
-										&& planet.getCoordinates().getSystem() == coords[2]) {
+										&& planet.getCoordinates().getSlot() == coords[2]) {
 										moon = planet.getMoon();
 										break;
 									}
@@ -211,7 +200,7 @@ public class EmpireViewReader {
 		return moon;
 	}
 
-	private static final Pattern COORD_PATTERN = Pattern.compile("\\[(?<galaxy>\\d)\\:(?<system>\\d)\\:(?<slot>\\d)\\]");
+	private static final Pattern COORD_PATTERN = Pattern.compile("\\[(?<galaxy>\\d)\\:(?<system>\\d{1,3})\\:(?<slot>\\d{1,2})\\]");
 
 	private static int[] tryParseCoords(String text) {
 		Matcher matcher = COORD_PATTERN.matcher(text);
