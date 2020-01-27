@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.observe.Observable;
 import org.observe.SettableValue;
@@ -53,6 +54,8 @@ public class PlanetTable {
 	private final SettableValue<Boolean> showFields;
 	private final SettableValue<Boolean> showTemps;
 	private final SettableValue<Boolean> showMines;
+	private final SettableValue<Boolean> showUsage;
+	private final SettableValue<Boolean> showItems;
 	private final SettableValue<Boolean> showEnergy;
 	private final SettableValue<Boolean> showStorage;
 	private final SettableValue<ProductionDisplayType> productionType;
@@ -75,6 +78,8 @@ public class PlanetTable {
 		showFields = config.asValue(boolean.class).at("planet-categories/fields").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
 		showTemps = config.asValue(boolean.class).at("planet-categories/temps").withFormat(Format.BOOLEAN, () -> true).buildValue(null);
 		showMines = config.asValue(boolean.class).at("planet-categories/mines").withFormat(Format.BOOLEAN, () -> true).buildValue(null);
+		showUsage = config.asValue(boolean.class).at("planet-categories/usage").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
+		showItems = config.asValue(boolean.class).at("planet-categories/items").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
 		showEnergy = config.asValue(boolean.class).at("planet-categories/energy").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
 		showStorage = config.asValue(boolean.class).at("planet-categories/storage").withFormat(Format.BOOLEAN, () -> false)
 			.buildValue(null);
@@ -249,6 +254,10 @@ public class PlanetTable {
 	}
 
 	public void addPlanetTable(PanelPopulation.PanelPopulator<?, ?> panel) {
+		ObservableCollection<Integer> usageOptions = ObservableCollection.of(TypeTokens.get().INT, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
+			0);
+		ObservableCollection<Integer> itemOptions = ObservableCollection.of(TypeTokens.get().INT, 30, 20, 10, 0);
+
 		List<Object> planetUpgradeList = new ArrayList<>();
 		List<Object> moonUpgradeList = new ArrayList<>();
 		planetUpgradeList.add("All");
@@ -332,11 +341,42 @@ public class PlanetTable {
 				return str.toString();
 			}) //
 		);
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> usageColumns1 = ObservableCollection.of(planetColumnType,
+			planetColumn("M %", int.class, p -> p.planet == null ? null : p.planet.getMetalUtilization(), Planet::setMetalUtilization, 45)
+				.withHeaderTooltip("Metal Mine Utilization").formatText(v -> v == null ? "" : v + "%")
+				.withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)), //
+			planetColumn("C %", int.class, p -> p.planet == null ? null : p.planet.getCrystalUtilization(), Planet::setCrystalUtilization,
+				45).withHeaderTooltip("Crystal Mine Utilization").formatText(v -> v == null ? "" : v + "%")
+					.withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)), //
+			planetColumn("D %", int.class, p -> p.planet == null ? null : p.planet.getDeuteriumUtilization(),
+				Planet::setDeuteriumUtilization, 45).withHeaderTooltip("Deuterium Synthesizer Utilization")
+					.formatText(v -> v == null ? "" : v + "%")
+					.withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)), //
+			planetColumn("Cr %", int.class, p -> p.planet == null ? null : p.planet.getCrawlerUtilization(), Planet::setCrawlerUtilization,
+				45).withHeaderTooltip("Crawler Utilization").formatText(v -> v == null ? "" : v + "%")
+					.withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)) //
+		);
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> itemColumns = ObservableCollection.of(planetColumnType,
+			planetColumn("M+", int.class, p -> p.planet == null ? null : p.planet.getMetalBonus(), Planet::setMetalBonus, 45)
+				.withHeaderTooltip("Metal Bonus Item").formatText(v -> v == null ? "" : v + "%")
+				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)), //
+			planetColumn("C+", int.class, p -> p.planet == null ? null : p.planet.getCrystalBonus(), Planet::setCrystalBonus, 45)
+				.withHeaderTooltip("Crystal Bonus Item").formatText(v -> v == null ? "" : v + "%")
+				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)), //
+			planetColumn("D+", int.class, p -> p.planet == null ? null : p.planet.getDeuteriumBonus(), Planet::setDeuteriumBonus, 45)
+				.withHeaderTooltip("Deuterium Bonus Item").formatText(v -> v == null ? "" : v + "%")
+				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)) //
+		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> energyBldgs = ObservableCollection.of(planetColumnType,
 			intPlanetColumn("Sats", false, true, Planet::getSolarSatellites, Planet::setSolarSatellites, 75), //
 			intPlanetColumn("Solar", false, true, Planet::getSolarPlant, Planet::setSolarPlant, 55), //
 			intPlanetColumn("Fusion", false, true, Planet::getFusionReactor, Planet::setFusionReactor, 55),
 			planetColumn("Net Energy", int.class, p -> p.planet == null ? null : p.getEnergy().totalNet, null, 60));
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> usageColumns2 = ObservableCollection.of(planetColumnType,
+			planetColumn("FZN %", int.class, p -> p.planet == null ? null : p.planet.getFusionReactorUtilization(),
+				Planet::setFusionReactorUtilization, 45).withHeaderTooltip("Fusion Reactor Utilization")
+					.formatText(v -> v == null ? "" : v + "%").withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)) //
+		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> storageColumns = ObservableCollection.of(planetColumnType,
 			intPlanetColumn("M Stor", false, true, Planet::getMetalStorage, Planet::setMetalStorage, 55), //
 			intPlanetColumn("C Stor", false, true, Planet::getCrystalStorage, Planet::setCrystalStorage, 55), //
@@ -434,7 +474,10 @@ public class PlanetTable {
 				ObservableCollection.flattenValue(showFields.map(show -> show ? fieldColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(showTemps.map(show -> show ? tempColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(showMines.map(show -> show ? mineColumns : emptyColumns)), //
+				ObservableCollection.flattenValue(showUsage.map(show -> show ? usageColumns1 : emptyColumns)), //
+				ObservableCollection.flattenValue(showItems.map(show -> show ? itemColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(showEnergy.map(show -> show ? energyBldgs : emptyColumns)), //
+				ObservableCollection.flattenValue(showUsage.map(show -> show ? usageColumns2 : emptyColumns)), //
 				ObservableCollection.flattenValue(showStorage.map(show -> show ? storageColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(productionType.map(type -> type.type == null ? emptyColumns : productionColumns)), //
 				ObservableCollection.flattenValue(showProductionTotals.map(show -> show ? productionTotalColumns : emptyColumns)), //
@@ -461,6 +504,7 @@ public class PlanetTable {
 			.addTable(researchColl,
 				researchTable -> researchTable.fill().withAdaptiveHeight(1, 1, 1).decorate(d -> d.withTitledBorder("Research", Color.black))//
 					.withColumn("Upgrd", Object.class, r -> r.getCurrentUpgrade(), upgradeCol -> upgradeCol.withWidths(60, 60, 60)
+						.withHeaderTooltip("Current Research Upgrade")
 						.formatText(rsrch -> rsrch == null ? "" : ((ResearchType) rsrch).shortName).withMutation(m -> m.asCombo(bdg -> {
 							if (bdg instanceof ResearchType) {
 								return ((ResearchType) bdg).shortName;
@@ -492,19 +536,21 @@ public class PlanetTable {
 					.withColumn(intResearchColumn("Shielding", Research::getShielding, Research::setShielding, 65))//
 					.withColumn(intResearchColumn("Armor", Research::getArmor, Research::setArmor, 55))//
 			)//
-			.addHPanel("Show Properties:", new JustifiedBoxLayout(false).setMainAlignment(JustifiedBoxLayout.Alignment.LEADING),
+			.addHPanel("Columns:", new JustifiedBoxLayout(false).setMainAlignment(JustifiedBoxLayout.Alignment.LEADING),
 				fieldPanel -> fieldPanel//
-					.addCheckField("Fields:", showFields, null).spacer(3)//
-					.addCheckField("Temps:", showTemps, null).spacer(3)//
-					.addCheckField("Mines:", showMines, null).spacer(3)//
-					.addCheckField("Energy:", showEnergy, null).spacer(3)//
-					.addCheckField("Storage:", showStorage, null).spacer(3)//
-					.addComboField("Production:", productionType, null, ProductionDisplayType.values()).spacer(3)//
-					.addCheckField("P. Totals:", showProductionTotals, null).spacer(3)//
-					.addCheckField("Main Facilities:", showMainFacilities, null).spacer(3)//
-					.addCheckField("Other Facilities:", showOtherFacilities, null).spacer(3)//
-					.addCheckField("Defense:", showDefense, null).spacer(3)//
-					.addCheckField("Moon Info:", showMoonInfo, null).spacer(3)//
+					.addCheckField("Fields:", showFields, null).spacer(2)//
+					.addCheckField("Temps:", showTemps, null).spacer(2)//
+					.addCheckField("Mines:", showMines, null).spacer(2)//
+					.addCheckField("Usage:", showUsage, null).spacer(2)//
+					.addCheckField("Items:", showItems, null).spacer(2)//
+					.addCheckField("Energy:", showEnergy, null).spacer(2)//
+					.addCheckField("Storage:", showStorage, null).spacer(2)//
+					.addComboField("Prod:", productionType, null, ProductionDisplayType.values()).spacer(3)//
+					.addCheckField("P. Totals:", showProductionTotals, null).spacer(2)//
+					.addCheckField("Main Facil:", showMainFacilities, null).spacer(2)//
+					.addCheckField("Other Facil:", showOtherFacilities, null).spacer(2)//
+					.addCheckField("Def:", showDefense, null).spacer(2)//
+					.addCheckField("Moon Info:", showMoonInfo, null).spacer(2)//
 			)//
 			.addTable(selectedPlanets,
 				planetTable -> planetTable.fill().withItemName("planet").withAdaptiveHeight(6, 30, 50)//
@@ -519,8 +565,8 @@ public class PlanetTable {
 							}
 						}))//
 					.withColumn("Upgrd", Object.class, p -> p.planet == null ? null : p.planet.getCurrentUpgrade(),
-						upgradeCol -> upgradeCol.withWidths(40, 40, 40).formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName)
-							.withMutation(m -> m.asCombo(bdg -> {
+						upgradeCol -> upgradeCol.withWidths(40, 40, 40).withHeaderTooltip("Current Building Upgrade")
+							.formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName).withMutation(m -> m.asCombo(bdg -> {
 								if (bdg instanceof BuildingType) {
 									return ((BuildingType) bdg).shortName;
 								} else {
@@ -536,7 +582,9 @@ public class PlanetTable {
 					.withColumns(planetColumns)//
 					.withSelection(theSelectedPlanet, false)//
 					.withAdd(() -> theUniGui.createPlanet(), null)//
-					.withRemove(planets -> theUniGui.getSelectedAccount().get().getPlanets().getValues().removeAll(planets),
+					.withRemove(
+						planets -> theUniGui.getSelectedAccount().get().getPlanets().getValues().removeAll(//
+							planets.stream().map(p -> p.planet).collect(Collectors.toList())),
 						action -> action//
 							.confirmForItems("Delete Planets?", "Are you sure you want to delete ", null, true))//
 			)//
@@ -727,6 +775,8 @@ public class PlanetTable {
 			target.setStationedShips(type, value);
 		}, width);
 	}
+
+	// private static final Format<int []> COORD_FORMAT=Format. TODO
 
 	interface TriConsumer<T, U, V> {
 		void accept(T t, U u, V v);
