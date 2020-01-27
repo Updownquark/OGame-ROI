@@ -6,8 +6,6 @@ import java.util.EnumMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
-import java.util.TreeMap;
 
 import org.qommons.collect.BetterSortedSet;
 import org.qommons.tree.BetterTreeSet;
@@ -94,7 +92,6 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 	private static final MineProduction METAL_PRODUCTION = new MineProduction(30, 30, 1.1, .0002, 1, 10);
 	private static final MineProduction CRYSTAL_PRODUCTION = new MineProduction(15, 20, 1.1, .0002, .66, 10);
 	private static final MineProduction DEUT_PRODUCTION = new MineProduction(0, 10, 1.1, .0002, .33, 20);
-	private static final NavigableMap<Integer, Double> DEUT_MULTIPLIERS;
 
 	private static final Map<AccountUpgradeType, CostDescrip> COST_DESCRIPS;
 
@@ -453,22 +450,6 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			}
 		}
 		COST_DESCRIPS = Collections.unmodifiableMap(costs);
-
-		NavigableMap<Integer, Double> deutMultipliers = new TreeMap<>();
-		deutMultipliers.put(-136, 1.9);
-		deutMultipliers.put(-110, 1.8);
-		deutMultipliers.put(-76, 1.6);
-		deutMultipliers.put(-46, 1.5);
-		deutMultipliers.put(-10, 1.4);
-		deutMultipliers.put(14, 1.3);
-		deutMultipliers.put(44, 1.2);
-		deutMultipliers.put(74, 1.1);
-		deutMultipliers.put(104, 1.0);
-		deutMultipliers.put(134, 0.9);
-		deutMultipliers.put(164, 0.8);
-		deutMultipliers.put(194, 0.7);
-		deutMultipliers.put(224, 0.6);
-		DEUT_MULTIPLIERS = Collections.unmodifiableNavigableMap(deutMultipliers);
 	}
 
 	/** Storage amount per storage building level, starting at level 0 */
@@ -511,10 +492,21 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				getSatelliteEnergy(account, planet) * planet.getSolarSatellites() * 1.0 * planet.getSolarSatelliteUtilization() / 100.0);
 			byType.put(ProductionSource.Satellite, typeAmount);
 			totalProduced += typeAmount;
+			int baseProduced = totalProduced;
 
 			if (account.getGameClass() == AccountClass.Collector) {
-				typeAmount = (int) Math.round(totalProduced * 0.10);
+				typeAmount = (int) Math.floor(baseProduced * 0.10);
 				byType.put(ProductionSource.Collector, typeAmount);
+				totalProduced += typeAmount;
+			}
+			if (account.getOfficers().isEngineer()) {
+				typeAmount = (int) Math.floor(baseProduced * 0.10);
+				byType.put(ProductionSource.Engineer, typeAmount);
+				totalProduced += typeAmount;
+			}
+			if (account.getOfficers().isCommandingStaff()) {
+				typeAmount = (int) Math.floor(baseProduced * 0.02);
+				byType.put(ProductionSource.CommandingStaff, typeAmount);
 				totalProduced += typeAmount;
 			}
 		} else {
@@ -558,13 +550,8 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			double mineP = production.multiplier * level * Math.pow(production.exponent, level) * account.getUniverse().getEconomySpeed()
 				* energyFactor * (utilization / 100.0);
 			if (resourceType == ResourceType.Deuterium) {
-				double mult;
-				Integer maxTemp = DEUT_MULTIPLIERS.ceilingKey((planet.getMinimumTemperature() + planet.getMaximumTemperature()) / 2);
-				if (maxTemp != null) {
-					mult = DEUT_MULTIPLIERS.get(maxTemp);
-				} else {
-					mult = DEUT_MULTIPLIERS.lastEntry().getValue();
-				}
+				int avgT = (planet.getMinimumTemperature() + planet.getMaximumTemperature()) / 2;
+				double mult = 1.36 - 0.004 * avgT;
 				mineP *= mult;
 			}
 			int mineProduction = (int) Math.floor(mineP);
