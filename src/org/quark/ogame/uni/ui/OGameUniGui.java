@@ -6,9 +6,10 @@ import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.Charset;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -52,8 +53,8 @@ import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.AccountUpgrade;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
-import org.quark.ogame.uni.EmpireViewReader;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
+import org.quark.ogame.uni.OGamePageReader;
 import org.quark.ogame.uni.OGameRuleSet;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.PointType;
@@ -443,6 +444,16 @@ public class OGameUniGui extends JPanel {
 											.addButton("Import", this::importEmpireView, pv -> pv.disableWith(thePlanetEmpireFile
 												.map(f -> f == null ? "Download and select the planet empire view file" : null)))//
 									)//
+										.addHPanel("Import Overview:", "box",
+											empirePanel -> empirePanel//
+												.addButton("Import", this::importOverview,
+													pv -> pv.withTooltip("<html><ul>"//
+														+ "<li>Select your Overview</li>"//
+														+ "<li>Save the page (e.g. Ctrl+S)</li>"//
+														+ "<li>Choose the HTML Only option, select a location, and click Save</li>"//
+														+ "<li>Click this button and select the saved file</li>"//
+														+ "</li></ul></html>"))//
+									)//
 							, acctSettingsTab -> acctSettingsTab.setName("Settings"))//
 								.withVTab("planets", acctBuildingsPanel -> thePlanetPanel.addPlanetTable(acctBuildingsPanel)//
 									, acctBuildingsTab -> acctBuildingsTab.setName("Builds"))//
@@ -740,8 +751,8 @@ public class OGameUniGui extends JPanel {
 
 	private void importEmpireView(Object cause) {
 		int planets;
-		try (BufferedReader reader = new BufferedReader(new FileReader(thePlanetEmpireFile.get()))) {
-			planets = EmpireViewReader.readEmpireView(theSelectedAccount.get(), reader, theSelectedRuleSet.get(),
+		try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(thePlanetEmpireFile.get())))) {
+			planets = OGamePageReader.readEmpireView(theSelectedAccount.get(), reader, theSelectedRuleSet.get(),
 				() -> createPlanet().planet);
 		} catch (IOException | RuntimeException e) {
 			e.printStackTrace();
@@ -750,15 +761,38 @@ public class OGameUniGui extends JPanel {
 		}
 
 		if (theMoonEmpireFile.get() != null) {
-			try (BufferedReader reader = new BufferedReader(new FileReader(theMoonEmpireFile.get()))) {
-				EmpireViewReader.readEmpireMoonView(theSelectedAccount.get(), theSelectedRuleSet.get(), reader);
+			try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(theMoonEmpireFile.get())))) {
+				OGamePageReader.readEmpireMoonView(theSelectedAccount.get(), theSelectedRuleSet.get(), reader);
 			} catch (IOException | RuntimeException e) {
 				e.printStackTrace();
 				JOptionPane.showMessageDialog(this, "Moon empire view parsing failed", "Unable to Import Moon Empire View",
 					JOptionPane.ERROR_MESSAGE);
 			}
 		}
+		theSelectedAccount.set(theSelectedAccount.get(), null);
 		JOptionPane.showMessageDialog(this, "Successfully imported " + planets + " planets from Empire View", "Empire View Imported",
+			JOptionPane.INFORMATION_MESSAGE);
+	}
+
+	private void importOverview(Object cause) {
+		JFileChooser chooser = new JFileChooser();
+		chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+		chooser.setFileFilter(new FileNameExtensionFilter("HTML Files", "html"));
+		if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+			return;
+		}
+		int planets;
+		try (BufferedReader reader = new BufferedReader(
+			new InputStreamReader(new FileInputStream(chooser.getSelectedFile()), Charset.forName("UTF-8")))) {
+			planets = OGamePageReader.readOverview(theSelectedAccount.get(), reader, theSelectedRuleSet.get(),
+				() -> createPlanet().planet);
+		} catch (IOException | RuntimeException e) {
+			e.printStackTrace();
+			JOptionPane.showMessageDialog(this, "Overview parsing failed", "Unable to Import Overview", JOptionPane.ERROR_MESSAGE);
+			return;
+		}
+		theSelectedAccount.set(theSelectedAccount.get(), null);
+		JOptionPane.showMessageDialog(this, "Successfully imported " + planets + " planets from Overview", "Overview Imported",
 			JOptionPane.INFORMATION_MESSAGE);
 	}
 

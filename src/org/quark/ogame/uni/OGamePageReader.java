@@ -1,9 +1,13 @@
 package org.quark.ogame.uni;
 
-import java.io.*;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
+import java.io.Writer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -11,7 +15,7 @@ import java.util.regex.Pattern;
 import org.qommons.io.HtmlNavigator;
 import org.qommons.io.HtmlNavigator.Tag;
 
-public class EmpireViewReader {
+public class OGamePageReader {
 	public static int readEmpireView(Account account, Reader reader, OGameRuleSet rules, Supplier<Planet> createPlanet) throws IOException {
 		HtmlNavigator nav = new HtmlNavigator(reader);
 		int planetIdx = 0;
@@ -40,8 +44,9 @@ public class EmpireViewReader {
 				continue;
 			}
 			Tag tag = nav.find("div", "planetHead");
-			if (tag == null)
+			if (tag == null) {
 				continue;
+			}
 			Moon moon = parseMoonHead(account, nav);
 			if (moon != null) {
 				parsePlanet(account, moon, nav);
@@ -51,6 +56,119 @@ public class EmpireViewReader {
 			}
 		}
 	}
+
+	public static int readOverview(Account account, Reader reader, OGameRuleSet rules, Supplier<Planet> createPlanet) throws IOException {
+		HtmlNavigator nav = new HtmlNavigator(reader);
+		int planetIdx = 0;
+		Tag head;
+		if ((head = nav.find("head")) == null) {
+			return 0;
+		}
+		Tag meta;
+		while ((meta = nav.find("meta")) != null) {
+			String metaName = meta.getAttributes().get("name");
+			String content = meta.getAttributes().get("content");
+			if (metaName == null || content == null) {
+				continue;
+			}
+			switch (metaName) {
+			case "ogame-universe-name":
+				account.getUniverse().setName(content);
+				break;
+			case "ogame-universe-speed":
+				int speed = Integer.parseInt(content);
+				account.getUniverse().setEconomySpeed(speed);
+				if (speed > 1 && account.getUniverse().getResearchSpeed() <= 1) {
+					account.getUniverse().setResearchSpeed(speed);
+				}
+				break;
+			case "ogame-universe-speed-fleet":
+				account.getUniverse().setFleetSpeed(Integer.parseInt(content));
+				break;
+			}
+		}
+		nav.close(head);
+		nav.descend(); // Body
+		Tag tag = nav.find("div", "fleft");
+		if (tag != null) {
+			Tag classTag = nav.find("a");
+			String title = classTag.getAttributes().get("title");
+			int idx = title.indexOf("class:");
+			if (idx >= 0) {
+				String className = getNextWord(title, idx + "class:".length()).toLowerCase();
+				switch (className) {
+				case "collector":
+					account.setGameClass(AccountClass.Collector);
+					idx = title.indexOf("% mine production");
+					if (idx >= 0) {
+						int lastIdx = idx;
+						while (idx >= 0 && Character.isDigit(title.charAt(idx - 1))) {
+							idx--;
+						}
+						account.getUniverse().setCollectorProductionBonus(Integer.parseInt(title.substring(idx, lastIdx)));
+					}
+					idx = title.indexOf("% energy");
+					if (idx >= 0) {
+						int lastIdx = idx;
+						while (idx >= 0 && Character.isDigit(title.charAt(idx - 1))) {
+							idx--;
+						}
+						account.getUniverse().setCollectorEnergyBonus(Integer.parseInt(title.substring(idx, lastIdx)));
+					}
+					break;
+				case "general":
+					account.setGameClass(AccountClass.General);
+					break;
+				case "discoverer":
+					account.setGameClass(AccountClass.Discoverer);
+					break;
+				}
+			}
+			nav.close(tag);
+		}
+		tag = nav.find("div", "fright");
+		if (tag != null) {
+			Tag officerTag = nav.find("a");
+			while (officerTag != null) {
+				if (officerTag.getClasses().contains("commander")) {
+					account.getOfficers().setCommander(officerTag.getAttributes().get("title").contains("active"));
+				} else if (officerTag.getClasses().contains("admiral")) {
+					account.getOfficers().setAdmiral(officerTag.getAttributes().get("title").contains("active"));
+				} else if (officerTag.getClasses().contains("engineer")) {
+					account.getOfficers().setEngineer(officerTag.getAttributes().get("title").contains("active"));
+				} else if (officerTag.getClasses().contains("geologist")) {
+					account.getOfficers().setGeologist(officerTag.getAttributes().get("title").contains("active"));
+				} else if (officerTag.getClasses().contains("technocrat")) {
+					account.getOfficers().setTechnocrat(officerTag.getAttributes().get("title").contains("active"));
+				}
+				nav.close(officerTag);
+				officerTag = nav.find("a");
+			}
+			nav.close(tag);
+		}
+		while (nav.getTop() != null && !"pageContent".equals(nav.getTop().getAttributes().get("id"))) {
+			nav.close(nav.getTop());
+		}
+		if (nav.find(t -> t.getName().equals("div") && "planetList".equals(t.getAttributes().get("id"))) == null) {
+			return 0;
+		}
+		while (nav.find("div", "smallplanet") != null) {
+			Planet planet;
+			if (planetIdx == account.getPlanets().getValues().size()) {
+				planet = createPlanet.get();
+			} else {
+				planet = account.getPlanets().getValues().get(planetIdx);
+			}
+			parsePlanetFromOverview(account, planet, nav);
+			int terraformerDiff = rules.economy().getFields(planet) - planet.getBaseFields();
+			planet.setBaseFields(planet.getBaseFields() - terraformerDiff);
+			planetIdx++;
+		}
+		return planetIdx;
+	}
+
+	private static final Pattern FIELDS_PATTERN = Pattern.compile("/(?<fields>\\d+)\\)");
+	private static final Pattern TEMP_PATTERN = Pattern.compile("(?<minTemp>\\-?\\d+)\u00b0C to (?<maxTemp>\\-?\\d+)\u00b0C");
 
 	private static void parsePlanet(Account account, RockyBody place, HtmlNavigator reader) throws IOException {
 		Tag tag = reader.descend();
@@ -75,6 +193,114 @@ public class EmpireViewReader {
 			reader.close(tag);
 			tag = reader.descend();
 		}
+	}
+
+	private static void parsePlanetFromOverview(Account account, Planet planet, HtmlNavigator reader) throws IOException {
+		Tag planetTag = reader.getTop();
+		Tag classTag = reader.find("a", "planetlink");
+		Tag tag;
+		if (classTag != null) {
+			String title = classTag.getAttributes().get("title");
+			title = title.replaceAll("&lt;", "<").replaceAll("&gt;", ">");
+			HtmlNavigator titleNav = new HtmlNavigator(new StringReader(title));
+			boolean hasFields = false, hasTemp = false;
+			while (!titleNav.isDone() && (!hasFields || !hasTemp)) {
+				titleNav.descend();
+				Matcher m = FIELDS_PATTERN.matcher(titleNav.getLastContent());
+				if (m.find()) {
+					planet.setBaseFields(Integer.parseInt(m.group("fields")));
+					hasFields = true;
+				}
+				m = TEMP_PATTERN.matcher(titleNav.getLastContent());
+				if (m.find()) {
+					planet.setMinimumTemperature(Integer.parseInt(m.group("minTemp")))//
+						.setMaximumTemperature(Integer.parseInt(m.group("maxTemp")));
+					hasTemp = true;
+				}
+			}
+			tag = reader.find("span", "planet-name");
+			if (tag != null) {
+				reader.close(tag);
+				planet.setName(reader.getLastContent());
+			}
+			tag = reader.find("span", "planet-koords");
+			if (tag != null) {
+				reader.close(tag);
+				int[] coords = tryParseCoords(reader.getLastContent());
+				if (coords != null) {
+					planet.getCoordinates().set(coords[0], coords[1], coords[2]);
+				}
+			}
+			reader.close(classTag);
+		}
+		classTag = reader.find("a", "constructionIcon");
+		if (classTag != null) {
+			switch (classTag.getAttributes().get("title")) {
+			case "Metal Mine":
+				planet.setCurrentUpgrade(BuildingType.MetalMine);
+				break;
+			case "Crystal Mine":
+				planet.setCurrentUpgrade(BuildingType.CrystalMine);
+				break;
+			case "Deuterium Synthesizer":
+				planet.setCurrentUpgrade(BuildingType.DeuteriumSynthesizer);
+				break;
+			case "Solar Plant":
+				planet.setCurrentUpgrade(BuildingType.SolarPlant);
+				break;
+			case "Fusion Reactor":
+				planet.setCurrentUpgrade(BuildingType.FusionReactor);
+				break;
+			case "Metal Storage":
+				planet.setCurrentUpgrade(BuildingType.MetalStorage);
+				break;
+			case "Crystal Storage":
+				planet.setCurrentUpgrade(BuildingType.CrystalStorage);
+				break;
+			case "Deuterium Tank":
+				planet.setCurrentUpgrade(BuildingType.DeuteriumStorage);
+				break;
+			case "Robotics Factory":
+				planet.setCurrentUpgrade(BuildingType.RoboticsFactory);
+				break;
+			case "Shipyard":
+				planet.setCurrentUpgrade(BuildingType.Shipyard);
+				break;
+			case "Research Lab":
+				planet.setCurrentUpgrade(BuildingType.ResearchLab);
+				break;
+			case "Alliance Depot":
+				planet.setCurrentUpgrade(BuildingType.AllianceDepot);
+				break;
+			case "Missile Silo":
+				planet.setCurrentUpgrade(BuildingType.MissileSilo);
+				break;
+			case "Nanite Factory":
+				planet.setCurrentUpgrade(BuildingType.NaniteFactory);
+				break;
+			case "Terraformer":
+				planet.setCurrentUpgrade(BuildingType.Terraformer);
+				break;
+			case "Space Dock":
+				planet.setCurrentUpgrade(BuildingType.SpaceDock);
+				break;
+			}
+			reader.close(classTag);
+		}
+		reader.close(planetTag);
+	}
+
+	private static String getNextWord(String content, int fromIndex) {
+		StringBuilder str = new StringBuilder();
+		while (fromIndex < content.length() && Character.isWhitespace(content.charAt(fromIndex))) {
+			fromIndex++;
+		}
+
+		while (fromIndex < content.length() && Character.isAlphabetic(content.charAt(fromIndex))) {
+			str.append(content.charAt(fromIndex));
+			fromIndex++;
+		}
+		return str.toString();
 	}
 
 	private static int parseFirstInt(String content) {
@@ -556,7 +782,6 @@ public class EmpireViewReader {
 	}
 
 	public static void main(String[] args) {
-		Set<String> noContentTags = new HashSet<>(Arrays.asList("img", "meta"));
 		try (BufferedReader reader = new BufferedReader(new FileReader(args[0]));
 			Writer writer = new BufferedWriter(new FileWriter(args[1]))) {
 			int indent = 0;
@@ -580,7 +805,7 @@ public class EmpireViewReader {
 						for (int i = tagIdx + 2; tagIdx < line.length() && Character.isAlphabetic(line.charAt(i)); i++) {
 							tagName.append(line.charAt(i));
 						}
-						if (!noContentTags.contains(tagName.toString().toLowerCase())) {
+						if (!HtmlNavigator.UNCLOSED_TAGS.contains(tagName.toString().toLowerCase())) {
 							indent++;
 						}
 					}
