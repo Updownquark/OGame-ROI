@@ -62,7 +62,7 @@ import org.quark.ogame.uni.ResearchType;
 import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.UpgradeCost;
-import org.quark.ogame.uni.versions.OGameRuleSet710;
+import org.quark.ogame.uni.versions.OGameRuleSet711;
 import org.xml.sax.SAXException;
 
 public class OGameUniGui extends JPanel {
@@ -819,7 +819,7 @@ public class OGameUniGui extends JPanel {
 			ex.printStackTrace();
 		});
 		List<OGameRuleSet> ruleSets = new ArrayList<>();
-		ruleSets.add(new OGameRuleSet710());
+		ruleSets.add(new OGameRuleSet711());
 		ObservableSwingUtils.systemLandF();
 		OGameUniGui ui = new OGameUniGui(config, ruleSets, getAccounts(config, "accounts/account"));
 		JFrame frame = new JFrame("OGame Account Helper");
