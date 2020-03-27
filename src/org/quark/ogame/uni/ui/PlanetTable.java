@@ -260,8 +260,8 @@ public class PlanetTable {
 
 		List<Object> planetUpgradeList = new ArrayList<>();
 		List<Object> moonUpgradeList = new ArrayList<>();
-		planetUpgradeList.add("All");
-		moonUpgradeList.add("All");
+		planetUpgradeList.add("None");
+		moonUpgradeList.add("None");
 		for (BuildingType b : BuildingType.values()) {
 			if (b.isPlanetBuilding) {
 				planetUpgradeList.add(b);
@@ -276,7 +276,7 @@ public class PlanetTable {
 			.build();
 
 		List<Object> researchUpgradeList = new ArrayList<>();
-		researchUpgradeList.add("All");
+		researchUpgradeList.add("None");
 		for (ResearchType r : ResearchType.values()) {
 			researchUpgradeList.add(r);
 		}
@@ -431,7 +431,7 @@ public class PlanetTable {
 						if (bdg instanceof BuildingType) {
 							return ((BuildingType) bdg).shortName;
 						} else {
-							return "All";
+							return "None";
 						}
 					}, moonUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
 						if (bdg instanceof BuildingType) {
@@ -513,7 +513,7 @@ public class PlanetTable {
 							if (bdg instanceof ResearchType) {
 								return ((ResearchType) bdg).shortName;
 							} else {
-								return "All";
+								return "None";
 							}
 						}, researchUpgrades).clicks(1).mutateAttribute((r, rsrch) -> {
 							if (rsrch instanceof ResearchType) {
@@ -585,7 +585,7 @@ public class PlanetTable {
 								if (bdg instanceof BuildingType) {
 									return ((BuildingType) bdg).shortName;
 								} else {
-									return "All";
+									return "None";
 								}
 							}, planetUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
 								if (bdg instanceof BuildingType) {
