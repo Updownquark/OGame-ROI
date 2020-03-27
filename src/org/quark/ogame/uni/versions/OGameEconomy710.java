@@ -776,9 +776,9 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		if (irn > 0) {
 			SortedTreeList<Integer> labLevels = new SortedTreeList<>(false, (i1, i2) -> -Integer.compare(i1, i2));
 			for (Planet planet : account.getPlanets().getValues()) {
-				if (planet != planetOrMoon) {
+				// if (planet != planetOrMoon) { The app doesn't actually care where the research starts from, so just use the best case
 					labLevels.add(planet.getBuildingLevel(BuildingType.ResearchLab));
-				}
+				// }
 			}
 			int linkedLabs = 0;
 			for (Integer lab : labLevels) {
@@ -800,7 +800,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 	}
 
 	protected int getTerraformerFields(int terraformerLevel) {
-		return (int) Math.ceil(terraformerLevel * 5.5);
+		return (int) Math.floor(terraformerLevel * 5.5);
 	}
 
 	@Override
