@@ -284,7 +284,9 @@ public class PlanetTable {
 			.withBacking(BetterList.of(researchUpgradeList)).build();
 
 		TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>> planetColumnType = new TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>>() {};
-		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> basicPlanetColumns = ObservableCollection
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> initPlanetColumns = ObservableCollection
+			.create(planetColumnType);
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> lastPlanetColumns = ObservableCollection
 			.create(planetColumnType);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> fieldColumns = ObservableCollection.of(planetColumnType,
 			intPlanetColumn("Total Fields", false, false, p -> theUniGui.getRules().get().economy().getFields(p), (p, f) -> {
@@ -470,7 +472,7 @@ public class PlanetTable {
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> emptyColumns = ObservableCollection.of(planetColumnType);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> planetColumns = ObservableCollection
 			.flattenCollections(planetColumnType, //
-				basicPlanetColumns, //
+				initPlanetColumns, //
 				ObservableCollection.flattenValue(showFields.map(show -> show ? fieldColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(showTemps.map(show -> show ? tempColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(showMines.map(show -> show ? mineColumns : emptyColumns)), //
@@ -487,7 +489,9 @@ public class PlanetTable {
 				ObservableCollection.flattenValue(showDefense.map(show -> show ? defenseColumns : emptyColumns)), //
 				ObservableCollection.flattenValue(showMoonInfo.combine((m, f) -> (m && f) ? moonFieldColumns : emptyColumns, showFields)), //
 				ObservableCollection.flattenValue(showMoonInfo.map(show -> show ? moonBuildings : emptyColumns)), //
-				ObservableCollection.flattenValue(showMoonInfo.combine((m, d) -> (m && d) ? moonDefenseColumns : emptyColumns, showDefense)) //
+				ObservableCollection
+					.flattenValue(showMoonInfo.combine((m, d) -> (m && d) ? moonDefenseColumns : emptyColumns, showDefense)), //
+				lastPlanetColumns
 			).collect();
 
 		ObservableCollection<Research> researchColl = ObservableCollection.flattenValue(theUniGui.getSelectedAccount()
@@ -556,7 +560,7 @@ public class PlanetTable {
 				planetTable -> planetTable.fill().withItemName("planet").withAdaptiveHeight(6, 30, 50)//
 					.decorate(d -> d.withTitledBorder("Planets", Color.black))//
 					// This is a little hacky, but the next line tells the column the item name
-					.withColumns(basicPlanetColumns)
+					.withColumns(initPlanetColumns)
 					// function
 					.withNameColumn(p -> p.planet == null ? "Totals" : p.planet.getName(), (p, name) -> p.planet.setName(name), false,
 						nameCol -> nameCol.withWidths(50, 100, 150).decorate((cell, decorator) -> {
@@ -579,6 +583,8 @@ public class PlanetTable {
 									p.planet.setCurrentUpgrade(null);
 								}
 							})))//
+					// This is a little hacky, but the next line adds the movement columns
+					.withColumns(lastPlanetColumns).withMove(true, null).withMove(false, null)//
 					.withColumns(planetColumns)//
 					.withSelection(theSelectedPlanet, false)//
 					.withAdd(() -> theUniGui.createPlanet(), null)//
