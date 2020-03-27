@@ -525,7 +525,18 @@ public class PlanetTable {
 					.withColumn(intResearchColumn("Energy", Research::getEnergy, Research::setEnergy, 60))//
 					.withColumn(intResearchColumn("Laser", Research::getLaser, Research::setLaser, 55))//
 					.withColumn(intResearchColumn("Ion", Research::getIon, Research::setIon, 35))//
-					.withColumn(intResearchColumn("Hyperspace", Research::getHyperspace, Research::setHyperspace, 75))//
+					.withColumn(intResearchColumn("Hyperspace", Research::getHyperspace, Research::setHyperspace, 75)//
+						.withValueTooltip((r, v) -> "<html>LC Capacity: "
+							+ theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.LargeCargo,
+								theUniGui.getSelectedAccount().get())
+							+ "<br>"//
+							+ "SC Capacity: "
+							+ theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.SmallCargo,
+								theUniGui.getSelectedAccount().get())
+							+ "<br>"//
+							+ "Recycler Capacity: " + theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.Recycler,
+								theUniGui.getSelectedAccount().get())//
+					))//
 					.withColumn(intResearchColumn("Plasma", Research::getPlasma, Research::setPlasma, 60))//
 					.withColumn(intResearchColumn("Combustion", Research::getCombustionDrive, Research::setCombustionDrive, 65))//
 					.withColumn(intResearchColumn("Impulse", Research::getImpulseDrive, Research::setImpulseDrive, 60))//

@@ -30,6 +30,9 @@ public class OGameFleet710 implements FleetRules {
 			case LargeCargo:
 				shipInfo.put(type, new ShipInfo(25000));
 				break;
+			case Recycler:
+				shipInfo.put(type, new ShipInfo(20000));
+				break;
 			}
 		}
 		SHIP_INFO = Collections.unmodifiableMap(shipInfo);
