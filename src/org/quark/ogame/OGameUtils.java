@@ -5,7 +5,7 @@ import java.text.DecimalFormat;
 import org.qommons.io.Format;
 
 public class OGameUtils {
-	private static final Format<Double> FORMAT = Format.doubleFormat(5).printIntFor(6, false).withExpCondition(4, 0)//
+	public static final Format<Double> FORMAT = Format.doubleFormat(5).printIntFor(6, false).withExpCondition(4, 0)//
 		.withPrefix("K", 3)//
 		.withPrefix("M", 6)//
 		.withPrefix("B", 9)//

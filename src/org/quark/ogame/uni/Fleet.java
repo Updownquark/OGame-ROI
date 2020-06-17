@@ -49,7 +49,7 @@ public interface Fleet extends ShipyardItemSet {
 	@Override
 	default int getItems(ShipyardItemType type) {
 		if (!type.mobile) {
-			throw new IllegalArgumentException(type + " is not a mobile ship");
+			return 0;
 		}
 		switch (type) {
 		case LightFighter:

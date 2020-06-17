@@ -25,4 +25,13 @@ public interface Universe extends Nameable {
 	Universe setCrawlerCap(int crawlerCap);
 
 	TradeRatios getTradeRatios();
+
+	int getGalaxies();
+	Universe setGalaxies(int galaxies);
+
+	boolean isCircularUniverse();
+	Universe setCircularUniverse(boolean circular);
+
+	boolean isCircularGalaxies();
+	Universe setCircularGalaxies(boolean circular);
 }

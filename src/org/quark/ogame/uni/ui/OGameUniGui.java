@@ -48,6 +48,7 @@ import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
 import org.quark.ogame.OGameUtils;
+import org.quark.ogame.roi.OGameRoiSettings;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.AccountUpgrade;
@@ -82,6 +83,7 @@ public class OGameUniGui extends JPanel {
 
 	private final HoldingsPanel theHoldingsPanel;
 	private final PlanetTable thePlanetPanel;
+	private final FlightPanel theFlightPanel;
 
 	public OGameUniGui(ObservableConfig config, List<OGameRuleSet> ruleSets, ObservableValueSet<Account> accounts) {
 		theConfig = config;
@@ -166,6 +168,7 @@ public class OGameUniGui extends JPanel {
 
 		thePlanetPanel = new PlanetTable(this);
 		theHoldingsPanel = new HoldingsPanel(this);
+		theFlightPanel = new FlightPanel(this);
 
 		initComponents();
 	}
@@ -208,7 +211,7 @@ public class OGameUniGui extends JPanel {
 			.with(Planet::getFusionReactorUtilization, 100)//
 			.with(Planet::getCrawlerUtilization, 100)//
 			.create();
-		return thePlanets.getElementsBySource(newPlanet.getElementId()).getFirst().get();
+		return thePlanets.getElementsBySource(newPlanet.getElementId(), theSelectedAccount.get().getPlanets().getValues()).getFirst().get();
 	}
 
 	public PlanetTable getPlanetPanel() {
@@ -337,6 +340,25 @@ public class OGameUniGui extends JPanel {
 										(account, speed) -> account.getUniverse().setFleetSpeed(speed), null),
 									SpinnerFormat.INT, f -> f.withPostLabel("x").modifyEditor(tf -> tf.withColumns(2)))//
 								)//
+										.addHPanel("Galaxies:",
+											new JustifiedBoxLayout(false).setMainAlignment(JustifiedBoxLayout.Alignment.LEADING),
+											galaxyPanel -> galaxyPanel//
+												.addTextField("Galaxies:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().INT,
+														account -> account.getUniverse().getGalaxies(),
+														(account, galaxies) -> account.getUniverse().setGalaxies(galaxies), null), //
+													SpinnerFormat.INT, tf -> tf.modifyEditor(tf2 -> tf2.withColumns(1)))//
+												.addCheckField("Circular Universe:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
+														account -> account.getUniverse().isCircularUniverse(),
+														(account, circular) -> account.getUniverse().setCircularUniverse(circular), null),
+													null)//
+												.addCheckField("Circular Galaxies:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
+														account -> account.getUniverse().isCircularGalaxies(),
+														(account, circular) -> account.getUniverse().setCircularGalaxies(circular), null),
+													null)//
+										)//
 							.addComboField("Account Class:",
 								theSelectedAccount.asFieldEditor(TypeTokens.get().of(AccountClass.class), Account::getGameClass,
 									Account::setGameClass, null),
@@ -454,6 +476,8 @@ public class OGameUniGui extends JPanel {
 														+ "<li>Click this button and select the saved file</li>"//
 														+ "</li></ul></html>"))//
 									)//
+										.addButton("Test ROI",
+											__ -> new OGameRoiSettings(theSelectedRuleSet.get(), theSelectedAccount.get()).test(15), null)//
 							, acctSettingsTab -> acctSettingsTab.setName("Settings"))//
 								.withVTab("planets", acctBuildingsPanel -> thePlanetPanel.addPlanetTable(acctBuildingsPanel)//
 									, acctBuildingsTab -> acctBuildingsTab.setName("Builds"))//
@@ -463,6 +487,7 @@ public class OGameUniGui extends JPanel {
 				// constructionTab -> constructionTab.setName("Construction"))//
 								.withVTab("resources", resPanel -> theHoldingsPanel.addPanel(resPanel),
 									resTab -> resTab.setName("Resources"))//
+								.withVTab("flights", theFlightPanel::addFlightPanel, flightsTab -> flightsTab.setName("Flights"))
 						))//
 			);
 	}
