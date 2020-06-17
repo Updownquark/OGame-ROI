@@ -427,7 +427,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 						.withRequirement(AccountUpgradeType.Shipyard, 1)//
 						.withRequirement(AccountUpgradeType.Shielding, 2));
 				break;
-			case LargeSheild:
+			case LargeShield:
 				costs.put(upgrade,
 					new CostDescrip(50000, 50000, 0).withEcoWeight(0)//
 						.withRequirement(AccountUpgradeType.Shipyard, 6)//

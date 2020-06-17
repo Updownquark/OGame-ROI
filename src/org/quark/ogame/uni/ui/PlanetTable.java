@@ -22,6 +22,7 @@ import org.observe.util.swing.PanelPopulation;
 import org.qommons.ArrayUtils;
 import org.qommons.TimeUtils;
 import org.qommons.collect.BetterList;
+import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
 import org.quark.ogame.OGameUtils;
@@ -34,6 +35,7 @@ import org.quark.ogame.uni.Moon;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
 import org.quark.ogame.uni.Planet;
+import org.quark.ogame.uni.PlannedUpgrade;
 import org.quark.ogame.uni.Research;
 import org.quark.ogame.uni.ResearchType;
 import org.quark.ogame.uni.ResourceType;
@@ -114,15 +116,19 @@ public class PlanetTable {
 
 		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).build();
 
-		ObservableCollection<AccountUpgrade> upgrades = ObservableCollection.build(AccountUpgrade.class).safe(false).build();
+		ObservableCollection<PlannedAccountUpgrade> calculatedUpgrades = ObservableCollection.build(PlannedAccountUpgrade.class).safe(false)
+			.build();
 		Observable.or(theUniGui.getSelectedAccount().changes(), theUniGui.getReferenceAccount().noInitChanges()).act(__ -> {
 			Account account = theUniGui.getSelectedAccount().get();
 			Account refAcct = theUniGui.getReferenceAccount().get();
 			if (account == null || refAcct == null) {
-				upgrades.clear();
+				calculatedUpgrades.clear();
 				return;
 			}
-			List<AccountUpgrade> newUpgrades = new ArrayList<>();
+			List<PlannedAccountUpgrade> newUpgrades = new ArrayList<>();
+			// for (PlannedUpgrade upgrade : theUniGui.getSelectedAccount().get().getPlannedUpgrades().getValues()) { TODO
+			// newUpgrades.add(new PlannedAccountUpgrade(upgrade));
+			// }
 			for (AccountUpgradeType type : AccountUpgradeType.values()) {
 				if (type.type == UpgradeType.Research) {
 					int fromLevel = refAcct.getResearch().getResearchLevel(type.research);
@@ -132,7 +138,7 @@ public class PlanetTable {
 					int toLevel = account.getResearch().getResearchLevel(type.research);
 					if (fromLevel != toLevel) {
 						UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, null, type, fromLevel, toLevel);
-						newUpgrades.add(new AccountUpgrade(type, null, false, fromLevel, toLevel, cost));
+						newUpgrades.add(new PlannedAccountUpgrade(type, null, false, fromLevel, toLevel, cost));
 					}
 				} else {
 					for (int p = 0; p < account.getPlanets().getValues().size(); p++) {
@@ -147,7 +153,7 @@ public class PlanetTable {
 						if (fromLevel != toLevel) {
 							UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, planet, type, fromLevel,
 								toLevel);
-							newUpgrades.add(new AccountUpgrade(type, planet, false, fromLevel, toLevel, cost));
+							newUpgrades.add(new PlannedAccountUpgrade(type, planet, false, fromLevel, toLevel, cost));
 						}
 
 						Moon moon = planet.getMoon();
@@ -159,30 +165,32 @@ public class PlanetTable {
 						toLevel = type.getLevel(account, moon);
 						if (fromLevel != toLevel) {
 							UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(account, moon, type, fromLevel, toLevel);
-							newUpgrades.add(new AccountUpgrade(type, planet, true, fromLevel, toLevel, cost));
+							newUpgrades.add(new PlannedAccountUpgrade(type, planet, true, fromLevel, toLevel, cost));
 						}
 					}
 				}
 			}
 
-			ArrayUtils.adjust(upgrades, newUpgrades, new ArrayUtils.DifferenceListener<AccountUpgrade, AccountUpgrade>() {
+			ArrayUtils.adjust(calculatedUpgrades, newUpgrades,
+				new ArrayUtils.DifferenceListener<PlannedAccountUpgrade, PlannedAccountUpgrade>() {
 				@Override
-				public boolean identity(AccountUpgrade o1, AccountUpgrade o2) {
+					public boolean identity(PlannedAccountUpgrade o1, PlannedAccountUpgrade o2) {
 					return o1.equals(o2);
 				}
 
 				@Override
-				public AccountUpgrade added(AccountUpgrade o, int mIdx, int retIdx) {
+					public PlannedAccountUpgrade added(PlannedAccountUpgrade o, int mIdx, int retIdx) {
 					return o;
 				}
 
 				@Override
-				public AccountUpgrade removed(AccountUpgrade o, int oIdx, int incMod, int retIdx) {
+					public PlannedAccountUpgrade removed(PlannedAccountUpgrade o, int oIdx, int incMod, int retIdx) {
 					return null;
 				}
 
 				@Override
-				public AccountUpgrade set(AccountUpgrade o1, int idx1, int incMod, AccountUpgrade o2, int idx2, int retIdx) {
+					public PlannedAccountUpgrade set(PlannedAccountUpgrade o1, int idx1, int incMod, PlannedAccountUpgrade o2, int idx2,
+						int retIdx) {
 					return o1;
 				}
 			});
@@ -193,7 +201,7 @@ public class PlanetTable {
 				UpgradeCost cost = UpgradeCost.ZERO;
 				PlanetWithProduction selectedPlanet = theSelectedPlanet.get();
 				if (selectedPlanet != null) {
-					for (AccountUpgrade upgrade : upgrades) {
+					for (AccountUpgrade upgrade : calculatedUpgrades) {
 						if (upgrade.getPlanet() == selectedPlanet.planet) {
 							cost = cost.plus(upgrade.getCost());
 						}
@@ -206,7 +214,7 @@ public class PlanetTable {
 			@Override
 			public UpgradeCost getCost() {
 				UpgradeCost cost = UpgradeCost.ZERO;
-				for (AccountUpgrade upgrade : upgrades) {
+				for (AccountUpgrade upgrade : calculatedUpgrades) {
 					cost = cost.plus(upgrade.getCost());
 				}
 				return cost;
@@ -222,7 +230,7 @@ public class PlanetTable {
 			}
 		});
 		theUpgrades = ObservableCollection.flattenCollections(TypeTokens.get().of(AccountUpgrade.class), //
-			upgrades.flow().refresh(theSelectedPlanet.noInitChanges()).collect(), //
+			calculatedUpgrades.flow().refresh(theSelectedPlanet.noInitChanges()).collect(), //
 			totalUpgrades).collect();
 	}
 
@@ -454,7 +462,7 @@ public class PlanetTable {
 			shipColumn("IC", ShipyardItemType.IonCannon, false, 55), //
 			shipColumn("PT", ShipyardItemType.PlasmaTurret, false, 55), //
 			shipColumn("SS", ShipyardItemType.SmallShield, false, 55), //
-			shipColumn("LS", ShipyardItemType.LargeSheild, false, 55), //
+			shipColumn("LS", ShipyardItemType.LargeShield, false, 55), //
 			shipColumn("ABM", ShipyardItemType.AntiBallisticMissile, false, 55), //
 			shipColumn("IPM", ShipyardItemType.InterPlanetaryMissile, false, 55) //
 		);
@@ -466,7 +474,7 @@ public class PlanetTable {
 			shipColumn("IC", ShipyardItemType.IonCannon, true, 55), //
 			shipColumn("PT", ShipyardItemType.PlasmaTurret, true, 55), //
 			shipColumn("SS", ShipyardItemType.SmallShield, true, 55), //
-			shipColumn("LS", ShipyardItemType.LargeSheild, true, 55) //
+			shipColumn("LS", ShipyardItemType.LargeShield, true, 55) //
 		);
 
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> emptyColumns = ObservableCollection.of(planetColumnType);
@@ -634,8 +642,8 @@ public class PlanetTable {
 									utilColumn -> utilColumn.withWidths(60, 60, 60)
 										.withMutation(m -> m.mutateAttribute((row, u) -> setUtilization(theSelectedPlanet.get(), row, u))
 											.editableIf((row, u) -> isUtilEditable(row))
-											.asCombo(s -> s, ObservableCollection.of(TypeTokens.get().STRING, "0%", "10%", "20%", "30%",
-												"40%", "50%", "60%", "70%", "80%", "90%", "100%"))
+											.asCombo(s -> s, ObservableCollection.of(TypeTokens.get().STRING, "100%", "90%", "80%", "70%",
+												"60%", "50%", "40%", "30%", "20%", "10%", "0%"))
 											.clicks(1)))//
 					)//
 					)//
@@ -791,6 +799,26 @@ public class PlanetTable {
 			RockyBody target = moon ? planet.getMoon() : planet;
 			target.setStationedShips(type, value);
 		}, width);
+	}
+
+	class PlannedAccountUpgrade extends AccountUpgrade {
+		CollectionElement<PlannedUpgrade> planned;
+
+		PlannedAccountUpgrade(AccountUpgradeType upgradeType, Planet planet, boolean moon, int fromLevel, int toLevel, UpgradeCost cost) {
+			super(upgradeType, planet, moon, fromLevel, toLevel, cost);
+		}
+
+		void setPlanned(boolean planned) {
+			if (planned && this.planned == null) {
+				this.planned = theUniGui.getSelectedAccount().get().getPlannedUpgrades().create()//
+					.with(PlannedUpgrade::getType, getType())//
+					.with(PlannedUpgrade::getLocation, isMoon() ? getPlanet().getMoon() : getPlanet())//
+					.create();
+			} else if (!planned && this.planned != null) {
+				theUniGui.getSelectedAccount().get().getPlannedUpgrades().getValues().mutableElement(this.planned.getElementId()).remove();
+				this.planned = null;
+			}
+		}
 	}
 
 	// private static final Format<int []> COORD_FORMAT=Format. TODO

@@ -29,7 +29,7 @@ public enum ShipyardItemType {
 	IonCannon(false, true), //
 	PlasmaTurret(false, true), //
 	SmallShield(false, true), //
-	LargeSheild(false, true), //
+	LargeShield(false, true), //
 	AntiBallisticMissile(false, true), //
 	InterPlanetaryMissile(false, true);
 

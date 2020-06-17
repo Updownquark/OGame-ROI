@@ -74,7 +74,7 @@ public enum AccountUpgradeType {
 	IonCannon(ShipyardItem), //
 	PlasmaTurret(ShipyardItem), //
 	SmallShield(ShipyardItem), //
-	LargeSheild(ShipyardItem), //
+	LargeShield(ShipyardItem), //
 	AntiBallisticMissile(ShipyardItem), //
 	InterPlanetaryMissile(ShipyardItem);
 

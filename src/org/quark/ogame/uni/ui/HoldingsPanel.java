@@ -599,7 +599,7 @@ public class HoldingsPanel {
 							}
 						}).withMutation(metalMutation -> {
 							metalMutation.mutateAttribute((h, m) -> h.setMetal((long) (m * 1E6))).editableIf((h, n) -> {
-								if (h instanceof SyntheticHolding) {
+								if (h instanceof SyntheticTrade) {
 									return false;
 								} else {
 									return h.getType() != ResourceType.Metal;
@@ -620,7 +620,7 @@ public class HoldingsPanel {
 							}
 						}).withMutation(crystalMutation -> {
 							crystalMutation.mutateAttribute((h, c) -> h.setCrystal((long) (c * 1E6))).editableIf((h, n) -> {
-								if (h instanceof SyntheticHolding) {
+								if (h instanceof SyntheticTrade) {
 									return false;
 								} else {
 									return h.getType() != ResourceType.Crystal;
@@ -641,7 +641,7 @@ public class HoldingsPanel {
 							}
 						}).withMutation(metalMutation -> {
 							metalMutation.mutateAttribute((h, d) -> h.setDeuterium((long) (d * 1E6))).editableIf((h, n) -> {
-								if (h instanceof SyntheticHolding) {
+								if (h instanceof SyntheticTrade) {
 									return false;
 								} else {
 									return h.getType() != ResourceType.Deuterium;

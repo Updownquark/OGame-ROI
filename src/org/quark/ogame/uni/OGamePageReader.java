@@ -705,7 +705,7 @@ public class OGamePageReader {
 			type = ShipyardItemType.SmallShield;
 			break;
 		case 408:
-			type = ShipyardItemType.LargeSheild;
+			type = ShipyardItemType.LargeShield;
 			break;
 
 		case 502:

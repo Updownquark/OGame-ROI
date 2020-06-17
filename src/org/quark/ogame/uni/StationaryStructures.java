@@ -62,7 +62,7 @@ public interface StationaryStructures extends ShipyardItemSet {
 			return getPlasmaTurrets();
 		case SmallShield:
 			return getSmallShieldDomes();
-		case LargeSheild:
+		case LargeShield:
 			return getLargeShieldDomes();
 		case AntiBallisticMissile:
 			return getAntiBallisticMissiles();
@@ -97,7 +97,7 @@ public interface StationaryStructures extends ShipyardItemSet {
 			return setPlasmaTurrets(number);
 		case SmallShield:
 			return setSmallShieldDomes(number);
-		case LargeSheild:
+		case LargeShield:
 			return setLargeShieldDomes(number);
 		case AntiBallisticMissile:
 			return setAntiBallisticMissiles(number);
