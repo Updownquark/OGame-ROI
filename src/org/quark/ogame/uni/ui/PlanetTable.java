@@ -21,7 +21,6 @@ import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.PanelPopulation;
 import org.qommons.ArrayUtils;
 import org.qommons.TimeUtils;
-import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
@@ -261,35 +260,58 @@ public class PlanetTable {
 		theTotalProduction.mutableElement(theTotalProduction.getTerminalElement(true).getElementId()).set(total);
 	}
 
+	static final String UPGRADE_DONE = "Done";
+
 	public void addPlanetTable(PanelPopulation.PanelPopulator<?, ?> panel) {
 		ObservableCollection<Integer> usageOptions = ObservableCollection.of(TypeTokens.get().INT, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
 			0);
 		ObservableCollection<Integer> itemOptions = ObservableCollection.of(TypeTokens.get().INT, 30, 20, 10, 0);
 
-		List<Object> planetUpgradeList = new ArrayList<>();
-		List<Object> moonUpgradeList = new ArrayList<>();
-		planetUpgradeList.add("None");
-		moonUpgradeList.add("None");
+		ObservableCollection<Object> planetUpgrades = ObservableCollection.build(Object.class).safe(false).build();
+		ObservableCollection<Object> moonUpgrades = ObservableCollection.build(Object.class).safe(false).build();
+		planetUpgrades.add("None");
+		moonUpgrades.add("None");
 		for (BuildingType b : BuildingType.values()) {
 			if (b.isPlanetBuilding) {
-				planetUpgradeList.add(b);
+				planetUpgrades.add(b);
 			}
 			if (b.isMoonBuilding) {
-				moonUpgradeList.add(b);
+				moonUpgrades.add(b);
 			}
 		}
-		ObservableCollection<Object> planetUpgrades = ObservableCollection.build(Object.class).withBacking(BetterList.of(planetUpgradeList))
-			.build();
-		ObservableCollection<Object> moonUpgrades = ObservableCollection.build(Object.class).withBacking(BetterList.of(moonUpgradeList))
-			.build();
+		theSelectedPlanet.changes().act(evt -> {
+			boolean currentlyHasDone = UPGRADE_DONE.equals(planetUpgrades.peekFirst());
+			boolean shouldHaveDone = evt.getNewValue() != null && evt.getNewValue().planet.getCurrentUpgrade() != null;
+			if (currentlyHasDone && !shouldHaveDone) {
+				planetUpgrades.removeFirst();
+			} else if (!currentlyHasDone && shouldHaveDone) {
+				planetUpgrades.addFirst(UPGRADE_DONE);
+			}
 
-		List<Object> researchUpgradeList = new ArrayList<>();
-		researchUpgradeList.add("None");
+			currentlyHasDone = UPGRADE_DONE.equals(moonUpgrades.peekFirst());
+			shouldHaveDone = evt.getNewValue() != null && evt.getNewValue().planet.getMoon().getCurrentUpgrade() != null;
+			if (currentlyHasDone && !shouldHaveDone) {
+				moonUpgrades.removeFirst();
+			} else if (!currentlyHasDone && shouldHaveDone) {
+				moonUpgrades.addFirst(UPGRADE_DONE);
+			}
+		});
+
+		ObservableCollection<Object> researchUpgrades = ObservableCollection.build(Object.class).safe(false).build();
+		researchUpgrades.add("None");
 		for (ResearchType r : ResearchType.values()) {
-			researchUpgradeList.add(r);
+			researchUpgrades.add(r);
 		}
-		ObservableCollection<Object> researchUpgrades = ObservableCollection.build(Object.class)
-			.withBacking(BetterList.of(researchUpgradeList)).build();
+
+		theUniGui.getSelectedAccount().changes().act(evt -> {
+			boolean currentlyHasDone = UPGRADE_DONE.equals(researchUpgrades.peekFirst());
+			boolean shouldHaveDone = evt.getNewValue() != null && evt.getNewValue().getResearch().getCurrentUpgrade() != null;
+			if (currentlyHasDone && !shouldHaveDone) {
+				researchUpgrades.removeFirst();
+			} else if (!currentlyHasDone && shouldHaveDone) {
+				researchUpgrades.addFirst(UPGRADE_DONE);
+			}
+		});
 
 		TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>> planetColumnType = new TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>>() {};
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> initPlanetColumns = ObservableCollection
@@ -434,18 +456,24 @@ public class PlanetTable {
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonBuildings = ObservableCollection.of(planetColumnType,
 			new CategoryRenderStrategy<PlanetWithProduction, Object>("Upgrd", TypeTokens.get().OBJECT,
 				p -> p.planet == null ? null : p.planet.getMoon().getCurrentUpgrade())//
-					.withWidths(40, 40, 40).formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName)
+					.withWidths(45, 45, 45).formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName)
 					.withMutation(m -> m.asCombo(bdg -> {
 						if (bdg instanceof BuildingType) {
 							return ((BuildingType) bdg).shortName;
+						} else if (bdg != null) {
+							return bdg.toString();
 						} else {
-							return "None";
+							return "";
 						}
 					}, moonUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
 						if (bdg instanceof BuildingType) {
 							p.planet.getMoon().setCurrentUpgrade((BuildingType) bdg);
 						} else {
+							BuildingType upgrade = p.planet.getMoon().getCurrentUpgrade();
 							p.planet.getMoon().setCurrentUpgrade(null);
+							if (UPGRADE_DONE.equals(bdg)) {
+								upgrade(p.planet.getMoon(), upgrade.getUpgrade());
+							}
 						}
 					})), //
 			intMoonColumn("Lunar Base", true, Moon::getLunarBase, Moon::setLunarBase, 60), //
@@ -517,17 +545,25 @@ public class PlanetTable {
 				researchTable -> researchTable.fill().withAdaptiveHeight(1, 1, 1).decorate(d -> d.withTitledBorder("Research", Color.black))//
 					.withColumn("Upgrd", Object.class, r -> r.getCurrentUpgrade(), upgradeCol -> upgradeCol.withWidths(60, 60, 60)
 						.withHeaderTooltip("Current Research Upgrade")
-						.formatText(rsrch -> rsrch == null ? "" : ((ResearchType) rsrch).shortName).withMutation(m -> m.asCombo(bdg -> {
-							if (bdg instanceof ResearchType) {
-								return ((ResearchType) bdg).shortName;
+						.formatText(rsrch -> rsrch == null ? "" : ((ResearchType) rsrch).shortName).withMutation(m -> m.asCombo(rsrch -> {
+							if (rsrch instanceof ResearchType) {
+								return ((ResearchType) rsrch).shortName;
+							} else if (rsrch != null) {
+								return rsrch.toString();
 							} else {
-								return "None";
+								return "";
 							}
 						}, researchUpgrades).clicks(1).mutateAttribute((r, rsrch) -> {
 							if (rsrch instanceof ResearchType) {
 								r.setCurrentUpgrade((ResearchType) rsrch);
 							} else {
+								ResearchType upgrade = r.getCurrentUpgrade();
 								r.setCurrentUpgrade(null);
+								if (UPGRADE_DONE.equals(rsrch)) {
+									upgrade(null, upgrade.getUpgrade());
+									researchColl.mutableElement(researchColl.getTerminalElement(true).getElementId())//
+										.set(theUniGui.getSelectedAccount().get().getResearch());
+								}
 							}
 						})))//
 					.withColumn(intResearchColumn("Energy", Research::getEnergy, Research::setEnergy, 60))//
@@ -588,18 +624,24 @@ public class PlanetTable {
 							}
 						}))//
 					.withColumn("Upgrd", Object.class, p -> p.planet == null ? null : p.planet.getCurrentUpgrade(),
-						upgradeCol -> upgradeCol.withWidths(40, 40, 40).withHeaderTooltip("Current Building Upgrade")
+						upgradeCol -> upgradeCol.withWidths(45, 45, 45).withHeaderTooltip("Current Building Upgrade")
 							.formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName).withMutation(m -> m.asCombo(bdg -> {
 								if (bdg instanceof BuildingType) {
 									return ((BuildingType) bdg).shortName;
+								} else if (bdg != null) {
+									return bdg.toString();
 								} else {
-									return "None";
+									return "";
 								}
 							}, planetUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
 								if (bdg instanceof BuildingType) {
 									p.planet.setCurrentUpgrade((BuildingType) bdg);
 								} else {
+									BuildingType upgrade = p.planet.getCurrentUpgrade();
 									p.planet.setCurrentUpgrade(null);
+									if (UPGRADE_DONE.equals(bdg)) {
+										upgrade(p.planet, upgrade.getUpgrade());
+									}
 								}
 							})))//
 					// This is a little hacky, but the next line adds the movement columns
@@ -799,6 +841,12 @@ public class PlanetTable {
 			RockyBody target = moon ? planet.getMoon() : planet;
 			target.setStationedShips(type, value);
 		}, width);
+	}
+
+	void upgrade(RockyBody target, AccountUpgradeType upgrade) {
+		Account account = theUniGui.getSelectedAccount().get();
+		int currentLevel = upgrade.getLevel(account, target);
+		upgrade.setLevel(account, target, currentLevel + 1);
 	}
 
 	class PlannedAccountUpgrade extends AccountUpgrade {

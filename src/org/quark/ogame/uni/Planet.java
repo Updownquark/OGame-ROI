@@ -15,49 +15,64 @@ public interface Planet extends RockyBody {
 
 	Moon getMoon();
 
+	@Override
+	Planet setName(String name);
+	@Override
+	Planet setRoboticsFactory(int roboticsFactory);
+	@Override
+	Planet setShipyard(int shipyard);
+	@Override
+	Planet setCurrentUpgrade(BuildingType building);
+
+	@Override
+	default Planet setStationedShips(ShipyardItemType type, int count) {
+		RockyBody.super.setStationedShips(type, count);
+		return this;
+	}
+
 	// Resources
 	int getMetalMine();
-	void setMetalMine(int metalMine);
+	Planet setMetalMine(int metalMine);
 
 	int getCrystalMine();
-	void setCrystalMine(int crystalMine);
+	Planet setCrystalMine(int crystalMine);
 
 	int getDeuteriumSynthesizer();
-	void setDeuteriumSynthesizer(int deutSynth);
+	Planet setDeuteriumSynthesizer(int deutSynth);
 
 	int getSolarPlant();
-	void setSolarPlant(int solarPlant);
+	Planet setSolarPlant(int solarPlant);
 
 	int getFusionReactor();
-	void setFusionReactor(int fusionReactor);
+	Planet setFusionReactor(int fusionReactor);
 
 	int getMetalStorage();
-	void setMetalStorage(int metalStorage);
+	Planet setMetalStorage(int metalStorage);
 
 	int getCrystalStorage();
-	void setCrystalStorage(int crystalStorage);
+	Planet setCrystalStorage(int crystalStorage);
 
 	int getDeuteriumStorage();
-	void setDeuteriumStorage(int deuteriumStorage);
+	Planet setDeuteriumStorage(int deuteriumStorage);
 
 	// Facilities
 	int getResearchLab();
-	void setResearchLab(int researchLab);
+	Planet setResearchLab(int researchLab);
 
 	int getAllianceDepot();
-	void setAllianceDepot(int allianceDepot);
+	Planet setAllianceDepot(int allianceDepot);
 
 	int getMissileSilo();
-	void setMissileSilo(int missileSilo);
+	Planet setMissileSilo(int missileSilo);
 
 	int getNaniteFactory();
-	void setNaniteFactory(int naniteFactory);
+	Planet setNaniteFactory(int naniteFactory);
 
 	int getTerraformer();
-	void setTerraformer(int terraformer);
+	Planet setTerraformer(int terraformer);
 
 	int getSpaceDock();
-	void setSpaceDock(int spaceDock);
+	Planet setSpaceDock(int spaceDock);
 
 	@Override
 	default int getBuildingLevel(BuildingType type) {
@@ -103,7 +118,7 @@ public interface Planet extends RockyBody {
 	}
 
 	@Override
-	default void setBuildingLevel(BuildingType type, int buildingLevel) {
+	default Planet setBuildingLevel(BuildingType type, int buildingLevel) {
 		switch (type) {
 		case MetalMine:
 			setMetalMine(buildingLevel);
@@ -160,6 +175,7 @@ public interface Planet extends RockyBody {
 				throw new IllegalArgumentException();
 			}
 		}
+		return this;
 	}
 
 	default int getSolarSatellites() {
@@ -181,15 +197,12 @@ public interface Planet extends RockyBody {
 	// Active Items
 
 	int getMetalBonus();
-
 	Planet setMetalBonus(int metalBonus);
 
 	int getCrystalBonus();
-
 	Planet setCrystalBonus(int crystalBonus);
 
 	int getDeuteriumBonus();
-
 	Planet setDeuteriumBonus(int deutBonus);
 
 	// Utilization Percentages

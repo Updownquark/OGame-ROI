@@ -10,13 +10,13 @@ public interface Moon extends RockyBody {
 
 	// Facilities
 	int getLunarBase();
-	void setLunarBase(int lunarBase);
+	Moon setLunarBase(int lunarBase);
 
 	int getSensorPhalanx();
-	void setSensorPhalanx(int sensorPhalanx);
+	Moon setSensorPhalanx(int sensorPhalanx);
 
 	int getJumpGate();
-	void setJumpGate(int jumpGate);
+	Moon setJumpGate(int jumpGate);
 
 	@Override
 	default int getBuildingLevel(BuildingType type) {
@@ -37,7 +37,7 @@ public interface Moon extends RockyBody {
 	}
 
 	@Override
-	default void setBuildingLevel(BuildingType type, int buildingLevel) {
+	default Moon setBuildingLevel(BuildingType type, int buildingLevel) {
 		switch (type) {
 		case RoboticsFactory:
 			setRoboticsFactory(buildingLevel);
@@ -59,10 +59,11 @@ public interface Moon extends RockyBody {
 				throw new IllegalArgumentException();
 			}
 		}
+		return this;
 	}
 
 	int getFieldBonus();
-	void setFieldBonus(int fieldBonus);
+	Moon setFieldBonus(int fieldBonus);
 
 	@Override
 	default int getUsedFields() {

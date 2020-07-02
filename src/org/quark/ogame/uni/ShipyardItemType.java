@@ -40,4 +40,8 @@ public enum ShipyardItemType {
 		this.mobile = mobile;
 		this.defense = defense;
 	}
+
+	public AccountUpgradeType getUpgrade() {
+		return AccountUpgradeType.getShipyardItemUpgrade(this);
+	}
 }

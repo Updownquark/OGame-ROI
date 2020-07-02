@@ -32,7 +32,7 @@ import org.observe.collect.CollectionChangeType;
 import org.observe.collect.ObservableCollection;
 import org.observe.config.ObservableConfig;
 import org.observe.config.ObservableConfigFormat;
-import org.observe.config.ObservableValueSet;
+import org.observe.config.SyncValueSet;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.CategoryRenderStrategy;
 import org.observe.util.swing.JustifiedBoxLayout;
@@ -69,7 +69,7 @@ import org.xml.sax.SAXException;
 public class OGameUniGui extends JPanel {
 	private final ObservableConfig theConfig;
 	private final List<OGameRuleSet> theRuleSets;
-	private final ObservableValueSet<Account> theAccounts;
+	private final SyncValueSet<Account> theAccounts;
 	private final SettableValue<OGameRuleSet> theSelectedRuleSet;
 	private final SettableValue<Account> theSelectedAccount;
 	private final SettableValue<Account> theReferenceAccount;
@@ -85,7 +85,7 @@ public class OGameUniGui extends JPanel {
 	private final PlanetTable thePlanetPanel;
 	private final FlightPanel theFlightPanel;
 
-	public OGameUniGui(ObservableConfig config, List<OGameRuleSet> ruleSets, ObservableValueSet<Account> accounts) {
+	public OGameUniGui(ObservableConfig config, List<OGameRuleSet> ruleSets, SyncValueSet<Account> accounts) {
 		theConfig = config;
 		theRuleSets = ruleSets;
 		theAccounts = accounts;
@@ -99,10 +99,10 @@ public class OGameUniGui extends JPanel {
 		}, OGameRuleSet::getName, null);
 		theSelectedAccount = config.asValue(Account.class).at("selected-account")
 			.withFormat(
-				ObservableConfigFormat
-				.<Account> buildReferenceFormat(fv -> accounts.getValues(), () -> accounts.getValues().peekFirst())//
-				.withField("id", Account::getId, ObservableConfigFormat.INT)//
-				.build()).buildValue(null);
+				ObservableConfigFormat.<Account> buildReferenceFormat(fv -> accounts.getValues(), () -> accounts.getValues().peekFirst())//
+					.withField("id", Account::getId, ObservableConfigFormat.INT)//
+					.build())
+			.buildValue(null);
 		theReferenceAccount = theSelectedAccount.refresh(theAccounts.getValues().simpleChanges()).map(TypeTokens.get().of(Account.class),
 			Account::getReferenceAccount, Account::getReferenceAccount, null);
 
@@ -250,96 +250,100 @@ public class OGameUniGui extends JPanel {
 		ObservableCollection<Account> referenceAccounts = ObservableCollection.flattenCollections(TypeTokens.get().of(Account.class), //
 			ObservableCollection.of(TypeTokens.get().of(Account.class), (Account) null), //
 			theAccounts.getValues().flow().refresh(theSelectedAccount.noInitChanges())
-			.filter(account -> account == theSelectedAccount.get() ? "Selected" : null).collect()//
-			).collect();
+				.filter(account -> account == theSelectedAccount.get() ? "Selected" : null).collect()//
+		).collect();
 		SettableValue<String> selectedTab = theConfig.asValue(String.class).at("selected-tab").withFormat(Format.TEXT, () -> "settings")
 			.buildValue(null);
 
 		PanelPopulation.populateVPanel(this, Observable.empty())//
-		.addSplit(true,
-			mainSplit -> mainSplit.withSplitLocation(150).fill().fillV()//
-			.firstV(accountSelectPanel -> accountSelectPanel//
-				.fill().addTable((ObservableCollection<Account>) theAccounts.getValues(),
-					accountTable -> accountTable//
-					.fill().withItemName("account")//
-					.withNameColumn(Account::getName, Account::setName, true,
-						nameColumn -> nameColumn.withWidths(50, 100, 300)//
-						.withMutation(nameMutator -> nameMutator.asText(SpinnerFormat.NUMERICAL_TEXT)))//
-					.withColumn("Universe", String.class, account -> account.getUniverse().getName(),
-						uniColumn -> uniColumn//
-						.withWidths(50, 100, 300)//
-						.withMutation(uniMutator -> uniMutator.mutateAttribute2((account, uniName) -> {
-							account.getUniverse().setName(uniName);
-							return uniName;
-						}).asText(Format.TEXT)))//
-					.withColumn("Planets", Integer.class, account -> account.getPlanets().getValues().size(), //
-						planetColumn -> planetColumn.withWidths(50, 50, 50))//
-					.withColumn("Reference", Account.class, Account::getReferenceAccount,
-						refColumn -> refColumn.withWidths(50, 100, 300)//
-						.formatText(account -> account == null ? "" : account.getName()))//
+			.addSplit(true,
+				mainSplit -> mainSplit.withSplitLocation(150).fill().fillV()//
+					.firstV(accountSelectPanel -> accountSelectPanel//
+						.fill().addTable((ObservableCollection<Account>) theAccounts.getValues(),
+							accountTable -> accountTable//
+								.fill().withItemName("account")//
+								.withNameColumn(Account::getName, Account::setName, true,
+									nameColumn -> nameColumn.withWidths(50, 100, 300)//
+										.withMutation(nameMutator -> nameMutator.asText(SpinnerFormat.NUMERICAL_TEXT)))//
+								.withColumn("Universe", String.class, account -> account.getUniverse().getName(),
+									uniColumn -> uniColumn//
+										.withWidths(50, 100, 300)//
+										.withMutation(uniMutator -> uniMutator.mutateAttribute2((account, uniName) -> {
+											account.getUniverse().setName(uniName);
+											return uniName;
+										}).asText(Format.TEXT)))//
+								.withColumn("Planets", Integer.class, account -> account.getPlanets().getValues().size(), //
+									planetColumn -> planetColumn.withWidths(50, 50, 50))//
+								.withColumn("Reference", Account.class, Account::getReferenceAccount,
+									refColumn -> refColumn.withWidths(50, 100, 300)//
+										.formatText(account -> account == null ? "" : account.getName()))//
 								.withColumn("Eco Points", String.class, account -> OGameUniGui.this.printPoints(account, PointType.Economy), //
 									pointsColumn -> pointsColumn.withWidths(75, 75, 75))//
 								.withColumn("Rsrch Points", String.class,
 									account -> OGameUniGui.this.printPoints(account, PointType.Research), //
-						pointsColumn -> pointsColumn.withWidths(75, 75, 75))//
-					.withSelection(theSelectedAccount, false)//
-					.withAdd(() -> initAccount(theAccounts.create()//
-						.with("name",
-							StringUtils.getNewItemName(theAccounts.getValues(), Account::getName, "New Account",
-								StringUtils.PAREN_DUPLICATES))//
-						.with("id", getNewId())//
-						.create().get()), null)//
-					.withRemove(accounts -> theAccounts.getValues().removeAll(accounts), action -> action//
-						.confirmForItems("Delete Accounts?", "Are you sure you want to delete ", null, true))//
-					.withCopy(account -> {
-						Account copy = theAccounts.copy(account).get();
-						copy.setId(getNewId());
-						copy.setName(StringUtils.getNewItemName(theAccounts.getValues(), Account::getName, account.getName(),
-							StringUtils.PAREN_DUPLICATES));
-						copy.setReferenceAccount(account);
-						return copy;
-					}, null)//
+									pointsColumn -> pointsColumn.withWidths(75, 75, 75))//
+								.withSelection(theSelectedAccount, false)//
+								.withAdd(() -> initAccount(theAccounts.create()//
+									.with("name",
+										StringUtils.getNewItemName(theAccounts.getValues(), Account::getName, "New Account",
+											StringUtils.PAREN_DUPLICATES))//
+									.with("id", getNewId())//
+									.create().get()), null)//
+								.withRemove(accounts -> theAccounts.getValues().removeAll(accounts),
+									action -> action//
+										.confirmForItems("Delete Accounts?", "Are you sure you want to delete ", null, true))//
+								.withCopy(account -> {
+									Account copy = theAccounts.create().copy(account)//
+										.with(Account::getId, getNewId())//
+										.with(Account::getName,
+											StringUtils.getNewItemName(theAccounts.getValues(), Account::getName, account.getName(),
+												StringUtils.PAREN_DUPLICATES))//
+										.with(Account::getReferenceAccount, account)//
+										.create().get();
+									return copy;
+								}, null)//
 					)//
-				).lastV(selectedAccountPanel -> selectedAccountPanel.visibleWhen(theSelectedAccount.map(account -> account != null))//
-					.addTabs(
+					).lastV(selectedAccountPanel -> selectedAccountPanel.visibleWhen(theSelectedAccount.map(account -> account != null))//
+						.addTabs(
 							tabs -> tabs.fill().fillV().withSelectedTab(selectedTab)//
-						.withVTab("settings",
-							acctSettingsPanel -> acctSettingsPanel//
-							.fill()//
-							.addTextField("Name:",
-								theSelectedAccount.asFieldEditor(TypeTokens.get().STRING, Account::getName, Account::setName,
-									null),
-								SpinnerFormat.NUMERICAL_TEXT, f -> f.fill())//
-							.addComboField("Compare To:",
-								theSelectedAccount.asFieldEditor(TypeTokens.get().of(Account.class),
-									Account::getReferenceAccount, Account::setReferenceAccount, null),
-								referenceAccounts, f -> f.fill().renderAs(account -> account == null ? "" : account.getName()))//
-							.addTextField("Universe Name:",
-								theSelectedAccount.asFieldEditor(TypeTokens.get().STRING,
-									account -> account.getUniverse().getName(),
-									(account, name) -> account.getUniverse().setName(name), null),
-								Format.TEXT, f -> f.fill())//
-							.addHPanel("Speed:",
-								new JustifiedBoxLayout(false).setMainAlignment(JustifiedBoxLayout.Alignment.LEADING),
-								speedPanel -> speedPanel//
-								.addTextField("Economy:",
-									theSelectedAccount.asFieldEditor(TypeTokens.get().INT,
-										account -> account.getUniverse().getEconomySpeed(),
-										(account, speed) -> account.getUniverse().setEconomySpeed(speed), null),
-									SpinnerFormat.INT, f -> f.withPostLabel("x").modifyEditor(tf -> tf.withColumns(2)))//
-								.spacer(3)//
-								.addTextField("Research:",
-									theSelectedAccount.asFieldEditor(TypeTokens.get().INT,
-										account -> account.getUniverse().getResearchSpeed(),
-										(account, speed) -> account.getUniverse().setResearchSpeed(speed), null),
-									SpinnerFormat.INT, f -> f.withPostLabel("x").modifyEditor(tf -> tf.withColumns(2)))//
-								.spacer(3)//
-								.addTextField("Fleet:",
-									theSelectedAccount.asFieldEditor(TypeTokens.get().INT,
-										account -> account.getUniverse().getFleetSpeed(),
-										(account, speed) -> account.getUniverse().setFleetSpeed(speed), null),
-									SpinnerFormat.INT, f -> f.withPostLabel("x").modifyEditor(tf -> tf.withColumns(2)))//
-								)//
+								.withVTab("settings",
+									acctSettingsPanel -> acctSettingsPanel//
+										.fill()//
+										.addTextField("Name:",
+											theSelectedAccount.asFieldEditor(TypeTokens.get().STRING, Account::getName, Account::setName,
+												null),
+											SpinnerFormat.NUMERICAL_TEXT, f -> f.fill())//
+										.addComboField("Compare To:",
+											theSelectedAccount.asFieldEditor(TypeTokens.get().of(Account.class),
+												Account::getReferenceAccount, Account::setReferenceAccount, null),
+											referenceAccounts, f -> f.fill().renderAs(account -> account == null ? "" : account.getName()))//
+										.addTextField("Universe Name:",
+											theSelectedAccount.asFieldEditor(TypeTokens.get().STRING,
+												account -> account.getUniverse().getName(),
+												(account, name) -> account.getUniverse().setName(name), null),
+											Format.TEXT, f -> f.fill())//
+										.addHPanel("Speed:",
+											new JustifiedBoxLayout(
+												false).setMainAlignment(JustifiedBoxLayout.Alignment.LEADING),
+											speedPanel -> speedPanel//
+												.addTextField("Economy:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().INT,
+														account -> account.getUniverse().getEconomySpeed(),
+														(account, speed) -> account.getUniverse().setEconomySpeed(speed), null),
+													SpinnerFormat.INT, f -> f.withPostLabel("x").modifyEditor(tf -> tf.withColumns(2)))//
+												.spacer(3)//
+												.addTextField("Research:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().INT,
+														account -> account.getUniverse().getResearchSpeed(),
+														(account, speed) -> account.getUniverse().setResearchSpeed(speed), null),
+													SpinnerFormat.INT, f -> f.withPostLabel("x").modifyEditor(tf -> tf.withColumns(2)))//
+												.spacer(3)//
+												.addTextField("Fleet:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().INT,
+														account -> account.getUniverse().getFleetSpeed(),
+														(account, speed) -> account.getUniverse().setFleetSpeed(speed), null),
+													SpinnerFormat.INT, f -> f.withPostLabel("x").modifyEditor(tf -> tf.withColumns(2)))//
+										)//
 										.addHPanel("Galaxies:",
 											new JustifiedBoxLayout(false).setMainAlignment(JustifiedBoxLayout.Alignment.LEADING),
 											galaxyPanel -> galaxyPanel//
@@ -359,91 +363,90 @@ public class OGameUniGui extends JPanel {
 														(account, circular) -> account.getUniverse().setCircularGalaxies(circular), null),
 													null)//
 										)//
-							.addComboField("Account Class:",
-								theSelectedAccount.asFieldEditor(TypeTokens.get().of(AccountClass.class), Account::getGameClass,
-									Account::setGameClass, null),
-								ObservableCollection.of(TypeTokens.get().of(AccountClass.class), AccountClass.values()), //
-								classEditor -> classEditor.fill().withValueTooltip(clazz -> describeClass(clazz))//
-								)//
-							.addHPanel("Collector Bonus:", "box",
-								collectorBonusPanel -> collectorBonusPanel//
-								.addTextField("Production:",
-									theSelectedAccount.asFieldEditor(TypeTokens.get().INT,
-										account -> account.getUniverse().getCollectorProductionBonus(),
-										(account, speed) -> account.getUniverse().setCollectorProductionBonus(speed), null),
-									SpinnerFormat.INT, f -> f.withPostLabel("%").modifyEditor(tf -> tf.withColumns(2)))//
-								.spacer(4)//
-								.addTextField("Energy:",
-									theSelectedAccount.asFieldEditor(TypeTokens.get().INT,
-										account -> account.getUniverse().getCollectorEnergyBonus(),
-										(account, speed) -> account.getUniverse().setCollectorEnergyBonus(speed), null),
-									SpinnerFormat.INT, f -> f.withPostLabel("%").modifyEditor(tf -> tf.withColumns(2)))//
-								)//
-							.addTextField("Hyperspace Cargo Bonus:",
-								theSelectedAccount.asFieldEditor(TypeTokens.get().DOUBLE,
-									account -> account.getUniverse().getHyperspaceCargoBonus(),
-									(account, speed) -> account.getUniverse().setHyperspaceCargoBonus(speed), null),
-								SpinnerFormat.doubleFormat("0.##", 1),
-								f -> f.withPostLabel("%").fill())//
-							.addHPanel("Trade Ratios:", "box",
-								tradeRatePanel -> tradeRatePanel//
-								.addTextField(null,
-									theSelectedAccount.asFieldEditor(TypeTokens.get().DOUBLE,
-										account -> account.getUniverse().getTradeRatios().getMetal(),
-										(account, rate) -> account.getUniverse().getTradeRatios().setMetal(rate), null),
-									SpinnerFormat.doubleFormat("0.0#", 0.1), f -> f.modifyEditor(tf -> tf.withColumns(3)))
-								.addComponent(null, new JLabel(":"), null)//
-								.addTextField(null,
-									theSelectedAccount.asFieldEditor(TypeTokens.get().DOUBLE,
-										account -> account.getUniverse().getTradeRatios().getCrystal(),
-										(account, rate) -> account.getUniverse().getTradeRatios().setCrystal(rate), null),
-									SpinnerFormat.doubleFormat("0.0#", 0.1), f -> f.modifyEditor(tf -> tf.withColumns(3)))
-								.addComponent(null, new JLabel(":"), null)//
-								.addTextField(null,
-									theSelectedAccount.asFieldEditor(TypeTokens.get().DOUBLE,
-										account -> account.getUniverse().getTradeRatios().getDeuterium(),
-										(account, rate) -> account.getUniverse().getTradeRatios().setDeuterium(rate), null),
-									SpinnerFormat.doubleFormat("0.0#", 0.1), f -> f.modifyEditor(tf -> tf.withColumns(3)))//
-								)//
-							.addHPanel("Officers:", "box",
-								officersPanel -> officersPanel//
-								.addCheckField("Commander:",
-									theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
-										account -> account.getOfficers().isCommander(),
-										(account, b) -> account.getOfficers().setCommander(b), null),
-									null)
-								.spacer(3)//
-								.addCheckField("Admiral:",
-									theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
-										account -> account.getOfficers().isAdmiral(),
-										(account, b) -> account.getOfficers().setAdmiral(b), null),
-									null)
-								.spacer(3)//
-								.addCheckField("Engineer:",
-									theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
-										account -> account.getOfficers().isEngineer(),
-										(account, b) -> account.getOfficers().setEngineer(b), null),
-									null)
-								.spacer(3)//
-								.addCheckField("Geologist:",
-									theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
-										account -> account.getOfficers().isGeologist(),
-										(account, b) -> account.getOfficers().setGeologist(b), null),
-									null)
-								.spacer(3)//
-								.addCheckField("Technocrat:",
-									theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
-										account -> account.getOfficers().isTechnocrat(),
-										(account, b) -> account.getOfficers().setTechnocrat(b), null),
-									null)
-								.spacer(3)//
-								.addCheckField("Commanding Staff:",
-									theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
-										account -> account.getOfficers().isCommandingStaff(),
-										(account, b) -> account.getOfficers().setCommandingStaff(b), null),
-									null)
-								.spacer(3)//
-								)//
+										.addComboField("Account Class:",
+											theSelectedAccount.asFieldEditor(TypeTokens.get().of(AccountClass.class), Account::getGameClass,
+												Account::setGameClass, null),
+											ObservableCollection.of(TypeTokens.get().of(AccountClass.class), AccountClass.values()), //
+											classEditor -> classEditor.fill().withValueTooltip(clazz -> describeClass(clazz))//
+										)//
+										.addHPanel("Collector Bonus:", "box",
+											collectorBonusPanel -> collectorBonusPanel//
+												.addTextField("Production:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().INT,
+														account -> account.getUniverse().getCollectorProductionBonus(),
+														(account, speed) -> account.getUniverse().setCollectorProductionBonus(speed), null),
+													SpinnerFormat.INT, f -> f.withPostLabel("%").modifyEditor(tf -> tf.withColumns(2)))//
+												.spacer(4)//
+												.addTextField("Energy:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().INT,
+														account -> account.getUniverse().getCollectorEnergyBonus(),
+														(account, speed) -> account.getUniverse().setCollectorEnergyBonus(speed), null),
+													SpinnerFormat.INT, f -> f.withPostLabel("%").modifyEditor(tf -> tf.withColumns(2)))//
+										)//
+										.addTextField("Hyperspace Cargo Bonus:",
+											theSelectedAccount.asFieldEditor(TypeTokens.get().DOUBLE,
+												account -> account.getUniverse().getHyperspaceCargoBonus(),
+												(account, speed) -> account.getUniverse().setHyperspaceCargoBonus(speed), null),
+											SpinnerFormat.doubleFormat("0.##", 1), f -> f.withPostLabel("%").fill())//
+										.addHPanel("Trade Ratios:", "box",
+											tradeRatePanel -> tradeRatePanel//
+												.addTextField(null,
+													theSelectedAccount.asFieldEditor(TypeTokens.get().DOUBLE,
+														account -> account.getUniverse().getTradeRatios().getMetal(),
+														(account, rate) -> account.getUniverse().getTradeRatios().setMetal(rate), null),
+													SpinnerFormat.doubleFormat("0.0#", 0.1), f -> f.modifyEditor(tf -> tf.withColumns(3)))
+												.addComponent(null, new JLabel(":"), null)//
+												.addTextField(null,
+													theSelectedAccount.asFieldEditor(TypeTokens.get().DOUBLE,
+														account -> account.getUniverse().getTradeRatios().getCrystal(),
+														(account, rate) -> account.getUniverse().getTradeRatios().setCrystal(rate), null),
+													SpinnerFormat.doubleFormat("0.0#", 0.1), f -> f.modifyEditor(tf -> tf.withColumns(3)))
+												.addComponent(null, new JLabel(":"), null)//
+												.addTextField(null,
+													theSelectedAccount.asFieldEditor(TypeTokens.get().DOUBLE,
+														account -> account.getUniverse().getTradeRatios().getDeuterium(),
+														(account, rate) -> account.getUniverse().getTradeRatios().setDeuterium(rate), null),
+													SpinnerFormat.doubleFormat("0.0#", 0.1), f -> f.modifyEditor(tf -> tf.withColumns(3)))//
+										)//
+										.addHPanel("Officers:", "box",
+											officersPanel -> officersPanel//
+												.addCheckField("Commander:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
+														account -> account.getOfficers().isCommander(),
+														(account, b) -> account.getOfficers().setCommander(b), null),
+													null)
+												.spacer(3)//
+												.addCheckField("Admiral:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
+														account -> account.getOfficers().isAdmiral(),
+														(account, b) -> account.getOfficers().setAdmiral(b), null),
+													null)
+												.spacer(3)//
+												.addCheckField("Engineer:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
+														account -> account.getOfficers().isEngineer(),
+														(account, b) -> account.getOfficers().setEngineer(b), null),
+													null)
+												.spacer(3)//
+												.addCheckField("Geologist:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
+														account -> account.getOfficers().isGeologist(),
+														(account, b) -> account.getOfficers().setGeologist(b), null),
+													null)
+												.spacer(3)//
+												.addCheckField("Technocrat:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
+														account -> account.getOfficers().isTechnocrat(),
+														(account, b) -> account.getOfficers().setTechnocrat(b), null),
+													null)
+												.spacer(3)//
+												.addCheckField("Commanding Staff:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().BOOLEAN,
+														account -> account.getOfficers().isCommandingStaff(),
+														(account, b) -> account.getOfficers().setCommandingStaff(b), null),
+													null)
+												.spacer(3)//
+										)//
 										.addHPanel("Import Empire View:", "box", empirePanel -> empirePanel//
 											.addButton("Planet View", this::browsePlanetFile, pv -> pv
 												.withText(thePlanetEmpireFile.map(file -> file == null ? "Planet View" : file.getName()))
@@ -465,7 +468,7 @@ public class OGameUniGui extends JPanel {
 														+ "</li></ul></html>"))//
 											.addButton("Import", this::importEmpireView, pv -> pv.disableWith(thePlanetEmpireFile
 												.map(f -> f == null ? "Download and select the planet empire view file" : null)))//
-									)//
+										)//
 										.addHPanel("Import Overview:", "box",
 											empirePanel -> empirePanel//
 												.addButton("Import", this::importOverview,
@@ -475,21 +478,20 @@ public class OGameUniGui extends JPanel {
 														+ "<li>Choose the HTML Only option, select a location, and click Save</li>"//
 														+ "<li>Click this button and select the saved file</li>"//
 														+ "</li></ul></html>"))//
-									)//
+										)//
 										.addButton("Test ROI",
 											__ -> new OGameRoiSettings(theSelectedRuleSet.get(), theSelectedAccount.get()).test(15), null)//
-							, acctSettingsTab -> acctSettingsTab.setName("Settings"))//
+									, acctSettingsTab -> acctSettingsTab.setName("Settings"))//
 								.withVTab("planets", acctBuildingsPanel -> thePlanetPanel.addPlanetTable(acctBuildingsPanel)//
 									, acctBuildingsTab -> acctBuildingsTab.setName("Builds"))//
-				// .withVTab("construction",
-				// constructionPanel -> new ConstructionPanel(theConfig, theSelectedRuleSet, theSelectedAccount)
-				// .addPanel(constructionPanel),
-				// constructionTab -> constructionTab.setName("Construction"))//
+								// .withVTab("construction",
+								// constructionPanel -> new ConstructionPanel(theConfig, theSelectedRuleSet, theSelectedAccount)
+								// .addPanel(constructionPanel),
+								// constructionTab -> constructionTab.setName("Construction"))//
 								.withVTab("resources", resPanel -> theHoldingsPanel.addPanel(resPanel),
 									resTab -> resTab.setName("Resources"))//
-								.withVTab("flights", theFlightPanel::addFlightPanel, flightsTab -> flightsTab.setName("Flights"))
-						))//
-			);
+								.withVTab("flights", theFlightPanel::addFlightPanel, flightsTab -> flightsTab.setName("Flights"))))//
+		);
 	}
 
 	static class SimpleLineBorder extends LineBorder {
@@ -646,19 +648,19 @@ public class OGameUniGui extends JPanel {
 			return "No class bonuses";
 		case Collector:
 			return "<ul>" + "<li>Can produce crawlers</li>" + "<li>+25% mine production</li>" + "<li>+10% energy production</li>"
-			+ "<li>+100% speed for Transporters</li>" + "<li>+25% cargo bay for Transporters</li>" + "<li>+2 offers</li>"
-			+ "<li>Lower Market Fees</li>" + "<li>+50% Crawler bonus</li>" + "</ul>";
+				+ "<li>+100% speed for Transporters</li>" + "<li>+25% cargo bay for Transporters</li>" + "<li>+2 offers</li>"
+				+ "<li>Lower Market Fees</li>" + "<li>+50% Crawler bonus</li>" + "</ul>";
 		case General:
 			return "<ul>" + "<li>Can produce reapers</li>" + "<li>+100% speed for combat ships</li>" + "<li>+100% speed for Recyclers</li>"
-			+ "<li>-25% deuterium consumption for all ships</li>" + "<li>-25% deuterium consumption for Recyclers</li>"
-			+ "<li>A small chance to immediately destroy a Deathstar once in a battle using a light fighter.</li>"
-			+ "<li>Wreckage at attack (transport to starting planet)</li>" + "<li>+2 combat research levels</li>"
-			+ "<li>+2 fleet slots</li></li>" + "</ul>";
+				+ "<li>-25% deuterium consumption for all ships</li>" + "<li>-25% deuterium consumption for Recyclers</li>"
+				+ "<li>A small chance to immediately destroy a Deathstar once in a battle using a light fighter.</li>"
+				+ "<li>Wreckage at attack (transport to starting planet)</li>" + "<li>+2 combat research levels</li>"
+				+ "<li>+2 fleet slots</li></li>" + "</ul>";
 		case Discoverer:
 			return "<ul>" + "<li>Can produce pathfinders</li>" + "<li>-25% research time</li>"
-			+ "<li>+2% gain on successful expeditions</li>" + "<li>+10% larger planets on colonisation</li>"
-			+ "<li>Debris fields created on expeditions will be visible in the Galaxy view.</li>" + "<li>+2 expeditions</li>"
-			+ "<li>+20% phalanx range</li>" + "<li>75% loot from inactive players</li>" + "</ul>";
+				+ "<li>+2% gain on successful expeditions</li>" + "<li>+10% larger planets on colonisation</li>"
+				+ "<li>Debris fields created on expeditions will be visible in the Galaxy view.</li>" + "<li>+2 expeditions</li>"
+				+ "<li>+20% phalanx range</li>" + "<li>75% loot from inactive players</li>" + "</ul>";
 		}
 		return null;
 	}
@@ -809,8 +811,7 @@ public class OGameUniGui extends JPanel {
 		int planets;
 		try (BufferedReader reader = new BufferedReader(
 			new InputStreamReader(new FileInputStream(chooser.getSelectedFile()), Charset.forName("UTF-8")))) {
-			planets = OGamePageReader.readOverview(theSelectedAccount.get(), reader, theSelectedRuleSet.get(),
-				() -> createPlanet().planet);
+			planets = OGamePageReader.readOverview(theSelectedAccount.get(), reader, theSelectedRuleSet.get(), () -> createPlanet().planet);
 		} catch (IOException | RuntimeException e) {
 			e.printStackTrace();
 			JOptionPane.showMessageDialog(this, "Overview parsing failed", "Unable to Import Overview", JOptionPane.ERROR_MESSAGE);
@@ -856,14 +857,14 @@ public class OGameUniGui extends JPanel {
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 	}
 
-	public static ObservableValueSet<Account> getAccounts(ObservableConfig config, String path) {
-		ValueHolder<ObservableValueSet<Account>> accounts = new ValueHolder<>();
+	public static SyncValueSet<Account> getAccounts(ObservableConfig config, String path) {
+		ValueHolder<SyncValueSet<Account>> accounts = new ValueHolder<>();
 		ObservableConfigFormat<Account> accountRefFormat = ObservableConfigFormat
 			.<Account> buildReferenceFormat(fv -> accounts.get().getValues(), null)//
 			.withField("id", Account::getId, ObservableConfigFormat.INT).build();
 		config.asValue(TypeTokens.get().of(Account.class))
-		.asEntity(efb -> efb//
-			.withFieldFormat(Account::getReferenceAccount, accountRefFormat))//
+			.asEntity(efb -> efb//
+				.withFieldFormat(Account::getReferenceAccount, accountRefFormat))//
 			.at(path).buildEntitySet(accounts);
 		return accounts.get();
 	}

@@ -1,6 +1,7 @@
 package org.quark.ogame.uni;
 
 import org.observe.config.ObservableValueSet;
+import org.observe.config.SyncValueSet;
 import org.observe.util.ObjectMethodOverride;
 import org.observe.util.ObjectMethodOverride.ObjectMethod;
 import org.qommons.Nameable;
@@ -25,10 +26,10 @@ public interface Account extends Nameable {
 
 	Research getResearch();
 
-	ObservableValueSet<Planet> getPlanets();
+	SyncValueSet<Planet> getPlanets();
 
-	ObservableValueSet<Holding> getHoldings();
-	ObservableValueSet<Trade> getTrades();
-	ObservableValueSet<PlannedUpgrade> getPlannedUpgrades();
-	ObservableValueSet<PlannedFlight> getPlannedFlights();
+	SyncValueSet<Holding> getHoldings();
+	SyncValueSet<Trade> getTrades();
+	SyncValueSet<PlannedUpgrade> getPlannedUpgrades();
+	SyncValueSet<PlannedFlight> getPlannedFlights();
 }

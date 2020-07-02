@@ -11,13 +11,13 @@ public interface RockyBody extends Nameable {
 
 	// Facilities
 	int getRoboticsFactory();
-	void setRoboticsFactory(int roboticsFactory);
+	RockyBody setRoboticsFactory(int roboticsFactory);
 
 	int getShipyard();
-	void setShipyard(int shipyard);
+	RockyBody setShipyard(int shipyard);
 
 	int getBuildingLevel(BuildingType type);
-	void setBuildingLevel(BuildingType type, int buildingLevel);
+	RockyBody setBuildingLevel(BuildingType type, int buildingLevel);
 
 	default int getStationedShips(ShipyardItemType type) {
 		if (type.mobile) {
@@ -37,7 +37,7 @@ public interface RockyBody extends Nameable {
 	}
 
 	BuildingType getCurrentUpgrade();
-	void setCurrentUpgrade(BuildingType building);
+	RockyBody setCurrentUpgrade(BuildingType building);
 
 	default int getUsedFields() {
 		return getRoboticsFactory() + getShipyard();

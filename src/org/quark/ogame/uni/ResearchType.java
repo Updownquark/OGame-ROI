@@ -23,4 +23,8 @@ public enum ResearchType {
 	private ResearchType(String shortName) {
 		this.shortName = shortName;
 	}
+
+	public AccountUpgradeType getUpgrade() {
+		return AccountUpgradeType.getResearchUpgrade(this);
+	}
 }

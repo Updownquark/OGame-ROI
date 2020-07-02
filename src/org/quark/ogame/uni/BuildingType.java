@@ -31,4 +31,8 @@ public enum BuildingType {
 		this.isPlanetBuilding = forPlanet;
 		this.isMoonBuilding = forMoon;
 	}
+
+	public AccountUpgradeType getUpgrade() {
+		return AccountUpgradeType.getBuildingUpgrade(this);
+	}
 }
