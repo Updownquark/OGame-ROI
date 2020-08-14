@@ -1,6 +1,5 @@
 package org.quark.ogame.uni;
 
-import org.observe.config.ObservableValueSet;
 import org.observe.config.SyncValueSet;
 import org.observe.util.ObjectMethodOverride;
 import org.observe.util.ObjectMethodOverride.ObjectMethod;
@@ -12,7 +11,6 @@ public interface Account extends Nameable {
 	String getName();
 
 	int getId();
-	void setId(int id);
 
 	Universe getUniverse();
 

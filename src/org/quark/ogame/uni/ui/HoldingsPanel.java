@@ -419,10 +419,12 @@ public class HoldingsPanel {
 				break; // Shipyard item's can't be canceled, so they can't be used for stashing resources
 			}
 		}
+		Format<Double> commaFormat = Format.doubleFormat("#,##0");
 		panel.addHPanel(null, new JustifiedBoxLayout(false).mainJustified().crossJustified(),
 			split -> split.fill().fillV()//
 				.addVPanel(holdingsPanel -> holdingsPanel.fill().fillV().decorate(d -> d.withTitledBorder("Holdings", Color.black))//
 					.addTable(theHoldings, holdingsTable -> holdingsTable.fill().fillV()//
+							.dragSourceRow(d -> d.toObject()).dragAcceptRow(d -> d.fromObject())//
 						.withColumn("Name", String.class, Holding::getName, nameCol -> nameCol.withMutation(nameMutator -> {
 							nameMutator.mutateAttribute(Holding::setName).editableIf((h, n) -> !(h instanceof SyntheticHolding))
 								.withEditor(ObservableCellEditor.createTextEditor(SpinnerFormat.NUMERICAL_TEXT));
@@ -529,12 +531,12 @@ public class HoldingsPanel {
 								}
 							}).asText(Format.doubleFormat("0.00"));
 						}))//
-						.withColumn("Cargoes", Integer.class, h -> {
+							.withColumn("Cargoes", Long.class, h -> {
 							long total = h.getMetal() + h.getCrystal() + h.getDeuterium();
 							long cap = theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.LargeCargo,
 								theUniGui.getSelectedAccount().get());
-							return (int) Math.ceil(total * 1.0 / cap);
-						}, col -> col.formatText(cargoes -> Format.INT.format(cargoes)))//
+								return (long) Math.ceil(total * 1.0 / cap);
+							}, col -> col.formatText(cargoes -> commaFormat.format(cargoes * 1.0)))//
 						.withAdd(
 							() -> theUniGui.getSelectedAccount().get().getHoldings().create()//
 								.with(Holding::getName, "").create().get(),
@@ -547,6 +549,7 @@ public class HoldingsPanel {
 				)//
 				.addVPanel(tradePanel -> tradePanel.fill().fillV().decorate(d -> d.withTitledBorder("Trades", Color.black))//
 					.addTable(theTrades, tradeTable -> tradeTable.fill().fillV()//
+							.dragSourceRow(d -> d.toObject()).dragAcceptRow(d -> d.fromObject())//
 						.withColumn("Name", String.class, Trade::getName, nameCol -> nameCol.withMutation(nameMutator -> {
 							nameMutator.mutateAttribute(Trade::setName).editableIf((h, n) -> !(h instanceof SyntheticTrade))
 								.withEditor(ObservableCellEditor.createTextEditor(SpinnerFormat.NUMERICAL_TEXT));
@@ -627,7 +630,7 @@ public class HoldingsPanel {
 								}
 							}).asText(Format.doubleFormat("0.00"));
 						}))//
-						.withColumn("Deuterium (KK)", Double.class, h -> {
+							.withColumn("Deut (KK)", Double.class, h -> {
 							if (h == theUpgradeTimeTrade || h == theTotalTradesUpgradeTime) {
 								return h.getDeuterium() * 1.0;
 							} else {
@@ -648,6 +651,37 @@ public class HoldingsPanel {
 								}
 							}).asText(Format.doubleFormat("0.00"));
 						}))//
+							.withColumn("Rx LC", Long.class, h -> {
+								if (h.getType() == null) {
+									return null;
+								}
+								long amount;
+								switch (h.getType()) {
+								case Metal:
+									amount = h.getCrystal() + h.getDeuterium();
+									break;
+								case Crystal:
+									amount = h.getMetal() + h.getDeuterium();
+									break;
+								default:
+									amount = h.getMetal() + h.getCrystal();
+									break;
+								}
+								int cargoSpace = theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.LargeCargo,
+									theUniGui.getSelectedAccount().get());
+								return (long) Math.ceil(amount * 1.0 / cargoSpace);
+							}, rxLcCol -> rxLcCol.formatText(v -> v == null ? "" : commaFormat.format(v * 1.0)).withWidths(30, 40, 80)
+								.withHeaderTooltip("Number of Large Cargoes required to hold the resources being received"))//
+							.withColumn("Tx LC", Long.class, h -> {
+								if (h.getType() == null) {
+									return null;
+								}
+								long amount = h.getRequiredResource();
+								int cargoSpace = theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.LargeCargo,
+									theUniGui.getSelectedAccount().get());
+								return (long) Math.ceil(amount * 1.0 / cargoSpace);
+							}, rxLcCol -> rxLcCol.formatText(v -> v == null ? "" : commaFormat.format(v * 1.0)).withWidths(30, 40, 80)
+								.withHeaderTooltip("Number of Large Cargoes required to hold the resources being sent"))//
 						.withAdd(
 							() -> theUniGui.getSelectedAccount().get().getTrades().create()//
 								.with(Trade::getName, "").with(Trade::getType, ResourceType.Metal)//

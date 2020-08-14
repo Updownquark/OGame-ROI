@@ -40,6 +40,6 @@ public class PlanetWithProduction {
 
 	@Override
 	public String toString() {
-		return planet.getName();
+		return planet == null ? "" : planet.getName();
 	}
 }

@@ -124,7 +124,7 @@ public class FlightPanel {
 		ObservableCollection<PlannedFlight> flights = ObservableCollection
 			.<PlannedFlight> flattenValue(theUniGui.getSelectedAccount().map(account -> account.getPlannedFlights().getValues()));
 		panel.addTable(flights, table -> {
-			table.fill()//
+			table.fill().dragSourceRow(d -> d.toObject()).dragAcceptRow(d -> d.fromObject())//
 				.withColumn("Name", String.class, PlannedFlight::getName, nameCol -> {
 					nameCol.withMutation(mut -> mut.mutateAttribute(PlannedFlight::setName).asText(SpinnerFormat.TEXT));
 				}).withColumn("Ships", String.class, FlightPanel::countShips, col -> col.withWidth("pref", 150))//
@@ -145,6 +145,8 @@ public class FlightPanel {
 		}).addVPanel(this::addConfigPanel);
 	}
 
+	private static Format<Double> COMMA_FORMAT = Format.doubleFormat("#,##0");
+
 	static String countShips(PlannedFlight flight) {
 		StringBuilder sb = new StringBuilder();
 		for (ShipyardItemType type : ShipyardItemType.values()) {
@@ -153,7 +155,8 @@ public class FlightPanel {
 				if (sb.length() > 0) {
 					sb.append(", ");
 				}
-				sb.append(amount).append(' ').append(abbreviate(type));
+				COMMA_FORMAT.append(sb, amount * 1.0);
+				sb.append(' ').append(abbreviate(type));
 			}
 		}
 		if (sb.length() == 0) {
@@ -293,7 +296,7 @@ public class FlightPanel {
 				table.fill()//
 					.withColumn("Ship Type", ShipyardItemType.class, amt -> amt.type, null)//
 					.withColumn("Amount", Integer.class, amt -> amt.amount,
-						col -> col.withMutation(
+						col -> col.formatText(i -> COMMA_FORMAT.format(i * 1.0)).withMutation(
 							mut -> mut.mutateAttribute((sa, amt) -> sa.amount = amt).asText(SpinnerFormat.INT).withRowUpdate(true)))//
 					.withColumn("Speed", Double.class, amt -> getSpeed(amt.type),
 						col -> col.formatText((sa, speed) -> INT_FORMAT.format(speed)))//

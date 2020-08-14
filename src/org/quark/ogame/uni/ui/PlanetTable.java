@@ -281,7 +281,12 @@ public class PlanetTable {
 		}
 		theSelectedPlanet.changes().act(evt -> {
 			boolean currentlyHasDone = UPGRADE_DONE.equals(planetUpgrades.peekFirst());
-			boolean shouldHaveDone = evt.getNewValue() != null && evt.getNewValue().planet.getCurrentUpgrade() != null;
+			boolean shouldHaveDone;
+			if (evt.getNewValue() == null || evt.getNewValue().planet == null) {
+				shouldHaveDone= false;
+			} else {
+				shouldHaveDone=evt.getNewValue().planet.getCurrentUpgrade() != null;
+			}
 			if (currentlyHasDone && !shouldHaveDone) {
 				planetUpgrades.removeFirst();
 			} else if (!currentlyHasDone && shouldHaveDone) {
@@ -289,7 +294,8 @@ public class PlanetTable {
 			}
 
 			currentlyHasDone = UPGRADE_DONE.equals(moonUpgrades.peekFirst());
-			shouldHaveDone = evt.getNewValue() != null && evt.getNewValue().planet.getMoon().getCurrentUpgrade() != null;
+			shouldHaveDone = evt.getNewValue() != null && evt.getNewValue().planet != null
+				&& evt.getNewValue().planet.getMoon().getCurrentUpgrade() != null;
 			if (currentlyHasDone && !shouldHaveDone) {
 				moonUpgrades.removeFirst();
 			} else if (!currentlyHasDone && shouldHaveDone) {
@@ -539,7 +545,7 @@ public class PlanetTable {
 				return rsrch;
 			}, opts -> opts.cache(true).reEvalOnUpdate(false)));
 		researchColl.simpleChanges().act(__ -> theUniGui.refreshProduction());
-
+		Format<Double> commaFormat = Format.doubleFormat("#,##0");
 		panel.fill().fillV()//
 			.addTable(researchColl,
 				researchTable -> researchTable.fill().withAdaptiveHeight(1, 1, 1).decorate(d -> d.withTitledBorder("Research", Color.black))//
@@ -613,6 +619,7 @@ public class PlanetTable {
 			)//
 			.addTable(selectedPlanets,
 				planetTable -> planetTable.fill().withItemName("planet").withAdaptiveHeight(6, 30, 50)//
+					.dragSourceRow(s -> s.toObject()).dragAcceptRow(a -> a.fromObject())// Allow dragging to reorder planets
 					.decorate(d -> d.withTitledBorder("Planets", Color.black))//
 					// This is a little hacky, but the next line tells the column the item name
 					.withColumns(initPlanetColumns)
@@ -645,7 +652,7 @@ public class PlanetTable {
 								}
 							})))//
 					// This is a little hacky, but the next line adds the movement columns
-					.withColumns(lastPlanetColumns).withMove(true, null).withMove(false, null)//
+					.withColumns(lastPlanetColumns)//
 					.withColumns(planetColumns)//
 					.withSelection(theSelectedPlanet, false)//
 					.withAdd(() -> theUniGui.createPlanet(), null)//
@@ -736,8 +743,21 @@ public class PlanetTable {
 										d.bold();
 									}
 								}))//
-							.withColumn("Time", String.class, upgrade -> OGameUniGui.printUpgradeTime(upgrade.getCost().getUpgradeTime()),
-								timeCol -> timeCol.withWidths(40, 100, 120))//
+							.withColumn("Time", String.class, upgrade -> {
+								if (upgrade.getCost().getUpgradeTime() == null) {
+									return "";
+								}
+								return OGameUniGui.printUpgradeTime(upgrade.getCost().getUpgradeTime());
+							}, timeCol -> timeCol.withWidths(40, 100, 120))//
+							.withColumn("Cargoes", Long.class, upgrade -> {
+								if (upgrade.getType() == null) {
+									return null;
+								}
+								long cost = upgrade.getCost().getTotal();
+								int cargoSpace = theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.LargeCargo,
+									theUniGui.getSelectedAccount().get());
+								return (long) Math.ceil(cost * 1.0 / cargoSpace);
+							}, cargoCol -> cargoCol.formatText(i -> i == null ? "" : commaFormat.format(i * 1.0)).withWidths(40, 50, 80))//
 				)//
 				)//
 		);
@@ -880,7 +900,7 @@ public class PlanetTable {
 		SettableValue<PlanetWithProduction> selectedPlanet, T defValue, int width) {
 		CategoryRenderStrategy<ResourceRow, T> column = new CategoryRenderStrategy<ResourceRow, T>(name, TypeTokens.get().of(type), t -> {
 			PlanetWithProduction planet = selectedPlanet.get();
-			if (planet == null) {
+			if (planet == null || planet.planet == null) {
 				return defValue;
 			} else {
 				return getter.apply(planet, t);
@@ -997,7 +1017,8 @@ public class PlanetTable {
 		case Satellite:
 			return planet.planet.getSolarSatellites();
 		case Crawler:
-			return planet.planet.getCrawlers();
+			return Math.min(planet.planet.getCrawlers(), //
+				theUniGui.getRules().get().economy().getMaxCrawlers(theUniGui.getSelectedAccount().get(), planet.planet));
 		case Plasma:
 			return theUniGui.getSelectedAccount().get().getResearch().getPlasma();
 		case Items:
@@ -1073,7 +1094,6 @@ public class PlanetTable {
 		case Solar:
 		case Fusion:
 		case Satellite:
-		case Crawler:
 		case Plasma:
 			return true;
 		default:

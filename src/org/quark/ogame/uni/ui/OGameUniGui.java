@@ -18,7 +18,6 @@ import java.util.function.Function;
 import java.util.function.IntFunction;
 
 import javax.swing.JFileChooser;
-import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -40,6 +39,7 @@ import org.observe.util.swing.ModelCell;
 import org.observe.util.swing.ObservableCellRenderer;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.PanelPopulation;
+import org.observe.util.swing.WindowPopulation;
 import org.qommons.ArrayUtils;
 import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
@@ -259,9 +259,10 @@ public class OGameUniGui extends JPanel {
 			.addSplit(true,
 				mainSplit -> mainSplit.withSplitLocation(150).fill().fillV()//
 					.firstV(accountSelectPanel -> accountSelectPanel//
-						.fill().addTable((ObservableCollection<Account>) theAccounts.getValues(),
+						.fill().fillV().addTable((ObservableCollection<Account>) theAccounts.getValues(),
 							accountTable -> accountTable//
-								.fill().withItemName("account")//
+								.fill().fillV().withItemName("account").withAdaptiveHeight(1, 2, 10)//
+								.dragSourceRow(d -> d.toObject()).dragAcceptRow(d -> d.fromObject())//
 								.withNameColumn(Account::getName, Account::setName, true,
 									nameColumn -> nameColumn.withWidths(50, 100, 300)//
 										.withMutation(nameMutator -> nameMutator.asText(SpinnerFormat.NUMERICAL_TEXT)))//
@@ -848,13 +849,11 @@ public class OGameUniGui extends JPanel {
 		ruleSets.add(new OGameRuleSet711());
 		ObservableSwingUtils.systemLandF();
 		OGameUniGui ui = new OGameUniGui(config, ruleSets, getAccounts(config, "accounts/account"));
-		JFrame frame = new JFrame("OGame Account Helper");
-		// frame.setContentPane(ui);
-		frame.getContentPane().add(ui);
-		frame.setVisible(true);
-		frame.pack();
-		ObservableSwingUtils.configureFrameBounds(frame, config);
-		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		WindowPopulation.populateWindow(null, null, true, true)//
+			.withTitle("OGame Account Helper")//
+			.withBounds(config)//
+			.withContent(ui)//
+			.run(null);
 	}
 
 	public static SyncValueSet<Account> getAccounts(ObservableConfig config, String path) {
