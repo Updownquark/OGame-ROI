@@ -145,8 +145,6 @@ public class FlightPanel {
 		}).addVPanel(this::addConfigPanel);
 	}
 
-	private static Format<Double> COMMA_FORMAT = Format.doubleFormat("#,##0");
-
 	static String countShips(PlannedFlight flight) {
 		StringBuilder sb = new StringBuilder();
 		for (ShipyardItemType type : ShipyardItemType.values()) {
@@ -155,7 +153,7 @@ public class FlightPanel {
 				if (sb.length() > 0) {
 					sb.append(", ");
 				}
-				COMMA_FORMAT.append(sb, amount * 1.0);
+				INT_FORMAT.append(sb, amount * 1.0);
 				sb.append(' ').append(abbreviate(type));
 			}
 		}
@@ -296,7 +294,7 @@ public class FlightPanel {
 				table.fill()//
 					.withColumn("Ship Type", ShipyardItemType.class, amt -> amt.type, null)//
 					.withColumn("Amount", Integer.class, amt -> amt.amount,
-						col -> col.formatText(i -> COMMA_FORMAT.format(i * 1.0)).withMutation(
+						col -> col.formatText(i -> INT_FORMAT.format(i * 1.0)).withMutation(
 							mut -> mut.mutateAttribute((sa, amt) -> sa.amount = amt).asText(SpinnerFormat.INT).withRowUpdate(true)))//
 					.withColumn("Speed", Double.class, amt -> getSpeed(amt.type),
 						col -> col.formatText((sa, speed) -> INT_FORMAT.format(speed)))//
