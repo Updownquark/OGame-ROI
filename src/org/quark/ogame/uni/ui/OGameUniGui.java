@@ -2,12 +2,10 @@ package org.quark.ogame.uni.ui;
 
 import java.awt.Color;
 import java.awt.Component;
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.time.Duration;
@@ -39,7 +37,6 @@ import org.observe.util.swing.ModelCell;
 import org.observe.util.swing.ObservableCellRenderer;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.PanelPopulation;
-import org.observe.util.swing.WindowPopulation;
 import org.qommons.ArrayUtils;
 import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
@@ -64,7 +61,6 @@ import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.versions.OGameRuleSet711;
-import org.xml.sax.SAXException;
 
 public class OGameUniGui extends JPanel {
 	private final ObservableConfig theConfig;
@@ -824,36 +820,13 @@ public class OGameUniGui extends JPanel {
 	}
 
 	public static void main(String[] args) {
-		String configFileLoc = System.getProperty("ogame.ui.config");
-		if (configFileLoc == null) {
-			configFileLoc = "./OGameUI.xml";
-		}
-		ObservableConfig config = ObservableConfig.createRoot("ogame-config");
-		ObservableConfig.XmlEncoding encoding = ObservableConfig.XmlEncoding.DEFAULT;
-		File configFile = new File(configFileLoc);
-		if (configFile.exists()) {
-			try {
-				try (InputStream configStream = new BufferedInputStream(new FileInputStream(configFile))) {
-					ObservableConfig.readXml(config, configStream, encoding);
-				}
-			} catch (IOException | SAXException e) {
-				System.err.println("Could not read config file " + configFileLoc);
-				e.printStackTrace();
-			}
-		}
-		config.persistOnShutdown(ObservableConfig.toFile(configFile, encoding), ex -> {
-			System.err.println("Could not persist UI config");
-			ex.printStackTrace();
-		});
 		List<OGameRuleSet> ruleSets = new ArrayList<>();
 		ruleSets.add(new OGameRuleSet711());
-		ObservableSwingUtils.systemLandF();
-		OGameUniGui ui = new OGameUniGui(config, ruleSets, getAccounts(config, "accounts/account"));
-		WindowPopulation.populateWindow(null, null, true, true)//
-			.withTitle("OGame Account Helper")//
-			.withBounds(config)//
-			.withContent(ui)//
-			.run(null);
+		ObservableSwingUtils.buildUI()//
+			.withConfig("ogame-config").withConfigAt("OGameUI.xml")//
+			.withTitle("OGame Account Helper").systemLandF().build(config -> {
+				return new OGameUniGui(config, ruleSets, getAccounts(config, "accounts/account"));
+			});
 	}
 
 	public static SyncValueSet<Account> getAccounts(ObservableConfig config, String path) {

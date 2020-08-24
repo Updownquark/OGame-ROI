@@ -1,13 +1,18 @@
 package org.quark.ogame.uni.ui;
 
 import java.awt.Color;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import javax.swing.JToggleButton;
 
 import org.observe.Observable;
 import org.observe.SettableValue;
@@ -20,6 +25,7 @@ import org.observe.util.swing.JustifiedBoxLayout;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.PanelPopulation;
 import org.qommons.ArrayUtils;
+import org.qommons.QommonsUtils;
 import org.qommons.TimeUtils;
 import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
@@ -31,8 +37,10 @@ import org.quark.ogame.uni.AccountUpgrade;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
 import org.quark.ogame.uni.Moon;
+import org.quark.ogame.uni.OGameEconomyRuleSet.FullProduction;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
+import org.quark.ogame.uni.OGameRuleSet;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.PlannedUpgrade;
 import org.quark.ogame.uni.Research;
@@ -47,25 +55,29 @@ import org.quark.ogame.uni.UpgradeType;
 import com.google.common.reflect.TypeToken;
 
 public class PlanetTable {
+	enum PlanetColumnSet {
+		Mines, Production, Facilities, Defense, Fleet, Moon, MoonFleet
+	}
 	private final OGameUniGui theUniGui;
 
 	private final ObservableCollection<PlanetWithProduction> selectedPlanets;
 	private final SettableValue<PlanetWithProduction> theSelectedPlanet;
 
-	private final SettableValue<Boolean> showFields;
-	private final SettableValue<Boolean> showTemps;
-	private final SettableValue<Boolean> showMines;
-	private final SettableValue<Boolean> showUsage;
-	private final SettableValue<Boolean> showItems;
-	private final SettableValue<Boolean> showEnergy;
-	private final SettableValue<Boolean> showStorage;
+	private final SettableValue<PlanetColumnSet> theSelectedColumns;
+	// private final SettableValue<Boolean> showFields;
+	// private final SettableValue<Boolean> showTemps;
+	// private final SettableValue<Boolean> showMines;
+	// private final SettableValue<Boolean> showUsage;
+	// private final SettableValue<Boolean> showItems;
+	// private final SettableValue<Boolean> showEnergy;
+	// private final SettableValue<Boolean> showStorage;
 	private final SettableValue<ProductionDisplayType> productionType;
-	private final SettableValue<Boolean> showProductionTotals;
-	private final SettableValue<Boolean> showMainFacilities;
-	private final SettableValue<Boolean> showOtherFacilities;
-	private final SettableValue<Boolean> showDefense;
-	private final SettableValue<Boolean> showFleet;
-	private final SettableValue<Boolean> showMoonInfo;
+	// private final SettableValue<Boolean> showProductionTotals;
+	// private final SettableValue<Boolean> showMainFacilities;
+	// private final SettableValue<Boolean> showOtherFacilities;
+	// private final SettableValue<Boolean> showDefense;
+	// private final SettableValue<Boolean> showFleet;
+	// private final SettableValue<Boolean> showMoonInfo;
 
 	private final ObservableCollection<PlanetWithProduction> theTotalProduction;
 	private final ObservableCollection<AccountUpgrade> theUpgrades;
@@ -76,31 +88,37 @@ public class PlanetTable {
 		theUniGui = uniGui;
 
 		ObservableConfig config = uniGui.getConfig();
-		showFields = config.asValue(boolean.class).at("planet-categories/fields").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
-		showTemps = config.asValue(boolean.class).at("planet-categories/temps").withFormat(Format.BOOLEAN, () -> true).buildValue(null);
-		showMines = config.asValue(boolean.class).at("planet-categories/mines").withFormat(Format.BOOLEAN, () -> true).buildValue(null);
-		showUsage = config.asValue(boolean.class).at("planet-categories/usage").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
-		showItems = config.asValue(boolean.class).at("planet-categories/items").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
-		showEnergy = config.asValue(boolean.class).at("planet-categories/energy").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
-		showStorage = config.asValue(boolean.class).at("planet-categories/storage").withFormat(Format.BOOLEAN, () -> false)
-			.buildValue(null);
-		showMainFacilities = config.asValue(boolean.class).at("planet-categories/main-facilities").withFormat(Format.BOOLEAN, () -> false)
-			.buildValue(null);
-		showOtherFacilities = config.asValue(boolean.class).at("planet-categories/other-facilities").withFormat(Format.BOOLEAN, () -> false)
-			.buildValue(null);
-		showMoonInfo = config.asValue(boolean.class).at("planet-categories/moon-info").withFormat(Format.BOOLEAN, () -> false)
-			.buildValue(null);
+		theSelectedColumns = config.asValue(PlanetColumnSet.class).at("planet-categories/columns")
+			.withFormat(ObservableConfigFormat.enumFormat(PlanetColumnSet.class, () -> PlanetColumnSet.Mines)).buildValue(null);
+		// showFields = config.asValue(boolean.class).at("planet-categories/fields").withFormat(Format.BOOLEAN, () ->
+		// false).buildValue(null);
+		// showTemps = config.asValue(boolean.class).at("planet-categories/temps").withFormat(Format.BOOLEAN, () -> true).buildValue(null);
+		// showMines = config.asValue(boolean.class).at("planet-categories/mines").withFormat(Format.BOOLEAN, () -> true).buildValue(null);
+		// showUsage = config.asValue(boolean.class).at("planet-categories/usage").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
+		// showItems = config.asValue(boolean.class).at("planet-categories/items").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
+		// showEnergy = config.asValue(boolean.class).at("planet-categories/energy").withFormat(Format.BOOLEAN, () ->
+		// false).buildValue(null);
+		// showStorage = config.asValue(boolean.class).at("planet-categories/storage").withFormat(Format.BOOLEAN, () -> false)
+		// .buildValue(null);
+		// showMainFacilities = config.asValue(boolean.class).at("planet-categories/main-facilities").withFormat(Format.BOOLEAN, () ->
+		// false)
+		// .buildValue(null);
+		// showOtherFacilities = config.asValue(boolean.class).at("planet-categories/other-facilities").withFormat(Format.BOOLEAN, () ->
+		// false)
+		// .buildValue(null);
+		// showMoonInfo = config.asValue(boolean.class).at("planet-categories/moon-info").withFormat(Format.BOOLEAN, () -> false)
+		// .buildValue(null);
 		productionType = config.asValue(ProductionDisplayType.class).at("planet-categories/production")
 			.withFormat(ObservableConfigFormat.enumFormat(ProductionDisplayType.class, () -> ProductionDisplayType.Hourly))
 			.buildValue(null);
-		showProductionTotals = config.asValue(boolean.class).at("planet-categories/productionTotals")
-			.withFormat(Format.BOOLEAN, () -> false).buildValue(null)
-			.combine(TypeTokens.get().BOOLEAN, (totals, type) -> type == null ? false : totals, productionType,
-				(newTotals, type) -> newTotals, opts -> {})
-			.disableWith(productionType.map(type -> type == null ? "Production is not selected" : null));
-		showDefense = config.asValue(boolean.class).at("planet-categories/defense").withFormat(Format.BOOLEAN, () -> false)
-			.buildValue(null);
-		showFleet = config.asValue(boolean.class).at("planet-categories/fleet").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
+		// showProductionTotals = config.asValue(boolean.class).at("planet-categories/productionTotals")
+		// .withFormat(Format.BOOLEAN, () -> false).buildValue(null)
+		// .combine(TypeTokens.get().BOOLEAN, (totals, type) -> type == null ? false : totals, productionType,
+		// (newTotals, type) -> newTotals, opts -> {})
+		// .disableWith(productionType.map(type -> type == null ? "Production is not selected" : null));
+		// showDefense = config.asValue(boolean.class).at("planet-categories/defense").withFormat(Format.BOOLEAN, () -> false)
+		// .buildValue(null);
+		// showFleet = config.asValue(boolean.class).at("planet-categories/fleet").withFormat(Format.BOOLEAN, () -> false).buildValue(null);
 
 		Production zero = new Production(Collections.emptyMap(), 0, 0);
 		PlanetWithProduction total = new PlanetWithProduction(null)//
@@ -489,50 +507,128 @@ public class PlanetTable {
 			intMoonColumn("Robotics", true, Moon::getRoboticsFactory, Moon::setRoboticsFactory, 55)//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> defenseColumns = ObservableCollection.of(planetColumnType,
-			shipColumn("RL", ShipyardItemType.RocketLauncher, false, 55), //
-			shipColumn("LL", ShipyardItemType.LightLaser, false, 55), //
-			shipColumn("HL", ShipyardItemType.HeavyLaser, false, 55), //
-			shipColumn("GC", ShipyardItemType.GaussCannon, false, 55), //
-			shipColumn("IC", ShipyardItemType.IonCannon, false, 55), //
-			shipColumn("PT", ShipyardItemType.PlasmaTurret, false, 55), //
-			shipColumn("SS", ShipyardItemType.SmallShield, false, 55), //
-			shipColumn("LS", ShipyardItemType.LargeShield, false, 55), //
-			shipColumn("ABM", ShipyardItemType.AntiBallisticMissile, false, 55), //
-			shipColumn("IPM", ShipyardItemType.InterPlanetaryMissile, false, 55) //
+			shipColumn(ShipyardItemType.RocketLauncher, false, 55), //
+			shipColumn(ShipyardItemType.LightLaser, false, 55), //
+			shipColumn(ShipyardItemType.HeavyLaser, false, 55), //
+			shipColumn(ShipyardItemType.GaussCannon, false, 55), //
+			shipColumn(ShipyardItemType.IonCannon, false, 55), //
+			shipColumn(ShipyardItemType.PlasmaTurret, false, 55), //
+			shipColumn(ShipyardItemType.SmallShield, false, 55), //
+			shipColumn(ShipyardItemType.LargeShield, false, 55), //
+			shipColumn(ShipyardItemType.AntiBallisticMissile, false, 55), //
+			shipColumn(ShipyardItemType.InterPlanetaryMissile, false, 55) //
+		);
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> fleetColumns = ObservableCollection.of(planetColumnType,
+			shipColumn(ShipyardItemType.LargeCargo, false, 65), //
+			shipColumn(ShipyardItemType.SmallCargo, false, 55), //
+			shipColumn(ShipyardItemType.Recycler, false, 55), //
+			shipColumn(ShipyardItemType.LightFighter, false, 65), //
+			shipColumn(ShipyardItemType.HeavyFighter, false, 65), //
+			shipColumn(ShipyardItemType.Cruiser, false, 65), //
+			shipColumn(ShipyardItemType.BattleShip, false, 65), //
+			shipColumn(ShipyardItemType.BattleCruiser, false, 65), //
+			shipColumn(ShipyardItemType.Bomber, false, 65), //
+			shipColumn(ShipyardItemType.Destroyer, false, 65), //
+			shipColumn(ShipyardItemType.DeathStar, false, 45), //
+			shipColumn(ShipyardItemType.Reaper, false, 65), //
+			shipColumn(ShipyardItemType.PathFinder, false, 55), //
+			shipColumn(ShipyardItemType.ColonyShip, false, 55), //
+			shipColumn(ShipyardItemType.EspionageProbe, false, 55) //
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonDefenseColumns = ObservableCollection.of(planetColumnType,
-			shipColumn("RL", ShipyardItemType.RocketLauncher, true, 55), //
-			shipColumn("LL", ShipyardItemType.LightLaser, true, 55), //
-			shipColumn("HL", ShipyardItemType.HeavyLaser, true, 55), //
-			shipColumn("GC", ShipyardItemType.GaussCannon, true, 55), //
-			shipColumn("IC", ShipyardItemType.IonCannon, true, 55), //
-			shipColumn("PT", ShipyardItemType.PlasmaTurret, true, 55), //
-			shipColumn("SS", ShipyardItemType.SmallShield, true, 55), //
-			shipColumn("LS", ShipyardItemType.LargeShield, true, 55) //
+			shipColumn(ShipyardItemType.RocketLauncher, true, 55), //
+			shipColumn(ShipyardItemType.LightLaser, true, 55), //
+			shipColumn(ShipyardItemType.HeavyLaser, true, 55), //
+			shipColumn(ShipyardItemType.GaussCannon, true, 55), //
+			shipColumn(ShipyardItemType.IonCannon, true, 55), //
+			shipColumn(ShipyardItemType.PlasmaTurret, true, 55), //
+			shipColumn(ShipyardItemType.SmallShield, true, 55), //
+			shipColumn(ShipyardItemType.LargeShield, true, 55) //
+		);
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonFleetColumns = ObservableCollection.of(planetColumnType,
+			shipColumn(ShipyardItemType.LargeCargo, true, 65), //
+			shipColumn(ShipyardItemType.SmallCargo, true, 55), //
+			shipColumn(ShipyardItemType.Recycler, true, 55), //
+			shipColumn(ShipyardItemType.LightFighter, true, 65), //
+			shipColumn(ShipyardItemType.HeavyFighter, true, 65), //
+			shipColumn(ShipyardItemType.Cruiser, true, 65), //
+			shipColumn(ShipyardItemType.BattleShip, true, 65), //
+			shipColumn(ShipyardItemType.BattleCruiser, true, 65), //
+			shipColumn(ShipyardItemType.Bomber, true, 65), //
+			shipColumn(ShipyardItemType.Destroyer, true, 65), //
+			shipColumn(ShipyardItemType.DeathStar, true, 45), //
+			shipColumn(ShipyardItemType.Reaper, true, 65), //
+			shipColumn(ShipyardItemType.PathFinder, true, 55), //
+			shipColumn(ShipyardItemType.ColonyShip, true, 55), //
+			shipColumn(ShipyardItemType.EspionageProbe, true, 55) //
 		);
 
-		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> emptyColumns = ObservableCollection.of(planetColumnType);
+		EnumMap<PlanetColumnSet, ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>>> columnSets = new EnumMap<>(
+			PlanetColumnSet.class);
+		for (PlanetColumnSet columnSet : PlanetColumnSet.values()) {
+			switch (columnSet) {
+			case Mines:
+				columnSets.put(columnSet, ObservableCollection.flattenCollections(planetColumnType, //
+					mineColumns, energyBldgs, tempColumns).collect());
+				break;
+			case Production:
+				columnSets.put(columnSet, ObservableCollection.flattenCollections(planetColumnType, //
+					productionColumns, productionTotalColumns, productionCargoColumns, storageColumns).collect());
+				break;
+			case Facilities:
+				columnSets.put(columnSet, ObservableCollection.flattenCollections(planetColumnType, //
+					fieldColumns, mainFacilities, otherFacilities).collect());
+				break;
+			case Defense:
+				columnSets.put(columnSet, // ObservableCollection.flattenCollections(planetColumnType, //
+					defenseColumns// ).collect());
+				);
+				break;
+			case Fleet:
+				columnSets.put(columnSet, // ObservableCollection.flattenCollections(planetColumnType, //
+					fleetColumns// ).collect());
+				);
+				break;
+			case Moon:
+				columnSets.put(columnSet, ObservableCollection.flattenCollections(planetColumnType, //
+					moonFieldColumns, moonBuildings, moonDefenseColumns).collect());
+				break;
+			case MoonFleet:
+				columnSets.put(columnSet, // ObservableCollection.flattenCollections(planetColumnType, //
+					moonFleetColumns// ).collect());
+				);
+				break;
+			}
+		}
+		TypeToken<ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>>> columnSetType = ObservableCollection.TYPE_KEY
+			.getCompoundType(planetColumnType);
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> selectedColumns = ObservableCollection.flattenValue(//
+			theSelectedColumns.map(columnSetType, columnSets::get));
+		// ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> emptyColumns = ObservableCollection.of(planetColumnType);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> planetColumns = ObservableCollection
 			.flattenCollections(planetColumnType, //
 				initPlanetColumns, //
-				ObservableCollection.flattenValue(showFields.map(show -> show ? fieldColumns : emptyColumns)), //
-				ObservableCollection.flattenValue(showTemps.map(show -> show ? tempColumns : emptyColumns)), //
-				ObservableCollection.flattenValue(showMines.map(show -> show ? mineColumns : emptyColumns)), //
-				ObservableCollection.flattenValue(showUsage.map(show -> show ? usageColumns1 : emptyColumns)), //
-				ObservableCollection.flattenValue(showItems.map(show -> show ? itemColumns : emptyColumns)), //
-				ObservableCollection.flattenValue(showEnergy.map(show -> show ? energyBldgs : emptyColumns)), //
-				ObservableCollection.flattenValue(showUsage.map(show -> show ? usageColumns2 : emptyColumns)), //
-				ObservableCollection.flattenValue(showStorage.map(show -> show ? storageColumns : emptyColumns)), //
-				ObservableCollection.flattenValue(productionType.map(type -> type.type == null ? emptyColumns : productionColumns)), //
-				ObservableCollection.flattenValue(showProductionTotals.map(show -> show ? productionTotalColumns : emptyColumns)), //
-				ObservableCollection.flattenValue(productionType.map(type -> type.type == null ? emptyColumns : productionCargoColumns)), //
-				ObservableCollection.flattenValue(showMainFacilities.map(show -> show ? mainFacilities : emptyColumns)), //
-				ObservableCollection.flattenValue(showOtherFacilities.map(show -> show ? otherFacilities : emptyColumns)), //
-				ObservableCollection.flattenValue(showDefense.map(show -> show ? defenseColumns : emptyColumns)), //
-				ObservableCollection.flattenValue(showMoonInfo.combine((m, f) -> (m && f) ? moonFieldColumns : emptyColumns, showFields)), //
-				ObservableCollection.flattenValue(showMoonInfo.map(show -> show ? moonBuildings : emptyColumns)), //
-				ObservableCollection
-					.flattenValue(showMoonInfo.combine((m, d) -> (m && d) ? moonDefenseColumns : emptyColumns, showDefense)), //
+				selectedColumns, //
+				// ObservableCollection.flattenValue(showFields.map(show -> show ? fieldColumns : emptyColumns)), //
+				// ObservableCollection.flattenValue(showTemps.map(show -> show ? tempColumns : emptyColumns)), //
+				// ObservableCollection.flattenValue(showMines.map(show -> show ? mineColumns : emptyColumns)), //
+				// ObservableCollection.flattenValue(showUsage.map(show -> show ? usageColumns1 : emptyColumns)), //
+				// ObservableCollection.flattenValue(showItems.map(show -> show ? itemColumns : emptyColumns)), //
+				// ObservableCollection.flattenValue(showEnergy.map(show -> show ? energyBldgs : emptyColumns)), //
+				// ObservableCollection.flattenValue(showUsage.map(show -> show ? usageColumns2 : emptyColumns)), //
+				// ObservableCollection.flattenValue(showStorage.map(show -> show ? storageColumns : emptyColumns)), //
+				// ObservableCollection.flattenValue(productionType.map(type -> type.type == null ? emptyColumns : productionColumns)), //
+				// ObservableCollection.flattenValue(showProductionTotals.map(show -> show ? productionTotalColumns : emptyColumns)), //
+				// ObservableCollection.flattenValue(productionType.map(type -> type.type == null ? emptyColumns : productionCargoColumns)),
+				// //
+				// ObservableCollection.flattenValue(showMainFacilities.map(show -> show ? mainFacilities : emptyColumns)), //
+				// ObservableCollection.flattenValue(showOtherFacilities.map(show -> show ? otherFacilities : emptyColumns)), //
+				// ObservableCollection.flattenValue(showDefense.map(show -> show ? defenseColumns : emptyColumns)), //
+				// ObservableCollection.flattenValue(showMoonInfo.combine((m, f) -> (m && f) ? moonFieldColumns : emptyColumns,
+				// showFields)), //
+				// ObservableCollection.flattenValue(showMoonInfo.map(show -> show ? moonBuildings : emptyColumns)), //
+				// ObservableCollection
+				// .flattenValue(showMoonInfo.combine((m, d) -> (m && d) ? moonDefenseColumns : emptyColumns, showDefense)), //
 				lastPlanetColumns
 			).collect();
 
@@ -601,22 +697,22 @@ public class PlanetTable {
 					.withColumn(intResearchColumn("Shielding", Research::getShielding, Research::setShielding, 65))//
 					.withColumn(intResearchColumn("Armor", Research::getArmor, Research::setArmor, 55))//
 			)//
-			.addHPanel("Columns:", new JustifiedBoxLayout(false).setMainAlignment(JustifiedBoxLayout.Alignment.LEADING),
-				fieldPanel -> fieldPanel//
-					.addCheckField("Fields:", showFields, null).spacer(2)//
-					.addCheckField("Temps:", showTemps, null).spacer(2)//
-					.addCheckField("Mines:", showMines, null).spacer(2)//
-					.addCheckField("Usage:", showUsage, null).spacer(2)//
-					.addCheckField("Items:", showItems, null).spacer(2)//
-					.addCheckField("Energy:", showEnergy, null).spacer(2)//
-					.addCheckField("Storage:", showStorage, null).spacer(2)//
-					.addComboField("Prod:", productionType, null, ProductionDisplayType.values()).spacer(3)//
-					.addCheckField("P. Totals:", showProductionTotals, null).spacer(2)//
-					.addCheckField("Main Facil:", showMainFacilities, null).spacer(2)//
-					.addCheckField("Other Facil:", showOtherFacilities, null).spacer(2)//
-					.addCheckField("Def:", showDefense, null).spacer(2)//
-					.addCheckField("Moon Info:", showMoonInfo, null).spacer(2)//
-			)//
+			// .addHPanel("Columns:", new JustifiedBoxLayout(false).setMainAlignment(JustifiedBoxLayout.Alignment.LEADING),
+			// fieldPanel -> fieldPanel//
+			// .addCheckField("Fields:", showFields, null).spacer(2)//
+			// .addCheckField("Temps:", showTemps, null).spacer(2)//
+			// .addCheckField("Mines:", showMines, null).spacer(2)//
+			// .addCheckField("Usage:", showUsage, null).spacer(2)//
+			// .addCheckField("Items:", showItems, null).spacer(2)//
+			// .addCheckField("Energy:", showEnergy, null).spacer(2)//
+			// .addCheckField("Storage:", showStorage, null).spacer(2)//
+			// .addComboField("Prod:", productionType, null, ProductionDisplayType.values()).spacer(3)//
+			// .addCheckField("P. Totals:", showProductionTotals, null).spacer(2)//
+			// .addCheckField("Main Facil:", showMainFacilities, null).spacer(2)//
+			// .addCheckField("Other Facil:", showOtherFacilities, null).spacer(2)//
+			// .addCheckField("Def:", showDefense, null).spacer(2)//
+			// .addCheckField("Moon Info:", showMoonInfo, null).spacer(2)//
+			// )//
 			.addTable(selectedPlanets,
 				planetTable -> planetTable.fill().withItemName("planet").withAdaptiveHeight(6, 30, 50)//
 					.dragSourceRow(s -> s.toObject()).dragAcceptRow(a -> a.fromObject())// Allow dragging to reorder planets
@@ -661,6 +757,14 @@ public class PlanetTable {
 							planets.stream().map(p -> p.planet).collect(Collectors.toList())),
 						action -> action//
 							.confirmForItems("Delete Planets?", "Are you sure you want to delete ", null, true))//
+					.withTableOption(columnsPanel -> {
+						columnsPanel.addToggleField("Columns:", theSelectedColumns, Arrays.asList(PlanetColumnSet.values()), //
+							JToggleButton.class, cs -> new JToggleButton("" + cs), columnButtons -> {});
+					}).withTableOption(prodTypePanel -> {
+						prodTypePanel.spacer(3).addComboField("Duration:", productionType, ptc -> {
+							ptc.visibleWhen(theSelectedColumns.map(cs -> cs == PlanetColumnSet.Production));
+						}, ProductionDisplayType.values());
+					})//
 			)//
 			.addHPanel(null, new JustifiedBoxLayout(false).mainJustified().crossJustified(),
 				bottomSplit -> bottomSplit.fill()//
@@ -758,6 +862,12 @@ public class PlanetTable {
 									theUniGui.getSelectedAccount().get());
 								return (long) Math.ceil(cost * 1.0 / cargoSpace);
 							}, cargoCol -> cargoCol.formatText(i -> i == null ? "" : commaFormat.format(i * 1.0)).withWidths(40, 50, 80))//
+				// This column makes the whole app really slow, and it's not ideal because it doesn't take into account
+				// optimal usage changes
+				// .withColumn("ROI", Duration.class, //
+				// upgrade -> getROI(theUniGui.getRules().get(), theUniGui.getSelectedAccount().get(), upgrade), //
+				// roiCol -> roiCol.formatText(roi -> roi == null ? "" : QommonsUtils.printDuration(roi, true)).withWidths(50,
+				// 100, 150))//
 				)//
 				)//
 		);
@@ -853,8 +963,8 @@ public class PlanetTable {
 		return intPlanetColumn(name, false, useTotal, p -> getter.apply(p.getMoon()), (p, v) -> setter.accept(p.getMoon(), v), width);
 	}
 
-	CategoryRenderStrategy<PlanetWithProduction, Integer> shipColumn(String name, ShipyardItemType type, boolean moon, int width) {
-		return intPlanetColumn(name, false, true, planet -> {
+	CategoryRenderStrategy<PlanetWithProduction, Integer> shipColumn(ShipyardItemType type, boolean moon, int width) {
+		return intPlanetColumn(OGameUtils.abbreviate(type), false, true, planet -> {
 			RockyBody target = moon ? planet.getMoon() : planet;
 			return target.getStationedShips(type);
 		}, (planet, value) -> {
@@ -1267,5 +1377,142 @@ public class PlanetTable {
 		default:
 			break;
 		}
+	}
+
+	static Duration getROI(OGameRuleSet rules, Account account, AccountUpgrade upgrade) {
+		if (upgrade.getToLevel() <= upgrade.getFromLevel()) {
+			return null;
+		}
+		switch (upgrade.getType().type) {
+		case Research:
+			switch (upgrade.getType().research) {
+			case Astrophysics:
+			case Plasma:
+				break;
+			case Energy: // TODO Involves adjusting usages, maybe will do it later
+			default:
+				return null;
+			}
+			break;
+		case ShipyardItem:
+			switch (upgrade.getType().shipyardItem) {
+			case Crawler:
+			case SolarSatellite:
+				break;
+			default:
+				return null;
+			}
+			break;
+		case Building:
+			switch (upgrade.getType().building) {
+			case MetalMine:
+			case CrystalMine:
+			case DeuteriumSynthesizer:
+			case SolarPlant:
+			case FusionReactor: // TODO Technically should adjust usages to calculate the real ROI, but that's tricky
+				break;
+			default:
+				return null;
+			}
+			break;
+		}
+		Account ref = account.getReferenceAccount();
+		if (ref == null) {
+			return null;
+		}
+		int planetIdx = upgrade.getPlanet() == null ? -1 : account.getPlanets().getValues().indexOf(upgrade.getPlanet());
+		if (planetIdx >= 0 && planetIdx >= ref.getPlanets().getValues().size()) {
+			return null;
+		}
+		Planet refPlanet = planetIdx < 0 ? null : ref.getPlanets().getValues().get(planetIdx);
+		double currentProduction = 0, newProduction = 0, cost = 0;
+		TradeRatios tr = account.getUniverse().getTradeRatios();
+		switch (upgrade.getType().type) {
+		case Research:
+			List<FullProduction> productions = QommonsUtils.map(ref.getPlanets().getValues(), //
+				p -> rules.economy().getFullProduction(ref, p), false);
+			cost = upgrade.getCost().getMetalValue(tr);
+			for (FullProduction p : productions) {
+				currentProduction += p.asCost().getMetalValue(tr);
+			}
+			switch (upgrade.getType().research) {
+			case Astrophysics:
+				int newPlanets = (upgrade.getToLevel() + 1) / 2 + 1;
+				newProduction = currentProduction * newPlanets / productions.size();
+				double planetCost = 0;
+				for (AccountUpgradeType u : AccountUpgradeType.values()) {
+					switch (u.type) {
+					case Building:
+						for (Planet p : ref.getPlanets().getValues()) {
+							planetCost += rules.economy().getUpgradeCost(account, p, u, 0, p.getBuildingLevel(u.building))
+								.getMetalValue(tr);
+						}
+						break;
+					case ShipyardItem:
+						if (u.shipyardItem.mobile) {
+							continue;
+						}
+						for (Planet p : ref.getPlanets().getValues()) {
+							planetCost += rules.economy().getUpgradeCost(account, p, u, 0, p.getStationedShips(u.shipyardItem))
+								.getMetalValue(tr);
+						}
+						break;
+					default:
+						break;
+					}
+				}
+				cost += planetCost / productions.size();
+				break;
+			case Plasma:
+				ref.getResearch().setPlasma(upgrade.getToLevel());
+				try {
+					newProduction = 0;
+					for (Planet p : ref.getPlanets().getValues()) {
+						newProduction += rules.economy().getFullProduction(ref, p).asCost().getMetalValue(tr);
+					}
+				} finally {
+					ref.getResearch().setPlasma(upgrade.getFromLevel());
+				}
+				break;
+			default:
+				return null;
+			}
+			break;
+		default:
+			productions = QommonsUtils.map(ref.getPlanets().getValues(), //
+				p -> rules.economy().getFullProduction(ref, p), false);
+			cost = upgrade.getCost().getMetalValue(tr);
+			newProduction = currentProduction - productions.get(planetIdx).asCost().getMetalValue(tr);
+			switch (upgrade.getType().type) {
+			case Building:
+				refPlanet.setBuildingLevel(upgrade.getType().building, upgrade.getToLevel());
+				break;
+			case ShipyardItem:
+				refPlanet.setStationedShips(upgrade.getType().shipyardItem, upgrade.getToLevel());
+				break;
+			default:
+				break;
+			}
+			try {
+				newProduction += rules.economy().getFullProduction(ref, refPlanet).asCost().getMetalValue(tr);
+			} finally {
+				switch (upgrade.getType().type) {
+				case Building:
+					refPlanet.setBuildingLevel(upgrade.getType().building, upgrade.getFromLevel());
+					break;
+				case ShipyardItem:
+					refPlanet.setStationedShips(upgrade.getType().shipyardItem, upgrade.getFromLevel());
+					break;
+				default:
+					break;
+				}
+			}
+			break;
+		}
+		if (newProduction <= currentProduction) {
+			return null;
+		}
+		double seconds = cost / (newProduction - currentProduction) * 3600;
+		return Duration.ofSeconds((long) seconds);
 	}
 }

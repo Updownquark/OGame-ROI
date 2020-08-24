@@ -4,7 +4,6 @@ import org.qommons.TimeUtils;
 import org.qommons.TimeUtils.DurationComponentType;
 
 enum ProductionDisplayType {
-	None(null),
 	Hourly(TimeUtils.DurationComponentType.Hour),
 	Daily(TimeUtils.DurationComponentType.Day),
 	Weekly(TimeUtils.DurationComponentType.Week),

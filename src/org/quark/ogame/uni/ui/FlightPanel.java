@@ -154,50 +154,13 @@ public class FlightPanel {
 					sb.append(", ");
 				}
 				INT_FORMAT.append(sb, amount * 1.0);
-				sb.append(' ').append(abbreviate(type));
+				sb.append(' ').append(OGameUtils.abbreviate(type));
 			}
 		}
 		if (sb.length() == 0) {
 			sb.append("None");
 		}
 		return sb.toString();
-	}
-
-	private static String abbreviate(ShipyardItemType type) {
-		switch (type) {
-		case SmallCargo:
-			return "SC";
-		case LargeCargo:
-			return "LC";
-		case ColonyShip:
-			return "Col";
-		case Recycler:
-			return "Rec";
-		case EspionageProbe:
-			return "Probe";
-		case LightFighter:
-			return "LF";
-		case HeavyFighter:
-			return "HF";
-		case Cruiser:
-			return "Cr";
-		case BattleShip:
-			return "BS";
-		case BattleCruiser:
-			return "BC";
-		case Bomber:
-			return "Bomb";
-		case Destroyer:
-			return "Des";
-		case DeathStar:
-			return "RIP";
-		case Reaper:
-			return "Reap";
-		case PathFinder:
-			return "PF";
-		default:
-			throw new IllegalStateException("Unrecognized mobile ship: " + type);
-		}
 	}
 
 	int getFlightDistance(PlannedFlight flight) {
