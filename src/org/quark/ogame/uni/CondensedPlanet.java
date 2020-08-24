@@ -219,4 +219,10 @@ public interface CondensedPlanet extends CondensedRockyBody, Planet {
 
 	@Override
 	abstract Planet setBonus(ResourceType type, int level);
+
+	@Override
+	CondensedPlanet setCurrentUpgrade(BuildingType building);
+
+	@Override
+	CondensedPlanet setName(String name);
 }

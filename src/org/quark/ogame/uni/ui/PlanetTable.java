@@ -49,6 +49,7 @@ import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.RockyBody;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.TradeRatios;
+import org.quark.ogame.uni.UpgradeAccount;
 import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.UpgradeType;
 
@@ -208,6 +209,7 @@ public class PlanetTable {
 				@Override
 					public PlannedAccountUpgrade set(PlannedAccountUpgrade o1, int idx1, int incMod, PlannedAccountUpgrade o2, int idx2,
 						int retIdx) {
+						o1.clearROI();
 					return o1;
 				}
 			});
@@ -862,12 +864,10 @@ public class PlanetTable {
 									theUniGui.getSelectedAccount().get());
 								return (long) Math.ceil(cost * 1.0 / cargoSpace);
 							}, cargoCol -> cargoCol.formatText(i -> i == null ? "" : commaFormat.format(i * 1.0)).withWidths(40, 50, 80))//
-				// This column makes the whole app really slow, and it's not ideal because it doesn't take into account
-				// optimal usage changes
-				// .withColumn("ROI", Duration.class, //
-				// upgrade -> getROI(theUniGui.getRules().get(), theUniGui.getSelectedAccount().get(), upgrade), //
-				// roiCol -> roiCol.formatText(roi -> roi == null ? "" : QommonsUtils.printDuration(roi, true)).withWidths(50,
-				// 100, 150))//
+							.withColumn("ROI", Duration.class, //
+								upgrade -> upgrade instanceof PlannedAccountUpgrade ? ((PlannedAccountUpgrade) upgrade).getROI() : null, //
+								roiCol -> roiCol.formatText(roi -> roi == null ? "" : QommonsUtils.printDuration(roi, true)).withWidths(50,
+									100, 150))//
 				)//
 				)//
 		);
@@ -980,6 +980,7 @@ public class PlanetTable {
 	}
 
 	class PlannedAccountUpgrade extends AccountUpgrade {
+		private Duration roi;
 		CollectionElement<PlannedUpgrade> planned;
 
 		PlannedAccountUpgrade(AccountUpgradeType upgradeType, Planet planet, boolean moon, int fromLevel, int toLevel, UpgradeCost cost) {
@@ -996,6 +997,17 @@ public class PlanetTable {
 				theUniGui.getSelectedAccount().get().getPlannedUpgrades().getValues().mutableElement(this.planned.getElementId()).remove();
 				this.planned = null;
 			}
+		}
+
+		void clearROI() {
+			roi = null;
+		}
+
+		Duration getROI() {
+			if (roi == null) {
+				roi = PlanetTable2.getROI(theUniGui.getRules().get(), theUniGui.getSelectedAccount().get(), this);
+			}
+			return roi;
 		}
 	}
 
@@ -1464,14 +1476,12 @@ public class PlanetTable {
 				cost += planetCost / productions.size();
 				break;
 			case Plasma:
-				ref.getResearch().setPlasma(upgrade.getToLevel());
-				try {
+				if (upgrade.getPlanet() == null) {
+					UpgradeAccount upgradeAccount = new UpgradeAccount(ref).withUpgrade(upgrade);
 					newProduction = 0;
 					for (Planet p : ref.getPlanets().getValues()) {
-						newProduction += rules.economy().getFullProduction(ref, p).asCost().getMetalValue(tr);
+						newProduction += rules.economy().getFullProduction(upgradeAccount, p).asCost().getMetalValue(tr);
 					}
-				} finally {
-					ref.getResearch().setPlasma(upgrade.getFromLevel());
 				}
 				break;
 			default:
@@ -1483,30 +1493,8 @@ public class PlanetTable {
 				p -> rules.economy().getFullProduction(ref, p), false);
 			cost = upgrade.getCost().getMetalValue(tr);
 			newProduction = currentProduction - productions.get(planetIdx).asCost().getMetalValue(tr);
-			switch (upgrade.getType().type) {
-			case Building:
-				refPlanet.setBuildingLevel(upgrade.getType().building, upgrade.getToLevel());
-				break;
-			case ShipyardItem:
-				refPlanet.setStationedShips(upgrade.getType().shipyardItem, upgrade.getToLevel());
-				break;
-			default:
-				break;
-			}
-			try {
-				newProduction += rules.economy().getFullProduction(ref, refPlanet).asCost().getMetalValue(tr);
-			} finally {
-				switch (upgrade.getType().type) {
-				case Building:
-					refPlanet.setBuildingLevel(upgrade.getType().building, upgrade.getFromLevel());
-					break;
-				case ShipyardItem:
-					refPlanet.setStationedShips(upgrade.getType().shipyardItem, upgrade.getFromLevel());
-					break;
-				default:
-					break;
-				}
-			}
+			UpgradeAccount.UpgradePlanet upgradePlanet = new UpgradeAccount.UpgradePlanet(refPlanet).withUpgrade(upgrade);
+			newProduction += rules.economy().getFullProduction(account, upgradePlanet).asCost().getMetalValue(tr);
 			break;
 		}
 		if (newProduction <= currentProduction) {
