@@ -14,9 +14,6 @@ public interface Account extends Nameable {
 
 	Universe getUniverse();
 
-	Account getReferenceAccount();
-	Account setReferenceAccount(Account referenceAccount);
-
 	AccountClass getGameClass();
 	Account setGameClass(AccountClass clazz);
 

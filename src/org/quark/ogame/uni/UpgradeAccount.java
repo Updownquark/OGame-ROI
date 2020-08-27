@@ -1,24 +1,63 @@
 package org.quark.ogame.uni;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.observe.collect.ObservableCollection;
+import org.observe.config.ConfiguredValueType;
+import org.observe.config.SyncValueCreator;
 import org.observe.config.SyncValueSet;
+import org.observe.util.TypeTokens;
+import org.qommons.ArrayUtils;
 import org.qommons.Nameable;
+
+import com.google.common.reflect.TypeToken;
 
 public class UpgradeAccount implements Account {
 	private final Account theWrapped;
 	private final UpgradeResearch theResearch;
-	private List<AccountUpgrade> theUpgrades;
+	private volatile UpgradePlanetSet thePlanets;
 
 	public UpgradeAccount(Account wrap) {
 		theWrapped = wrap;
-		theUpgrades = new LinkedList<>();
 		theResearch = new UpgradeResearch();
 	}
 
+	public Account getWrapped() {
+		return theWrapped;
+	}
+
 	public UpgradeAccount withUpgrade(AccountUpgrade upgrade) {
-		theUpgrades.add(upgrade);
+		if (upgrade.getPlanet() != null) {
+			getPlanets().getUpgradePlanet(upgrade.getPlanet()).withUpgrade(upgrade);
+		} else {
+			theResearch.withUpgrade(upgrade);
+		}
+		return this;
+	}
+
+	public UpgradeAccount withUpgrade(PlannedUpgrade upgrade) {
+		if (upgrade.getType().research != null) {
+			theResearch.withUpgrade(upgrade);
+		} else {
+			getPlanets().getPlanet(upgrade.getPlanet()).withUpgrade(upgrade);
+		}
+		return this;
+	}
+
+	public UpgradeAccount withoutUpgrade(PlannedUpgrade upgrade) {
+		if (upgrade.getType().research != null) {
+			theResearch.withoutUpgrade(upgrade);
+		} else {
+			UpgradePlanet planet = getPlanets().getPlanet(upgrade.getPlanet());
+			if (planet != null) {
+				planet.withoutUpgrade(upgrade);
+			}
+		}
 		return this;
 	}
 
@@ -43,16 +82,6 @@ public class UpgradeAccount implements Account {
 	}
 
 	@Override
-	public Account getReferenceAccount() {
-		return theWrapped.getReferenceAccount();
-	}
-
-	@Override
-	public Account setReferenceAccount(Account referenceAccount) {
-		return this;
-	}
-
-	@Override
 	public AccountClass getGameClass() {
 		return theWrapped.getGameClass();
 	}
@@ -73,8 +102,17 @@ public class UpgradeAccount implements Account {
 	}
 
 	@Override
-	public SyncValueSet<Planet> getPlanets() {
-		return theWrapped.getPlanets();
+	public UpgradePlanetSet getPlanets() {
+		UpgradePlanetSet planets = thePlanets;
+		if (planets == null) {
+			synchronized (this) {
+				planets = thePlanets;
+				if (planets == null) {
+					thePlanets = planets = new UpgradePlanetSet();
+				}
+			}
+		}
+		return thePlanets;
 	}
 
 	@Override
@@ -97,7 +135,81 @@ public class UpgradeAccount implements Account {
 		return theWrapped.getPlannedFlights();
 	}
 
-	public class UpgradeResearch implements CondensedResearch {
+	public class UpgradePlanetSet implements SyncValueSet<Planet> {
+		private final Map<Long, UpgradePlanet> theUpgradePlanets;
+		private final ObservableCollection<UpgradePlanet> thePlanetCollection;
+
+		UpgradePlanetSet() {
+			theUpgradePlanets = new ConcurrentHashMap<>();
+			thePlanetCollection = theWrapped.getPlanets().getValues().flow()//
+				.map(TypeTokens.get().of(UpgradePlanet.class), p -> {
+					return theUpgradePlanets.computeIfAbsent(p.getId(), __ -> new UpgradePlanet(p));
+				}, opts -> opts.cache(false)).collectPassive();
+		}
+
+		@Override
+		public ConfiguredValueType<Planet> getType() {
+			return theWrapped.getPlanets().getType();
+		}
+
+		@Override
+		public ObservableCollection<Planet> getValues() {
+			return (ObservableCollection<Planet>) (ObservableCollection<?>) thePlanetCollection;
+		}
+
+		public UpgradePlanet getUpgradePlanet(Planet wrappedPlanet) {
+			if (wrappedPlanet.getAccount() == UpgradeAccount.this) {
+				return (UpgradePlanet) wrappedPlanet;
+			} else if (wrappedPlanet.getAccount() == theWrapped) {
+				return theUpgradePlanets.computeIfAbsent(wrappedPlanet.getId(), __ -> new UpgradePlanet(wrappedPlanet));
+			} else {
+				throw new IllegalArgumentException("Unrecognized planet: " + wrappedPlanet);
+			}
+		}
+
+		public UpgradePlanet getPlanet(long planetId) {
+			for (Planet p : theWrapped.getPlanets().getValues()) {
+				if (p.getId() == planetId) {
+					return getUpgradePlanet(p);
+				}
+			}
+			return null;
+		}
+
+		@Override
+		public <E2 extends Planet> SyncValueCreator<Planet, E2> create(TypeToken<E2> subType) {
+			throw new UnsupportedOperationException("Can't create planets here");
+		}
+	}
+
+	class UpgradeResearch implements CondensedResearch {
+		private List<AccountUpgrade> theUpgrades;
+		private Map<ResearchType, List<PlannedUpgrade>> thePlannedUpgrades;
+
+		void withUpgrade(AccountUpgrade upgrade) {
+			if (theUpgrades == null) {
+				theUpgrades = new LinkedList<>();
+			}
+			theUpgrades.add(upgrade);
+		}
+
+		void withUpgrade(PlannedUpgrade upgrade) {
+			if (thePlannedUpgrades == null) {
+				thePlannedUpgrades = new HashMap<>();
+			}
+			List<PlannedUpgrade> upgrades = thePlannedUpgrades.computeIfAbsent(upgrade.getType().research, __ -> new LinkedList<>());
+			if (!upgrades.contains(upgrade)) {
+				upgrades.add(upgrade);
+			}
+		}
+
+		void withoutUpgrade(PlannedUpgrade upgrade) {
+			if (thePlannedUpgrades == null) {
+				return;
+			}
+			thePlannedUpgrades.getOrDefault(upgrade.getType().research, Collections.emptyList()).remove(upgrade);
+		}
+
 		@Override
 		public ResearchType getCurrentUpgrade() {
 			return null;
@@ -111,9 +223,15 @@ public class UpgradeAccount implements Account {
 		@Override
 		public int getResearchLevel(ResearchType type) {
 			int level = theWrapped.getResearch().getResearchLevel(type);
-			for (AccountUpgrade upgrade : theUpgrades) {
-				if (upgrade.getType().research == type) {
-					level = Math.max(level, upgrade.getToLevel());
+			if (theUpgrades != null) {
+				for (AccountUpgrade upgrade : theUpgrades) {
+					if (upgrade.getType().research == type) {
+						level = Math.max(level, upgrade.getToLevel());
+					}
+				}
+			} else if (thePlannedUpgrades != null) {
+				for (PlannedUpgrade upgrade : thePlannedUpgrades.getOrDefault(type, Collections.emptyList())) {
+					level += upgrade.getQuantity();
 				}
 			}
 			return level;
@@ -123,30 +241,79 @@ public class UpgradeAccount implements Account {
 		public void setResearchLevel(ResearchType type, int level) {}
 	}
 
-	public static class UpgradePlanet implements CondensedPlanet {
-		private final Planet theWrapped;
-		private final UpgradeStructures theStructures;
-		private final List<AccountUpgrade> theUpgrades;
+	public class UpgradePlanet extends UpgradeRockyBody implements CondensedPlanet {
+		private UpgradeMoon theMoon;
+		private int theFusionUtil;
 
 		public UpgradePlanet(Planet wrapped) {
-			theWrapped = wrapped;
-			theUpgrades = new LinkedList<>();
-			theStructures = new UpgradeStructures();
+			super(wrapped);
+			theFusionUtil = -1;
 		}
 
-		public UpgradePlanet withUpgrade(AccountUpgrade upgrade) {
-			theUpgrades.add(upgrade);
-			return this;
+		public void optimizeEnergy(OGameEconomyRuleSet eco) {
+			theFusionUtil = ArrayUtils.binarySearch(0, 10, util -> {
+				theFusionUtil = util * 10;
+				double net = eco.getProduction(UpgradeAccount.this, this, ResourceType.Energy, 1).totalNet;
+				if (net == 0) {
+					return 0;
+				} else if (net < 0) {
+					return 1;
+				} else {
+					return -1;
+				}
+			}) * 10;
+		}
+
+		@Override
+		public Planet getWrapped() {
+			return (Planet) super.getWrapped();
+		}
+
+		@Override
+		void withUpgrade(AccountUpgrade upgrade) {
+			if (upgrade.isMoon()) {
+				getMoon().withUpgrade(upgrade);
+			} else {
+				super.withUpgrade(upgrade);
+			}
+		}
+
+		@Override
+		void withUpgrade(PlannedUpgrade upgrade) {
+			if (upgrade.isMoon()) {
+				getMoon().withUpgrade(upgrade);
+			} else {
+				super.withUpgrade(upgrade);
+			}
+		}
+
+		@Override
+		void withoutUpgrade(PlannedUpgrade upgrade) {
+			if (upgrade.isMoon()) {
+				getMoon().withoutUpgrade(upgrade);
+			} else {
+				super.withoutUpgrade(upgrade);
+			}
+		}
+
+		@Override
+		public long getId() {
+			return getWrapped().getId();
+		}
+
+		@Override
+		public UpgradeAccount getAccount() {
+			return UpgradeAccount.this;
 		}
 
 		@Override
 		public Coordinate getCoordinates() {
-			return theWrapped.getCoordinates();
+			return getWrapped().getCoordinates();
 		}
 
 		@Override
 		public int getBaseFields() {
-			return theWrapped.getBaseFields();
+			return getWrapped().getBaseFields();
 		}
 
 		@Override
@@ -156,7 +323,7 @@ public class UpgradeAccount implements Account {
 
 		@Override
 		public int getMinimumTemperature() {
-			return theWrapped.getMinimumTemperature();
+			return getWrapped().getMinimumTemperature();
 		}
 
 		@Override
@@ -166,7 +333,7 @@ public class UpgradeAccount implements Account {
 
 		@Override
 		public int getMaximumTemperature() {
-			return theWrapped.getMaximumTemperature();
+			return getWrapped().getMaximumTemperature();
 		}
 
 		@Override
@@ -175,13 +342,16 @@ public class UpgradeAccount implements Account {
 		}
 
 		@Override
-		public Moon getMoon() {
-			return theWrapped.getMoon();
+		public UpgradeMoon getMoon() {
+			if (theMoon == null) {
+				theMoon = new UpgradeMoon(getWrapped().getMoon());
+			}
+			return theMoon;
 		}
 
 		@Override
 		public int getMetalUtilization() {
-			return theWrapped.getMetalUtilization();
+			return getWrapped().getMetalUtilization();
 		}
 
 		@Override
@@ -191,7 +361,7 @@ public class UpgradeAccount implements Account {
 
 		@Override
 		public int getCrystalUtilization() {
-			return theWrapped.getCrystalUtilization();
+			return getWrapped().getCrystalUtilization();
 		}
 
 		@Override
@@ -201,7 +371,7 @@ public class UpgradeAccount implements Account {
 
 		@Override
 		public int getDeuteriumUtilization() {
-			return theWrapped.getDeuteriumUtilization();
+			return getWrapped().getDeuteriumUtilization();
 		}
 
 		@Override
@@ -211,7 +381,7 @@ public class UpgradeAccount implements Account {
 
 		@Override
 		public int getSolarPlantUtilization() {
-			return theWrapped.getSolarPlantUtilization();
+			return getWrapped().getSolarPlantUtilization();
 		}
 
 		@Override
@@ -221,7 +391,10 @@ public class UpgradeAccount implements Account {
 
 		@Override
 		public int getFusionReactorUtilization() {
-			return theWrapped.getFusionReactorUtilization();
+			if (theFusionUtil >= 0) {
+				return theFusionUtil;
+			}
+			return getWrapped().getFusionReactorUtilization();
 		}
 
 		@Override
@@ -231,7 +404,7 @@ public class UpgradeAccount implements Account {
 
 		@Override
 		public int getSolarSatelliteUtilization() {
-			return theWrapped.getSolarSatelliteUtilization();
+			return getWrapped().getSolarSatelliteUtilization();
 		}
 
 		@Override
@@ -241,7 +414,7 @@ public class UpgradeAccount implements Account {
 
 		@Override
 		public int getCrawlerUtilization() {
-			return theWrapped.getCrawlerUtilization();
+			return getWrapped().getCrawlerUtilization();
 		}
 
 		@Override
@@ -250,13 +423,18 @@ public class UpgradeAccount implements Account {
 		}
 
 		@Override
-		public String getName() {
-			return theWrapped.getName();
+		public int getBonus(ResourceType type) {
+			return getWrapped().getBonus(type);
 		}
 
 		@Override
-		public BuildingType getCurrentUpgrade() {
-			return null;
+		public Planet setBonus(ResourceType type, int level) {
+			return this;
+		}
+
+		@Override
+		public UpgradePlanet setName(String name) {
+			return this;
 		}
 
 		@Override
@@ -265,60 +443,261 @@ public class UpgradeAccount implements Account {
 		}
 
 		@Override
-		public StationaryStructures getStationaryStructures() {
+		public UpgradePlanet setBuildingLevel(BuildingType type, int buildingLevel) {
+			return this;
+		}
+
+		public class UpgradeMoon extends UpgradeRockyBody implements CondensedMoon {
+			public UpgradeMoon(Moon wrapped) {
+				super(wrapped);
+			}
+
+			@Override
+			public Moon getWrapped() {
+				return (Moon) super.getWrapped();
+			}
+
+			@Override
+			public UpgradePlanet getPlanet() {
+				return UpgradePlanet.this;
+			}
+
+			@Override
+			public int getFieldBonus() {
+				return getMoon().getFieldBonus();
+			}
+
+			@Override
+			public Moon setFieldBonus(int fieldBonus) {
+				return this;
+			}
+
+			@Override
+			public UpgradeMoon setName(String name) {
+				return this;
+			}
+
+			@Override
+			public UpgradeMoon setCurrentUpgrade(BuildingType building) {
+				return this;
+			}
+
+			@Override
+			public UpgradeMoon setBuildingLevel(BuildingType type, int buildingLevel) {
+				return this;
+			}
+		}
+	}
+
+	public static abstract class UpgradeRockyBody implements CondensedRockyBody {
+		private final RockyBody theWrappedBody;
+		private List<AccountUpgrade> theUpgrades;
+		private Map<BuildingType, List<PlannedUpgrade>> thePlannedUpgrades;
+		private UpgradeStructures theStructures;
+		private UpgradeFleet theFleet;
+
+		UpgradeRockyBody(RockyBody wrappedBody) {
+			theWrappedBody = wrappedBody;
+		}
+
+		public RockyBody getWrapped() {
+			return theWrappedBody;
+		}
+
+		void withUpgrade(AccountUpgrade upgrade) {
+			if (theUpgrades == null) {
+				theUpgrades = new LinkedList<>();
+			}
+			theUpgrades.add(upgrade);
+		}
+
+		void withUpgrade(PlannedUpgrade upgrade) {
+			if (upgrade.getType().shipyardItem != null) {
+				if (upgrade.getType().shipyardItem.mobile) {
+					getStationedFleet().withUpgrade(upgrade);
+				} else {
+					getStationaryStructures().withUpgrade(upgrade);
+				}
+				return;
+			}
+			if (thePlannedUpgrades == null) {
+				thePlannedUpgrades = new HashMap<>();
+			}
+			List<PlannedUpgrade> upgrades = thePlannedUpgrades.computeIfAbsent(upgrade.getType().building, __ -> new LinkedList<>());
+			if (!upgrades.contains(upgrade)) {
+				upgrades.add(upgrade);
+			}
+		}
+
+		void withoutUpgrade(PlannedUpgrade upgrade) {
+			if (thePlannedUpgrades == null) {
+				return;
+			}
+			thePlannedUpgrades.getOrDefault(upgrade.getType().building, Collections.emptyList()).remove(upgrade);
+		}
+
+		@Override
+		public String getName() {
+			return theWrappedBody.getName();
+		}
+
+		@Override
+		public BuildingType getCurrentUpgrade() {
+			return theWrappedBody.getCurrentUpgrade();
+		}
+
+		@Override
+		public RockyBody setCurrentUpgrade(BuildingType building) {
+			return this;
+		}
+
+		@Override
+		public UpgradeStructures getStationaryStructures() {
+			if (theStructures == null) {
+				theStructures = new UpgradeStructures();
+			}
 			return theStructures;
 		}
 
 		@Override
-		public Fleet getStationedFleet() {
-			return theWrapped.getStationedFleet();
+		public UpgradeFleet getStationedFleet() {
+			if (theFleet == null) {
+				theFleet = new UpgradeFleet();
+			}
+			return theFleet;
 		}
 
 		@Override
-		public CondensedPlanet setName(String name) {
+		public Nameable setName(String name) {
 			return this;
 		}
 
 		@Override
 		public int getBuildingLevel(BuildingType type) {
-			int level = theWrapped.getBuildingLevel(type);
-			for (AccountUpgrade upgrade : theUpgrades) {
-				if (upgrade.getType().building == type) {
-					level = Math.max(level, upgrade.getToLevel());
+			int level = theWrappedBody.getBuildingLevel(type);
+			if (theUpgrades != null) {
+				for (AccountUpgrade upgrade : theUpgrades) {
+					if (upgrade.getType().building == type) {
+						level = Math.max(level, upgrade.getToLevel());
+					}
+				}
+			} else if (thePlannedUpgrades != null) {
+				for (PlannedUpgrade upgrade : thePlannedUpgrades.getOrDefault(type, Collections.emptyList())) {
+					level += upgrade.getQuantity();
 				}
 			}
 			return level;
 		}
 
 		@Override
-		public CondensedPlanet setBuildingLevel(BuildingType type, int buildingLevel) {
-			return this;
-		}
-
-		@Override
-		public int getBonus(ResourceType type) {
-			return theWrapped.getBonus(type);
-		}
-
-		@Override
-		public Planet setBonus(ResourceType type, int level) {
+		public CondensedRockyBody setBuildingLevel(BuildingType type, int buildingLevel) {
 			return this;
 		}
 
 		public class UpgradeStructures implements CondensedStationaryStructures {
+			private Map<ShipyardItemType, List<PlannedUpgrade>> thePlannedUpgrades;
+			private List<AccountUpgrade> theUpgrades;
+
+			UpgradeStructures() {}
+
+			void withUpgrade(AccountUpgrade upgrade) {
+				if (theUpgrades == null) {
+					theUpgrades = new LinkedList<>();
+				}
+				theUpgrades.add(upgrade);
+			}
+
+			void withUpgrade(PlannedUpgrade upgrade) {
+				if (thePlannedUpgrades == null) {
+					thePlannedUpgrades = new HashMap<>();
+				}
+				List<PlannedUpgrade> upgrades = thePlannedUpgrades.computeIfAbsent(upgrade.getType().shipyardItem,
+					__ -> new LinkedList<>());
+				if (!upgrades.contains(upgrade)) {
+					upgrades.add(upgrade);
+				}
+			}
+
+			void withoutUpgrade(PlannedUpgrade upgrade) {
+				if (thePlannedUpgrades == null) {
+					return;
+				}
+				thePlannedUpgrades.getOrDefault(upgrade.getType().shipyardItem, Collections.emptyList()).remove(upgrade);
+			}
+
 			@Override
 			public int getItems(ShipyardItemType type) {
-				int level = theWrapped.getStationaryStructures().getItems(type);
-				for (AccountUpgrade upgrade : theUpgrades) {
-					if (upgrade.getType().shipyardItem == type) {
-						level = Math.max(level, upgrade.getToLevel());
+				int level = theWrappedBody.getStationaryStructures().getItems(type);
+				if (theUpgrades != null) {
+					for (AccountUpgrade upgrade : theUpgrades) {
+						if (upgrade.getType().shipyardItem == type) {
+							level = Math.max(level, upgrade.getToLevel());
+						}
+					}
+				} else if (thePlannedUpgrades != null) {
+					for (PlannedUpgrade upgrade : thePlannedUpgrades.getOrDefault(type, Collections.emptyList())) {
+						level+=upgrade.getQuantity();
 					}
 				}
 				return level;
 			}
 
 			@Override
-			public StationaryStructures setItems(ShipyardItemType type, int number) {
+			public UpgradeStructures setItems(ShipyardItemType type, int number) {
+				return this;
+			}
+		}
+
+		public class UpgradeFleet implements CondensedFleet {
+			private Map<ShipyardItemType, List<PlannedUpgrade>> thePlannedUpgrades;
+			private List<AccountUpgrade> theUpgrades;
+
+			UpgradeFleet() {}
+
+			void withUpgrade(AccountUpgrade upgrade) {
+				if (theUpgrades == null) {
+					theUpgrades = new LinkedList<>();
+				}
+				theUpgrades.add(upgrade);
+			}
+
+			void withUpgrade(PlannedUpgrade upgrade) {
+				if (thePlannedUpgrades == null) {
+					thePlannedUpgrades = new HashMap<>();
+				}
+				List<PlannedUpgrade> upgrades = thePlannedUpgrades.computeIfAbsent(upgrade.getType().shipyardItem,
+					__ -> new LinkedList<>());
+				if (!upgrades.contains(upgrade)) {
+					upgrades.add(upgrade);
+				}
+			}
+
+			void withoutUpgrade(PlannedUpgrade upgrade) {
+				if (thePlannedUpgrades == null) {
+					return;
+				}
+				thePlannedUpgrades.getOrDefault(upgrade.getType().shipyardItem, Collections.emptyList()).remove(upgrade);
+			}
+
+			@Override
+			public int getItems(ShipyardItemType type) {
+				int level = theWrappedBody.getStationedFleet().getItems(type);
+				if (theUpgrades != null) {
+					for (AccountUpgrade upgrade : theUpgrades) {
+						if (upgrade.getType().shipyardItem == type) {
+							level = Math.max(level, upgrade.getToLevel());
+						}
+					}
+				} else if (thePlannedUpgrades != null) {
+					for (PlannedUpgrade upgrade : thePlannedUpgrades.getOrDefault(type, Collections.emptyList())) {
+						level += upgrade.getQuantity();
+					}
+				}
+				return level;
+			}
+
+			@Override
+			public UpgradeFleet setItems(ShipyardItemType type, int number) {
 				return this;
 			}
 		}

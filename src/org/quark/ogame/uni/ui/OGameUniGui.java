@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -23,6 +24,7 @@ import javax.swing.border.LineBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 import org.observe.Observable;
+import org.observe.ObservableValue;
 import org.observe.SettableValue;
 import org.observe.SimpleObservable;
 import org.observe.collect.CollectionChangeType;
@@ -37,48 +39,64 @@ import org.observe.util.swing.ModelCell;
 import org.observe.util.swing.ObservableCellRenderer;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.PanelPopulation;
-import org.qommons.ArrayUtils;
 import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
 import org.qommons.ValueHolder;
+import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
+import org.qommons.collect.ElementId;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
 import org.quark.ogame.OGameUtils;
 import org.quark.ogame.roi.OGameRoiSettings;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountClass;
-import org.quark.ogame.uni.AccountUpgrade;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
+import org.quark.ogame.uni.OGameEconomyRuleSet;
+import org.quark.ogame.uni.OGameEconomyRuleSet.FullProduction;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGamePageReader;
 import org.quark.ogame.uni.OGameRuleSet;
 import org.quark.ogame.uni.Planet;
+import org.quark.ogame.uni.PlannedUpgrade;
 import org.quark.ogame.uni.PointType;
-import org.quark.ogame.uni.ResearchType;
 import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
+import org.quark.ogame.uni.TradeRatios;
+import org.quark.ogame.uni.UpgradeAccount;
+import org.quark.ogame.uni.UpgradeAccount.UpgradePlanet;
 import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.versions.OGameRuleSet711;
 
+import com.google.common.reflect.TypeToken;
+
 public class OGameUniGui extends JPanel {
+	private static final Production ZERO = new Production(Collections.emptyMap(), 0, 0);
+
 	private final ObservableConfig theConfig;
 	private final List<OGameRuleSet> theRuleSets;
 	private final SyncValueSet<Account> theAccounts;
 	private final SettableValue<OGameRuleSet> theSelectedRuleSet;
 	private final SettableValue<Account> theSelectedAccount;
-	private final SettableValue<Account> theReferenceAccount;
 
 	private final SimpleObservable<Void> thePlanetRefresh;
 	private final ObservableCollection<PlanetWithProduction> thePlanets;
-	private final ObservableCollection<AccountUpgrade> theGlobalUpgrades;
+	private final SettableValue<PlanetWithProduction> theSelectedPlanet;
+	private final ObservableValue<UpgradeAccount> theUpgradeAccount;
+
+	private final ObservableCollection<PlanetWithProduction> theTotalProduction;
+	private final ObservableCollection<PlanetWithProduction> thePlanetsWithTotal;
+	private final ObservableCollection<PlannedAccountUpgrade> theUpgrades;
 
 	private final SettableValue<File> thePlanetEmpireFile;
 	private final SettableValue<File> theMoonEmpireFile;
 
-	private final HoldingsPanel theHoldingsPanel;
 	private final PlanetTable thePlanetPanel;
+	private final ProductionPanel theProductionPanel;
+	private final ResourceSettingsPanel theResourceSettingsPanel;
+	private final UpgradePanel theUpgradePanel;
+	private final HoldingsPanel theHoldingsPanel;
 	private final FlightPanel theFlightPanel;
 
 	public OGameUniGui(ObservableConfig config, List<OGameRuleSet> ruleSets, SyncValueSet<Account> accounts) {
@@ -99,58 +117,65 @@ public class OGameUniGui extends JPanel {
 					.withField("id", Account::getId, ObservableConfigFormat.INT)//
 					.build())
 			.buildValue(null);
-		theReferenceAccount = theSelectedAccount.refresh(theAccounts.getValues().simpleChanges()).map(TypeTokens.get().of(Account.class),
-			Account::getReferenceAccount, Account::getReferenceAccount, null);
-
-		theGlobalUpgrades = ObservableCollection.build(AccountUpgrade.class).safe(false).build();
-		Observable.or(theSelectedAccount.changes(), theReferenceAccount.noInitChanges()).act(__ -> {
-			Account account = theSelectedAccount.get();
-			Account refAcct = theReferenceAccount.get();
-			if (account == null || refAcct == null) {
-				theGlobalUpgrades.clear();
-				return;
-			}
-			List<AccountUpgrade> upgrades = new ArrayList<>();
-			for (ResearchType rsrch : ResearchType.values()) {
-				int fromLevel = refAcct.getResearch().getResearchLevel(rsrch);
-				int toLevel = account.getResearch().getResearchLevel(rsrch);
-				if (fromLevel != toLevel) {
-					AccountUpgradeType type = AccountUpgradeType.getResearchUpgrade(rsrch);
-					UpgradeCost cost = theSelectedRuleSet.get().economy().getUpgradeCost(account, null, type, fromLevel, toLevel);
-					upgrades.add(new AccountUpgrade(type, null, false, fromLevel, toLevel, cost));
-				}
-			}
-
-			ArrayUtils.adjust(theGlobalUpgrades, upgrades, new ArrayUtils.DifferenceListener<AccountUpgrade, AccountUpgrade>() {
-				@Override
-				public boolean identity(AccountUpgrade o1, AccountUpgrade o2) {
-					return o1.equals(o2);
-				}
-
-				@Override
-				public AccountUpgrade added(AccountUpgrade o, int mIdx, int retIdx) {
-					return o;
-				}
-
-				@Override
-				public AccountUpgrade removed(AccountUpgrade o, int oIdx, int incMod, int retIdx) {
-					return null;
-				}
-
-				@Override
-				public AccountUpgrade set(AccountUpgrade o1, int idx1, int incMod, AccountUpgrade o2, int idx2, int retIdx) {
-					return o1;
-				}
-			});
-		});
+		theUpgradeAccount = theSelectedAccount.map(TypeTokens.get().of(UpgradeAccount.class), a -> a == null ? null : new UpgradeAccount(a),
+			opts -> opts.cache(true).reEvalOnUpdate(false).fireIfUnchanged(true));
 
 		thePlanetRefresh = new SimpleObservable<>();
 		thePlanets = ObservableCollection
-			.flattenValue(theSelectedAccount.map(
+			.flattenValue(theUpgradeAccount.map(
 				account -> account == null ? ObservableCollection.of(TypeTokens.get().of(Planet.class)) : account.getPlanets().getValues()))
 			.flow().refresh(thePlanetRefresh)//
 			.map(TypeTokens.get().of(PlanetWithProduction.class), this::productionFor, opts -> opts.cache(true).reEvalOnUpdate(false))
 			.collect();
+		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).build();
+
+		PlanetWithProduction total = new PlanetWithProduction(null, null)//
+			.setProduction(ZERO, ZERO, ZERO, ZERO).setUpgradeProduction(ZERO, ZERO, ZERO, ZERO);
+		theTotalProduction = ObservableCollection.build(PlanetWithProduction.class).safe(false).build().with(total);
+		// Update total for each change
+		thePlanets.simpleChanges().act(__ -> updateTotalProduction(total, ZERO));
+		thePlanetsWithTotal = ObservableCollection.flattenCollections(TypeTokens.get().of(PlanetWithProduction.class), //
+			getPlanets(), theTotalProduction).collect();
+
+		TypeToken<ObservableCollection<PlannedUpgrade>> upgradeCollType = ObservableCollection.TYPE_KEY
+			.getCompoundType(PlannedUpgrade.class);
+		theUpgrades = ObservableCollection
+			.flattenValue(
+				theSelectedAccount.map(upgradeCollType, account -> account.getPlannedUpgrades().getValues(), opts -> opts.nullToNull(true)))//
+			.flow().map(TypeTokens.get().of(PlannedAccountUpgrade.class), pu -> new PlannedAccountUpgrade(pu)).collect();
+		theUpgradeAccount.changes().act(evt -> {
+			if (evt.getNewValue() == evt.getOldValue()) {
+				return;
+			}
+			UpgradeAccount ua = evt.getNewValue();
+			if (ua != null) {
+				for (CollectionElement<PlannedAccountUpgrade> upgrade : theUpgrades.elements()) {
+					BetterList<ElementId> upgradeEl = theUpgrades.getSourceElements(upgrade.getElementId(),
+						ua.getWrapped().getPlannedUpgrades().getValues());
+					if (upgradeEl.isEmpty()) {
+						return;
+					}
+					ua.withUpgrade(upgrade.get().getUpgrade());
+				}
+			}
+		});
+		theUpgrades.subscribe(evt -> {
+			UpgradeAccount ua = theUpgradeAccount.get();
+			if (ua == null) {
+				return;
+			}
+			if (evt.getType() != CollectionChangeType.add) {
+				ua.withoutUpgrade(evt.getOldValue().getUpgrade());
+			}
+			if (evt.getType() != CollectionChangeType.remove) {
+				BetterList<ElementId> upgradeEl = theUpgrades.getSourceElements(evt.getElementId(),
+					ua.getWrapped().getPlannedUpgrades().getValues());
+				if (upgradeEl.isEmpty()) {
+					return;
+				}
+				ua.withUpgrade(evt.getNewValue().getUpgrade());
+			}
+		}, true);
 		thePlanets.changes().act(evt -> {
 			if (evt.type == CollectionChangeType.set) {
 				for (PlanetWithProduction p : evt.getValues()) {
@@ -158,11 +183,17 @@ public class OGameUniGui extends JPanel {
 				}
 			}
 		});
+		theUpgrades.simpleChanges().act(evt -> refreshProduction());
+		refreshProduction();
+		updateTotalProduction(total, ZERO);
 
 		thePlanetEmpireFile = SettableValue.build(File.class).safe(false).build();
 		theMoonEmpireFile = SettableValue.build(File.class).safe(false).build();
 
 		thePlanetPanel = new PlanetTable(this);
+		theProductionPanel = new ProductionPanel(this);
+		theResourceSettingsPanel = new ResourceSettingsPanel(this);
+		theUpgradePanel = new UpgradePanel(this);
 		theHoldingsPanel = new HoldingsPanel(this);
 		theFlightPanel = new FlightPanel(this);
 
@@ -181,12 +212,30 @@ public class OGameUniGui extends JPanel {
 		return theSelectedAccount;
 	}
 
-	public SettableValue<Account> getReferenceAccount() {
-		return theReferenceAccount;
+	public ObservableValue<UpgradeAccount> getUpgradeAccount() {
+		return theUpgradeAccount;
 	}
 
 	public ObservableCollection<PlanetWithProduction> getPlanets() {
 		return thePlanets;
+	}
+
+	/** @return {@link PlanetWithProduction} values for each planet, in addition to a terminal rows for total production */
+	public ObservableCollection<PlanetWithProduction> getPlanetsWithTotal() {
+		return thePlanetsWithTotal;
+	}
+
+	public SettableValue<PlanetWithProduction> getSelectedPlanet() {
+		return theSelectedPlanet;
+	}
+
+	/** @return An ObservableCollection with a single element that is the total production of the selected account */
+	public ObservableCollection<PlanetWithProduction> getTotalProduction() {
+		return theTotalProduction;
+	}
+
+	public ObservableCollection<PlannedAccountUpgrade> getUpgrades() {
+		return theUpgrades;
 	}
 
 	public void refreshProduction() {
@@ -214,26 +263,63 @@ public class OGameUniGui extends JPanel {
 		return thePlanetPanel;
 	}
 
+	public UpgradePanel getUpgradePanel() {
+		return theUpgradePanel;
+	}
+
 	public HoldingsPanel getHoldings() {
 		return theHoldingsPanel;
 	}
 
 	PlanetWithProduction productionFor(Planet planet) {
-		PlanetWithProduction p = new PlanetWithProduction(planet);
-		updateProduction(p);
-		return p;
+		return new PlanetWithProduction(((UpgradePlanet) planet).getWrapped(), (UpgradePlanet) planet)//
+			.setProduction(ZERO, ZERO, ZERO, ZERO).setUpgradeProduction(ZERO, ZERO, ZERO, ZERO);
 	}
 
 	void updateProduction(PlanetWithProduction p) {
-		Production energy = theSelectedRuleSet.get().economy().getProduction(theSelectedAccount.get(), p.planet, ResourceType.Energy, 1);
+		OGameEconomyRuleSet eco = theSelectedRuleSet.get().economy();
+		UpgradeAccount account = theUpgradeAccount.get();
+		p.upgradePlanet.optimizeEnergy(eco);
+		Production energy = eco.getProduction(account, p.upgradePlanet, ResourceType.Energy, 1);
 		double energyFactor = Math.min(1, energy.totalProduction * 1.0 / energy.totalConsumption);
-		Production metal = theSelectedRuleSet.get().economy().getProduction(theSelectedAccount.get(), p.planet, ResourceType.Metal,
-			energyFactor);
-		Production crystal = theSelectedRuleSet.get().economy().getProduction(theSelectedAccount.get(), p.planet, ResourceType.Crystal,
-			energyFactor);
-		Production deuterium = theSelectedRuleSet.get().economy().getProduction(theSelectedAccount.get(), p.planet, ResourceType.Deuterium,
-			energyFactor);
+		Production metal = eco.getProduction(account, p.upgradePlanet, ResourceType.Metal, energyFactor);
+		Production crystal = eco.getProduction(account, p.upgradePlanet, ResourceType.Crystal, energyFactor);
+		Production deuterium = eco.getProduction(account, p.upgradePlanet, ResourceType.Deuterium, energyFactor);
+		p.setUpgradeProduction(energy, metal, crystal, deuterium);
+
+		energy = eco.getProduction(account.getWrapped(), p.planet, ResourceType.Energy, 1);
+		energyFactor = Math.min(1, energy.totalProduction * 1.0 / energy.totalConsumption);
+		metal = eco.getProduction(account.getWrapped(), p.planet, ResourceType.Metal, energyFactor);
+		crystal = eco.getProduction(account.getWrapped(), p.planet, ResourceType.Crystal, energyFactor);
+		deuterium = eco.getProduction(account.getWrapped(), p.planet, ResourceType.Deuterium, energyFactor);
 		p.setProduction(energy, metal, crystal, deuterium);
+	}
+
+	void updateTotalProduction(PlanetWithProduction total, Production zero) {
+		// At some point there may be a use case for adding each component of production,
+		// e.g. to see how much deuterium you're using on fusion throughout the empire.
+		// But at the moment, all that's needed is the total net production of material resources
+		// and the calculation for all that detail is cumbersome.
+		int metal = 0, crystal = 0, deuterium = 0;
+		int upgradeMetal = 0, upgradeCrystal = 0, upgradeDeuterium = 0;
+		for (PlanetWithProduction planet : thePlanets) {
+			metal += planet.getMetal().totalNet;
+			crystal += planet.getCrystal().totalNet;
+			deuterium += planet.getDeuterium().totalNet;
+
+			upgradeMetal += planet.getUpgradeMetal().totalNet;
+			upgradeCrystal += planet.getUpgradeCrystal().totalNet;
+			upgradeDeuterium += planet.getUpgradeDeuterium().totalNet;
+		}
+		total.setProduction(zero, //
+			new Production(Collections.emptyMap(), metal, 0), //
+			new Production(Collections.emptyMap(), crystal, 0), //
+				new Production(Collections.emptyMap(), deuterium, 0))//
+			.setUpgradeProduction(zero, //
+				new Production(Collections.emptyMap(), upgradeMetal, 0), //
+				new Production(Collections.emptyMap(), upgradeCrystal, 0), //
+				new Production(Collections.emptyMap(), upgradeDeuterium, 0));
+		theTotalProduction.mutableElement(theTotalProduction.getTerminalElement(true).getElementId()).set(total);
 	}
 
 	void initComponents() {
@@ -255,7 +341,7 @@ public class OGameUniGui extends JPanel {
 			.addSplit(true,
 				mainSplit -> mainSplit.withSplitLocation(150).fill().fillV()//
 					.firstV(accountSelectPanel -> accountSelectPanel//
-						.fill().fillV().addTable((ObservableCollection<Account>) theAccounts.getValues(),
+						.fill().fillV().addTable(theAccounts.getValues(),
 							accountTable -> accountTable//
 								.fill().fillV().withItemName("account").withAdaptiveHeight(1, 2, 10)//
 								.dragSourceRow(d -> d.toObject()).dragAcceptRow(d -> d.fromObject())//
@@ -271,9 +357,6 @@ public class OGameUniGui extends JPanel {
 										}).asText(Format.TEXT)))//
 								.withColumn("Planets", Integer.class, account -> account.getPlanets().getValues().size(), //
 									planetColumn -> planetColumn.withWidths(50, 50, 50))//
-								.withColumn("Reference", Account.class, Account::getReferenceAccount,
-									refColumn -> refColumn.withWidths(50, 100, 300)//
-										.formatText(account -> account == null ? "" : account.getName()))//
 								.withColumn("Eco Points", String.class, account -> OGameUniGui.this.printPoints(account, PointType.Economy), //
 									pointsColumn -> pointsColumn.withWidths(75, 75, 75))//
 								.withColumn("Rsrch Points", String.class,
@@ -284,7 +367,6 @@ public class OGameUniGui extends JPanel {
 									.with("name",
 										StringUtils.getNewItemName(theAccounts.getValues(), Account::getName, "New Account",
 											StringUtils.PAREN_DUPLICATES))//
-									.with("id", getNewId())//
 									.create().get()), null)//
 								.withRemove(accounts -> theAccounts.getValues().removeAll(accounts),
 									action -> action//
@@ -295,7 +377,6 @@ public class OGameUniGui extends JPanel {
 										.with(Account::getName,
 											StringUtils.getNewItemName(theAccounts.getValues(), Account::getName, account.getName(),
 												StringUtils.PAREN_DUPLICATES))//
-										.with(Account::getReferenceAccount, account)//
 										.create().get();
 									return copy;
 								}, null)//
@@ -310,10 +391,6 @@ public class OGameUniGui extends JPanel {
 											theSelectedAccount.asFieldEditor(TypeTokens.get().STRING, Account::getName, Account::setName,
 												null),
 											SpinnerFormat.NUMERICAL_TEXT, f -> f.fill())//
-										.addComboField("Compare To:",
-											theSelectedAccount.asFieldEditor(TypeTokens.get().of(Account.class),
-												Account::getReferenceAccount, Account::setReferenceAccount, null),
-											referenceAccounts, f -> f.fill().renderAs(account -> account == null ? "" : account.getName()))//
 										.addTextField("Universe Name:",
 											theSelectedAccount.asFieldEditor(TypeTokens.get().STRING,
 												account -> account.getUniverse().getName(),
@@ -481,6 +558,12 @@ public class OGameUniGui extends JPanel {
 									, acctSettingsTab -> acctSettingsTab.setName("Settings"))//
 								.withVTab("planets", acctBuildingsPanel -> thePlanetPanel.addPlanetTable(acctBuildingsPanel)//
 									, acctBuildingsTab -> acctBuildingsTab.setName("Builds"))//
+								.withVTab("production", productionPanel -> theProductionPanel.addPanel(productionPanel), //
+									productionTab -> productionTab.setName("Production"))//
+								.withVTab("resSettings", resSettingsPanel -> theResourceSettingsPanel.addPanel(resSettingsPanel), //
+									resSettingsTab -> resSettingsTab.setName("Resource Settings"))//
+								.withVTab("upgrades", upgradesPanel -> theUpgradePanel.addPanel(upgradesPanel), //
+									upgradesTab -> upgradesTab.setName("Upgrades"))//
 								// .withVTab("construction",
 								// constructionPanel -> new ConstructionPanel(theConfig, theSelectedRuleSet, theSelectedAccount)
 								// .addPanel(constructionPanel),
@@ -501,8 +584,8 @@ public class OGameUniGui extends JPanel {
 		}
 	}
 
-	public static <M> void decorateDiffColumn(CategoryRenderStrategy<M, Integer> column, IntFunction<Integer> reference) {
-		column.withRenderer(new ObservableCellRenderer.DefaultObservableCellRenderer<M, Integer>((m, c) -> String.valueOf(c)) {
+	public static <M> void decorateDiffColumn(CategoryRenderStrategy<M, Integer> column, IntFunction<Integer> goal) {
+		column.withRenderer(new ObservableCellRenderer.DefaultObservableCellRenderer<M, Integer>((m, c) -> c == null ? "" : c.toString()) {
 			@Override
 			public Component getCellRendererComponent(Component parent, ModelCell<M, Integer> cell, CellRenderContext ctx) {
 				Component c = super.getCellRendererComponent(parent, cell, ctx);
@@ -510,17 +593,9 @@ public class OGameUniGui extends JPanel {
 				if (value == null) {
 					return c;
 				}
-				Integer refValue = reference.apply(cell.getRowIndex());
-				if (refValue != null && !value.equals(refValue)) {
-					StringBuilder str = new StringBuilder().append(value);
-					str.append(" (");
-					if (value > refValue) {
-						str.append('+');
-					} else {
-						str.append('-');
-					}
-					str.append(Math.abs(value - refValue));
-					str.append(')');
+				Integer goalValue = goal.apply(cell.getRowIndex());
+				if (goalValue != null && !value.equals(goalValue)) {
+					StringBuilder str = new StringBuilder().append(value).append('/').append(goalValue);
 					((JLabel) c).setText(str.toString());
 				}
 				return c;
@@ -530,7 +605,7 @@ public class OGameUniGui extends JPanel {
 			if (value == null) {
 				return;
 			}
-			Integer refValue = reference.apply(cell.getRowIndex());
+			Integer refValue = goal.apply(cell.getRowIndex());
 			if (refValue == null || value.equals(refValue)) {
 				return;
 			}
@@ -551,7 +626,7 @@ public class OGameUniGui extends JPanel {
 					fg = new Color(0, rb, 0);
 				}
 			}
-			decorator.withForeground(fg).bold();
+			decorator.withForeground(fg);
 		});
 	}
 
@@ -674,12 +749,13 @@ public class OGameUniGui extends JPanel {
 		account.getUniverse().getTradeRatios().setMetal(2.5);
 		account.getUniverse().getTradeRatios().setCrystal(1.5);
 		account.getUniverse().getTradeRatios().setDeuterium(1);
+		account.getUniverse().setGalaxies(9).setCircularGalaxies(true).setCircularUniverse(true);
+		account.setGameClass(AccountClass.Unselected);
 		return account;
 	}
 
 	static Account copy(Account source, Account dest) {
 		dest.setGameClass(source.getGameClass());
-		dest.setReferenceAccount(source);
 
 		dest.getUniverse().setName(source.getUniverse().getName());
 		dest.getUniverse().setCollectorProductionBonus(source.getUniverse().getCollectorProductionBonus());
@@ -831,13 +907,235 @@ public class OGameUniGui extends JPanel {
 
 	public static SyncValueSet<Account> getAccounts(ObservableConfig config, String path) {
 		ValueHolder<SyncValueSet<Account>> accounts = new ValueHolder<>();
-		ObservableConfigFormat<Account> accountRefFormat = ObservableConfigFormat
-			.<Account> buildReferenceFormat(fv -> accounts.get().getValues(), null)//
-			.withField("id", Account::getId, ObservableConfigFormat.INT).build();
+		// Old code from when goals were configured as a referenced account
+		// ObservableConfigFormat<Account> accountRefFormat = ObservableConfigFormat
+		// .<Account> buildReferenceFormat(fv -> accounts.get().getValues(), null)//
+		// .withField("id", Account::getId, ObservableConfigFormat.INT).build();
 		config.asValue(TypeTokens.get().of(Account.class))
-			.asEntity(efb -> efb//
-				.withFieldFormat(Account::getReferenceAccount, accountRefFormat))//
 			.at(path).buildEntitySet(accounts);
 		return accounts.get();
+	}
+
+	public class PlannedAccountUpgrade {
+		final PlannedUpgrade planned;
+		private final Planet thePlanet;
+		private int theFrom;
+		private Boolean isPaid;
+		private UpgradeCost cost;
+		private Duration roi;
+
+		PlannedAccountUpgrade(PlannedUpgrade upgrade) {
+			this.planned = upgrade;
+			Planet planet = null;
+			if (planned != null) {
+				if (planned.getType().research == null) {
+					for (Planet p : getSelectedAccount().get().getPlanets().getValues()) {
+						if (p.getId() == planned.getPlanet()) {
+							planet = p;
+							break;
+						}
+					}
+				}
+			}
+			thePlanet = planet;
+			clear();
+		}
+
+		void clear() {
+			theFrom = -1;
+			cost = null;
+			roi = null;
+			isPaid = null;
+		}
+
+		PlannedUpgrade getUpgrade() {
+			return planned;
+		}
+
+		Planet getPlanet() {
+			return thePlanet;
+		}
+
+		int getFrom() {
+			if (theFrom >= 0 || planned == null) {
+				return theFrom;
+			}
+			int level = planned.getType().getLevel(getSelectedAccount().get(), thePlanet);
+			for (PlannedUpgrade upgrade : getSelectedAccount().get().getPlannedUpgrades().getValues()) {
+				if (upgrade == planned) {
+					break;
+				} else if (upgrade.getType() == planned.getType()//
+					&& upgrade.getPlanet() == planned.getPlanet()//
+					&& upgrade.isMoon() == planned.isMoon()) {
+					level += upgrade.getQuantity();
+				}
+			}
+			theFrom = level;
+			return theFrom;
+		}
+
+		int getTo() {
+			if (planned == null) {
+				return 0;
+			}
+			return getFrom() + planned.getQuantity();
+		}
+
+		boolean isPaid() {
+			if (planned == null) {
+				return false;
+			}
+			if (isPaid == null) {
+				Account account = getSelectedAccount().get();
+				boolean alreadyPaid = false;
+				if (getFrom() == planned.getType().getLevel(account, thePlanet)) {
+					if (account.getResearch().getCurrentUpgrade() == planned.getType().research//
+						|| (thePlanet != null && thePlanet.getCurrentUpgrade() == planned.getType().building)) {
+						alreadyPaid = true;
+					}
+				}
+				isPaid = alreadyPaid;
+			}
+			return isPaid;
+		}
+
+		UpgradeCost getCost() {
+			if (cost == null && planned != null && !isPaid()) {
+				cost = getRules().get().economy().getUpgradeCost(getSelectedAccount().get(), //
+					thePlanet == null ? null : theUpgradeAccount.get().getPlanets().getUpgradePlanet(thePlanet), planned.getType(),
+					getFrom(), theFrom + planned.getQuantity());
+			}
+			return cost;
+		}
+
+		Duration getROI() {
+			if (roi == null && planned != null && !isPaid()) {
+				roi = OGameUniGui.getROI(getRules().get(), getSelectedAccount().get(), this);
+			}
+			return roi;
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder msg = new StringBuilder();
+			if (thePlanet != null) {
+				msg.append(thePlanet.getName()).append(' ');
+			}
+			if (getUpgrade() == null) {
+				if (msg.length() > 0) {
+					msg.append(' ');
+				}
+				return msg.append("Total").toString();
+			}
+			return msg.append(getUpgrade().getType()).append(' ').append(getFrom()).append("->").append(getTo()).toString();
+		}
+	}
+
+	static Duration getROI(OGameRuleSet rules, Account account, PlannedAccountUpgrade upgrade) {
+		if (upgrade.getUpgrade().getQuantity() <= 0) {
+			return null;
+		}
+		switch (upgrade.getUpgrade().getType().type) {
+		case Research:
+			switch (upgrade.getUpgrade().getType().research) {
+			case Astrophysics:
+			case Plasma:
+				break;
+			case Energy: // TODO Involves adjusting usages, maybe will do it later
+			default:
+				return null;
+			}
+			break;
+		case ShipyardItem:
+			switch (upgrade.getUpgrade().getType().shipyardItem) {
+			case Crawler:
+			case SolarSatellite:
+				break;
+			default:
+				return null;
+			}
+			break;
+		case Building:
+			switch (upgrade.getUpgrade().getType().building) {
+			case MetalMine:
+			case CrystalMine:
+			case DeuteriumSynthesizer:
+			case SolarPlant:
+			case FusionReactor: // TODO Technically should adjust usages to calculate the real ROI, but that's tricky
+				break;
+			default:
+				return null;
+			}
+			break;
+		}
+
+		Planet planet = upgrade.getPlanet();
+		int planetIdx = account.getPlanets().getValues().indexOf(planet);
+		double currentProduction = 0, newProduction = 0, cost = 0;
+		TradeRatios tr = account.getUniverse().getTradeRatios();
+		switch (upgrade.getUpgrade().getType().type) {
+		case Research:
+			List<FullProduction> productions = QommonsUtils.map(account.getPlanets().getValues(), //
+				p -> rules.economy().getFullProduction(account, p), false);
+			cost = upgrade.getCost().getMetalValue(tr);
+			for (FullProduction p : productions) {
+				currentProduction += p.asCost().getMetalValue(tr);
+			}
+			switch (upgrade.getUpgrade().getType().research) {
+			case Astrophysics:
+				int newPlanets = (upgrade.getTo() + 1) / 2 + 1;
+				newProduction = currentProduction * newPlanets / productions.size();
+				double planetCost = 0;
+				for (AccountUpgradeType u : AccountUpgradeType.values()) {
+					switch (u.type) {
+					case Building:
+						for (Planet p : account.getPlanets().getValues()) {
+							planetCost += rules.economy().getUpgradeCost(account, p, u, 0, p.getBuildingLevel(u.building))
+								.getMetalValue(tr);
+						}
+						break;
+					case ShipyardItem:
+						if (u.shipyardItem.mobile) {
+							continue;
+						}
+						for (Planet p : account.getPlanets().getValues()) {
+							planetCost += rules.economy().getUpgradeCost(account, p, u, 0, p.getStationedShips(u.shipyardItem))
+								.getMetalValue(tr);
+						}
+						break;
+					default:
+						break;
+					}
+				}
+				cost += planetCost / productions.size();
+				break;
+			case Plasma:
+				if (upgrade.getPlanet() == null) {
+					UpgradeAccount upgradeAccount = new UpgradeAccount(account).withUpgrade(upgrade.getUpgrade());
+					newProduction = 0;
+					for (Planet p : account.getPlanets().getValues()) {
+						newProduction += rules.economy().getFullProduction(upgradeAccount, p).asCost().getMetalValue(tr);
+					}
+				}
+				break;
+			default:
+				return null;
+			}
+			break;
+		default:
+			productions = QommonsUtils.map(account.getPlanets().getValues(), //
+				p -> rules.economy().getFullProduction(account, p), false);
+			cost = upgrade.getCost().getMetalValue(tr);
+			newProduction = currentProduction - productions.get(planetIdx).asCost().getMetalValue(tr);
+			UpgradeAccount upgradeAccount = new UpgradeAccount(account).withUpgrade(upgrade.getUpgrade());
+			UpgradeAccount.UpgradePlanet upgradePlanet = upgradeAccount.getPlanets().getUpgradePlanet(planet);
+			newProduction += rules.economy().getFullProduction(upgradeAccount, upgradePlanet).asCost().getMetalValue(tr);
+			break;
+		}
+		if (newProduction <= currentProduction) {
+			return null;
+		}
+		double seconds = cost / (newProduction - currentProduction) * 3600;
+		return Duration.ofSeconds((long) seconds);
 	}
 }

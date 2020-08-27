@@ -26,6 +26,8 @@ public interface UpgradeCost {
 	UpgradeCost plus(UpgradeCost cost);
 	UpgradeCost times(int mult);
 
+	UpgradeCost divide(double div);
+
 	default long getTotal() {
 		return getMetal() + getCrystal() + getDeuterium();
 	}
@@ -165,10 +167,10 @@ public interface UpgradeCost {
 
 		@Override
 		public UpgradeCost plus(UpgradeCost cost) {
-			if (isZero()) {
-				return cost;
-			} else if (cost.isZero()) {
+			if (cost == null || cost.isZero()) {
 				return this;
+			} else if (isZero()) {
+				return cost;
 			} else if (cost instanceof SimpleUpgradeCost) {
 				SimpleUpgradeCost other = (SimpleUpgradeCost) cost;
 				if (theType == other.theType && thePointType == other.thePointType) {
@@ -198,7 +200,7 @@ public interface UpgradeCost {
 		public SimpleUpgradeCost times(int mult) {
 			if (mult == 0) {
 				return (SimpleUpgradeCost) ZERO;
-			} else if (isZero()) {
+			} else if (isZero() || mult == 1) {
 				return this;
 			} else {
 				return new SimpleUpgradeCost(theType, thePointType, theMetal * mult, theCrystal * mult, theDeuterium * mult,
@@ -215,6 +217,16 @@ public interface UpgradeCost {
 			} catch (ArithmeticException e) {
 				return null;
 			}
+		}
+
+		@Override
+		public SimpleUpgradeCost divide(double div) {
+			if (div == 1) {
+				return this;
+			}
+			return new SimpleUpgradeCost(theType, thePointType, //
+				Math.round(theMetal / div), Math.round(theCrystal / div), Math.round(theDeuterium / div), theEnergy,
+				Duration.ofSeconds(Math.round(theTime.getSeconds() / div)));
 		}
 
 		@Override
@@ -351,10 +363,10 @@ public interface UpgradeCost {
 
 		@Override
 		public UpgradeCost plus(UpgradeCost cost) {
-			if (isZero()) {
-				return cost;
-			} else if (cost.isZero()) {
+			if (cost == null || cost.isZero()) {
 				return this;
+			} else if (isZero()) {
+				return cost;
 			} else if (cost instanceof SimpleUpgradeCost) {
 				SimpleUpgradeCost other = (SimpleUpgradeCost) cost;
 				List<SimpleUpgradeCost> components = new ArrayList<>(theComponents.size() + 1);
@@ -399,6 +411,15 @@ public interface UpgradeCost {
 			List<SimpleUpgradeCost> components = new ArrayList<>(theComponents.size());
 			for (SimpleUpgradeCost c : theComponents) {
 				components.add(c.times(mult));
+			}
+			return new CompositeUpgradeCost(components);
+		}
+
+		@Override
+		public UpgradeCost divide(double div) {
+			List<SimpleUpgradeCost> components = new ArrayList<>(theComponents.size());
+			for (SimpleUpgradeCost c : theComponents) {
+				components.add(c.divide(div));
 			}
 			return new CompositeUpgradeCost(components);
 		}

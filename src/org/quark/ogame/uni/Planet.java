@@ -1,6 +1,12 @@
 package org.quark.ogame.uni;
 
-public interface Planet extends RockyBody {
+import org.observe.config.ParentReference;
+import org.observe.util.Identified;
+
+public interface Planet extends RockyBody, Identified {
+	@ParentReference
+	Account getAccount();
+
 	Coordinate getCoordinates();
 
 	// Planet properties

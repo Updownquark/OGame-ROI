@@ -92,7 +92,7 @@ public class FlightPanel {
 					}
 					break;
 				}
-				ObservableCollection<PlannedFlight> flights = (ObservableCollection<PlannedFlight>) theUniGui.getSelectedAccount().get()
+				ObservableCollection<PlannedFlight> flights = theUniGui.getSelectedAccount().get()
 					.getPlannedFlights().getValues();
 
 				flights.mutableElement(flights.getElement(theSelectedFlight.get(), true).getElementId())//
@@ -121,8 +121,9 @@ public class FlightPanel {
 	}
 
 	public void addFlightPanel(PanelPopulation.PanelPopulator<?, ?> panel) {
-		ObservableCollection<PlannedFlight> flights = ObservableCollection
-			.<PlannedFlight> flattenValue(theUniGui.getSelectedAccount().map(account -> account.getPlannedFlights().getValues()));
+		ObservableCollection<PlannedFlight> flights = ObservableCollection.<PlannedFlight> flattenValue(
+			theUniGui.getSelectedAccount().map(ObservableCollection.TYPE_KEY.getCompoundType(PlannedFlight.class),
+				account -> account.getPlannedFlights().getValues(), opts -> opts.nullToNull(true)));
 		panel.addTable(flights, table -> {
 			table.fill().dragSourceRow(d -> d.toObject()).dragAcceptRow(d -> d.fromObject())//
 				.withColumn("Name", String.class, PlannedFlight::getName, nameCol -> {

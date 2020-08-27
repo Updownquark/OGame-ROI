@@ -44,7 +44,7 @@ public class HoldingsPanel {
 		theUniGui = uniGui;
 
 		ObservableCollection<Holding> flatHoldings = ObservableCollection.flattenValue(theUniGui.getSelectedAccount().map(
-			new TypeToken<ObservableCollection<Holding>>() {}, acct -> (ObservableCollection<Holding>) acct.getHoldings().getValues()));
+			new TypeToken<ObservableCollection<Holding>>() {}, acct -> acct.getHoldings().getValues(), opts -> opts.nullToNull(true)));
 		theTotalHolding = new SyntheticHolding() {
 			@Override
 			public String getName() {
@@ -102,6 +102,9 @@ public class HoldingsPanel {
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
 					production += planet.getMetal().totalNet;
 				}
+				if (production == 0) {
+					return 0;
+				}
 				return holdings * 3600 / production; // Seconds
 			}
 
@@ -112,6 +115,9 @@ public class HoldingsPanel {
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
 					production += planet.getCrystal().totalNet;
 				}
+				if (production == 0) {
+					return 0;
+				}
 				return holdings * 3600 / production; // Seconds
 			}
 
@@ -121,6 +127,9 @@ public class HoldingsPanel {
 				long production = 0;
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
 					production += planet.getDeuterium().totalNet;
+				}
+				if (production == 0) {
+					return 0;
 				}
 				return holdings * 3600 / production; // Seconds
 			}
@@ -133,7 +142,7 @@ public class HoldingsPanel {
 
 			@Override
 			public long getMetal() {
-				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getMetal();
+				long needed = theUniGui.getUpgradePanel().getTotalUpgrades().getCost().getMetal();
 				if (needed == 0) {
 					return 0;
 				}
@@ -150,7 +159,7 @@ public class HoldingsPanel {
 
 			@Override
 			public long getCrystal() {
-				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getCrystal();
+				long needed = theUniGui.getUpgradePanel().getTotalUpgrades().getCost().getCrystal();
 				if (needed == 0) {
 					return 0;
 				}
@@ -162,12 +171,15 @@ public class HoldingsPanel {
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
 					production += planet.getCrystal().totalNet;
 				}
+				if (production == 0) {
+					return 0;
+				}
 				return needed * 3600 / production; // seconds
 			}
 
 			@Override
 			public long getDeuterium() {
-				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getDeuterium();
+				long needed = theUniGui.getUpgradePanel().getTotalUpgrades().getCost().getDeuterium();
 				if (needed == 0) {
 					return 0;
 				}
@@ -178,6 +190,9 @@ public class HoldingsPanel {
 				long production = 0;
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
 					production += planet.getDeuterium().totalNet;
+				}
+				if (production == 0) {
+					return 0;
 				}
 				return needed * 3600 / production; // seconds
 			}
@@ -199,7 +214,7 @@ public class HoldingsPanel {
 		theHoldings = ObservableCollection.flattenCollections(TypeTokens.get().of(Holding.class), flatHoldings, synthHoldings).collect();
 
 		ObservableCollection<Trade> flatTrades = ObservableCollection.flattenValue(theUniGui.getSelectedAccount()
-			.map(new TypeToken<ObservableCollection<Trade>>() {}, acct -> (ObservableCollection<Trade>) acct.getTrades().getValues()));
+			.map(new TypeToken<ObservableCollection<Trade>>() {}, acct -> acct.getTrades().getValues(), opts -> opts.nullToNull(true)));
 		theTotalTrade = new SyntheticTrade() {
 			@Override
 			public String getName() {
@@ -247,36 +262,45 @@ public class HoldingsPanel {
 
 			@Override
 			public long getMetal() {
-				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getMetal();
+				long needed = theUniGui.getUpgradePanel().getTotalUpgrades().getCost().getMetal();
 				needed -= theTotalHolding.getMetal();
 				needed -= theTotalTrade.getMetal();
 				long production = 0;
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
 					production += planet.getMetal().totalNet;
 				}
+				if (production == 0) {
+					return 0;
+				}
 				return needed * 3600 / production; // seconds
 			}
 
 			@Override
 			public long getCrystal() {
-				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getCrystal();
+				long needed = theUniGui.getUpgradePanel().getTotalUpgrades().getCost().getCrystal();
 				needed -= theTotalHolding.getCrystal();
 				needed -= theTotalTrade.getCrystal();
 				long production = 0;
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
 					production += planet.getCrystal().totalNet;
 				}
+				if (production == 0) {
+					return 0;
+				}
 				return needed * 3600 / production; // seconds
 			}
 
 			@Override
 			public long getDeuterium() {
-				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getDeuterium();
+				long needed = theUniGui.getUpgradePanel().getTotalUpgrades().getCost().getDeuterium();
 				needed -= theTotalHolding.getDeuterium();
 				needed -= theTotalTrade.getDeuterium();
 				long production = 0;
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
 					production += planet.getDeuterium().totalNet;
+				}
+				if (production == 0) {
+					return 0;
 				}
 				return needed * 3600 / production; // seconds
 			}
@@ -290,7 +314,7 @@ public class HoldingsPanel {
 			// At the moment, this is a colossal waste of computation, as this value is calculated for each resource type and duration
 			// But it's only done once (for each resource) when anything changes, so it may not be worth the trouble of optimizing
 			private double[] calcNeededTrade() {
-				UpgradeCost cost = theUniGui.getPlanetPanel().getTotalUpgrades().getCost();
+				UpgradeCost cost = theUniGui.getUpgradePanel().getTotalUpgrades().getCost();
 				cost = cost.plus(UpgradeCost.of('b', 'e', theTotalHolding.getMetal(), theTotalHolding.getCrystal(),
 					theTotalHolding.getDeuterium(), 0, Duration.ZERO).negate());
 				cost = cost.plus(UpgradeCost
@@ -298,8 +322,12 @@ public class HoldingsPanel {
 					.negate());
 				UpgradeCost production = UpgradeCost.ZERO;
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
-					production = production.plus(UpgradeCost.of('b', 'e', planet.getMetal().totalNet, planet.getCrystal().totalNet,
-						planet.getDeuterium().totalNet, 0, Duration.ZERO));
+					UpgradeCost planetProduction = UpgradeCost.of('b', 'e', planet.getMetal().totalNet, planet.getCrystal().totalNet,
+						planet.getDeuterium().totalNet, 0, Duration.ZERO);
+					planetProduction = planetProduction.plus(UpgradeCost.of('b', 'e', planet.getMetal(true).totalNet,
+						planet.getCrystal(true).totalNet, planet.getDeuterium(true).totalNet, 0, Duration.ZERO));
+					planetProduction = planetProduction.divide(2);
+					production = production.plus(planetProduction);
 				}
 				// Trade rates
 				double rM = theUniGui.getSelectedAccount().get().getUniverse().getTradeRatios().getMetal();
@@ -318,8 +346,8 @@ public class HoldingsPanel {
 				// The amount of resources needed via additional, as yet unplanned, trades
 				double tM, tC, tD;
 				tM = (nM * x - rM * nC / rC - rM * nD / rD) / (x + 1);
-				double t = (nM - tM) / pM; // The amount of time (in hours) needed to achieve all goals (with all planned and unplanned
-											// trades)
+				// The amount of time (in hours) needed to achieve all goals (with all planned and unplanned trades)
+				double t = (nM - tM) / pM;
 				tC = nC - pC * t;
 				tD = nD - pD * t;
 				return new double[] { tM, tC, tD, t };
@@ -348,39 +376,51 @@ public class HoldingsPanel {
 
 			@Override
 			public long getMetal() {
-				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getMetal();
+				long needed = theUniGui.getUpgradePanel().getTotalUpgrades().getCost().getMetal();
 				needed -= theTotalHolding.getMetal();
 				needed -= theTotalTrade.getMetal();
 				needed -= theTradesNeeded.getMetal();
 				long production = 0;
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
-					production += planet.getMetal().totalNet;
+					production += (planet.getMetal().totalNet + planet.getMetal(true).totalNet) / 2;
+					// production += planet.getMetal(true).totalNet;
+				}
+				if (production == 0) {
+					return 0;
 				}
 				return needed * 3600 / production; // seconds
 			}
 
 			@Override
 			public long getCrystal() {
-				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getCrystal();
+				long needed = theUniGui.getUpgradePanel().getTotalUpgrades().getCost().getCrystal();
 				needed -= theTotalHolding.getCrystal();
 				needed -= theTotalTrade.getCrystal();
 				needed -= theTradesNeeded.getCrystal();
 				long production = 0;
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
-					production += planet.getCrystal().totalNet;
+					production += (planet.getCrystal().totalNet + planet.getCrystal(true).totalNet) / 2;
+					// production += planet.getCrystal(true).totalNet;
+				}
+				if (production == 0) {
+					return 0;
 				}
 				return needed * 3600 / production; // seconds
 			}
 
 			@Override
 			public long getDeuterium() {
-				long needed = theUniGui.getPlanetPanel().getTotalUpgrades().getCost().getDeuterium();
+				long needed = theUniGui.getUpgradePanel().getTotalUpgrades().getCost().getDeuterium();
 				needed -= theTotalHolding.getDeuterium();
 				needed -= theTotalTrade.getDeuterium();
 				needed -= theTradesNeeded.getDeuterium();
 				long production = 0;
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
-					production += planet.getDeuterium().totalNet;
+					production += (planet.getDeuterium().totalNet + planet.getDeuterium(true).totalNet) / 2;
+					// production += planet.getDeuterium(true).totalNet;
+				}
+				if (production == 0) {
+					return 0;
 				}
 				return needed * 3600 / production; // seconds
 			}
@@ -532,11 +572,14 @@ public class HoldingsPanel {
 							}).asText(Format.doubleFormat("0.00"));
 						}))//
 							.withColumn("Cargoes", Long.class, h -> {
+								if (h instanceof SyntheticHolding) {
+									return null;
+								}
 							long total = h.getMetal() + h.getCrystal() + h.getDeuterium();
 							long cap = theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.LargeCargo,
 								theUniGui.getSelectedAccount().get());
 								return (long) Math.ceil(total * 1.0 / cap);
-							}, col -> col.formatText(cargoes -> commaFormat.format(cargoes * 1.0)))//
+							}, col -> col.formatText(cargoes -> cargoes == null ? "" : commaFormat.format(cargoes * 1.0)))//
 						.withAdd(
 							() -> theUniGui.getSelectedAccount().get().getHoldings().create()//
 								.with(Holding::getName, "").create().get(),

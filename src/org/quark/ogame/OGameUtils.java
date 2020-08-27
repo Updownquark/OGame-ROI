@@ -6,7 +6,7 @@ import org.qommons.io.Format;
 import org.quark.ogame.uni.ShipyardItemType;
 
 public class OGameUtils {
-	public static final Format<Double> FORMAT = Format.doubleFormat(5).printIntFor(6, false).withExpCondition(4, 0)//
+	public static final Format<Double> FORMAT = Format.doubleFormat(5).printIntFor(6, false).withExpCondition(4, -1)//
 		.withPrefix("K", 3)//
 		.withPrefix("M", 6)//
 		.withPrefix("B", 9)//

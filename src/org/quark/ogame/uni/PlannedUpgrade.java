@@ -4,6 +4,12 @@ public interface PlannedUpgrade {
 	AccountUpgradeType getType();
 	PlannedUpgrade setType(AccountUpgradeType type);
 
-	RockyBody getLocation();
-	PlannedUpgrade setLocation(RockyBody location);
+	long getPlanet();
+	PlannedUpgrade setPlanet(long location);
+
+	boolean isMoon();
+	PlannedUpgrade setMoon(boolean moon);
+
+	int getQuantity();
+	PlannedUpgrade setQuantity(int quantity);
 }

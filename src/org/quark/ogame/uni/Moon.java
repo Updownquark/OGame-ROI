@@ -1,9 +1,12 @@
 package org.quark.ogame.uni;
 
+import org.observe.config.ParentReference;
 import org.observe.util.ObjectMethodOverride;
 import org.observe.util.ObjectMethodOverride.ObjectMethod;
 
 public interface Moon extends RockyBody {
+	@ParentReference
+	Planet getPlanet();
 	@Override
 	@ObjectMethodOverride(ObjectMethod.toString)
 	String getName();
