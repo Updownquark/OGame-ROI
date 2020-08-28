@@ -141,10 +141,18 @@ public class UpgradeAccount implements Account {
 
 		UpgradePlanetSet() {
 			theUpgradePlanets = new ConcurrentHashMap<>();
+			// thePlanetCollection = theWrapped.getPlanets().getValues().flow()//
+			// .map(TypeTokens.get().of(UpgradePlanet.class), p -> {
+			// return theUpgradePlanets.computeIfAbsent(p.getId(), __ -> new UpgradePlanet(p));
+			// }, opts -> opts.cache(false)).collectPassive();
 			thePlanetCollection = theWrapped.getPlanets().getValues().flow()//
-				.map(TypeTokens.get().of(UpgradePlanet.class), p -> {
+				.combine(TypeTokens.get().of(UpgradePlanet.class),
+					c -> c.withReverse((cv, p) -> p.get())//
+						.cache(false)//
+						.build1(p -> {
 					return theUpgradePlanets.computeIfAbsent(p.getId(), __ -> new UpgradePlanet(p));
-				}, opts -> opts.cache(false)).collectPassive();
+						}))
+				.collectPassive();
 		}
 
 		@Override
