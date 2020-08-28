@@ -144,11 +144,17 @@ public class OGameUniGui extends JPanel {
 				theSelectedAccount.map(upgradeCollType, account -> account.getPlannedUpgrades().getValues(), opts -> opts.nullToNull(true)))//
 			.flow().map(TypeTokens.get().of(PlannedAccountUpgrade.class), pu -> new PlannedAccountUpgrade(pu)).collect();
 		theUpgradeAccount.changes().act(evt -> {
-			if (evt.getNewValue() == evt.getOldValue()) {
-				return;
-			}
 			UpgradeAccount ua = evt.getNewValue();
-			if (ua != null) {
+			if (ua == null) {
+				return;
+			} else if (evt.getNewValue() == evt.getOldValue()) {
+				for (PlannedAccountUpgrade upgrade : theUpgrades) {
+					if (upgrade.getPlanet() == null) {
+						upgrade.clear();
+					}
+				}
+				return;
+			} else {
 				for (CollectionElement<PlannedAccountUpgrade> upgrade : theUpgrades.elements()) {
 					BetterList<ElementId> upgradeEl = theUpgrades.getSourceElements(upgrade.getElementId(),
 						ua.getWrapped().getPlannedUpgrades().getValues());
@@ -179,6 +185,11 @@ public class OGameUniGui extends JPanel {
 		thePlanets.changes().act(evt -> {
 			if (evt.type == CollectionChangeType.set) {
 				for (PlanetWithProduction p : evt.getValues()) {
+					for (PlannedAccountUpgrade upgrade : theUpgrades) {
+						if (upgrade.getPlanet() == p.planet) {
+							upgrade.clear();
+						}
+					}
 					updateProduction(p);
 				}
 			}
