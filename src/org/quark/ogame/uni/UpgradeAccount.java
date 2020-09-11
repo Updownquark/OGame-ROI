@@ -146,12 +146,9 @@ public class UpgradeAccount implements Account {
 			// return theUpgradePlanets.computeIfAbsent(p.getId(), __ -> new UpgradePlanet(p));
 			// }, opts -> opts.cache(false)).collectPassive();
 			thePlanetCollection = theWrapped.getPlanets().getValues().flow()//
-				.combine(TypeTokens.get().of(UpgradePlanet.class),
-					c -> c.withReverse((cv, p) -> p.get())//
-						.cache(false)//
-						.build1(p -> {
-					return theUpgradePlanets.computeIfAbsent(p.getId(), __ -> new UpgradePlanet(p));
-						}))
+				.transform(TypeTokens.get().of(UpgradePlanet.class),
+					c -> c.cache(false).map(p -> theUpgradePlanets.computeIfAbsent(p.getId(), __ -> new UpgradePlanet(p)))//
+						.replaceSourceWith((p, cv) -> cv.getCurrentSource()))// Not even sure I need this since it'll just be updates
 				.collectPassive();
 		}
 

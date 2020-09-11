@@ -125,7 +125,7 @@ public class OGameUniGui extends JPanel {
 			.flattenValue(theUpgradeAccount.map(
 				account -> account == null ? ObservableCollection.of(TypeTokens.get().of(Planet.class)) : account.getPlanets().getValues()))
 			.flow().refresh(thePlanetRefresh)//
-			.map(TypeTokens.get().of(PlanetWithProduction.class), this::productionFor, opts -> opts.cache(true).reEvalOnUpdate(false))
+			.transform(TypeTokens.get().of(PlanetWithProduction.class), tx -> tx.cache(true).reEvalOnUpdate(false).map(this::productionFor))//
 			.collect();
 		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).build();
 
