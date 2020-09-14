@@ -122,7 +122,7 @@ public class FlightPanel {
 
 	public void addFlightPanel(PanelPopulation.PanelPopulator<?, ?> panel) {
 		ObservableCollection<PlannedFlight> flights = ObservableCollection.<PlannedFlight> flattenValue(
-			theUniGui.getSelectedAccount().map(ObservableCollection.TYPE_KEY.getCompoundType(PlannedFlight.class),
+			theUniGui.getSelectedAccount().map(TypeTokens.get().keyFor(ObservableCollection.class).parameterized(PlannedFlight.class),
 				account -> account.getPlannedFlights().getValues(), opts -> opts.nullToNull(true)));
 		panel.addTable(flights, table -> {
 			table.fill().dragSourceRow(d -> d.toObject()).dragAcceptRow(d -> d.fromObject())//

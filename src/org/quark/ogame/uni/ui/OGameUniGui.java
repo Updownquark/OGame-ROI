@@ -137,8 +137,8 @@ public class OGameUniGui extends JPanel {
 		thePlanetsWithTotal = ObservableCollection.flattenCollections(TypeTokens.get().of(PlanetWithProduction.class), //
 			getPlanets(), theTotalProduction).collect();
 
-		TypeToken<ObservableCollection<PlannedUpgrade>> upgradeCollType = ObservableCollection.TYPE_KEY
-			.getCompoundType(PlannedUpgrade.class);
+		TypeToken<ObservableCollection<PlannedUpgrade>> upgradeCollType = TypeTokens.get().keyFor(ObservableCollection.class)
+			.parameterized(PlannedUpgrade.class);
 		theUpgrades = ObservableCollection
 			.flattenValue(
 				theSelectedAccount.map(upgradeCollType, account -> account.getPlannedUpgrades().getValues(), opts -> opts.nullToNull(true)))//

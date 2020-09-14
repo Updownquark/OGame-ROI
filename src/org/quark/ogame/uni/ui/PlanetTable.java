@@ -349,8 +349,8 @@ public class PlanetTable {
 				break;
 			}
 		}
-		TypeToken<ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>>> columnSetType = ObservableCollection.TYPE_KEY
-			.getCompoundType(PLANET_COLUMN_TYPE);
+		TypeToken<ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>>> columnSetType = TypeTokens.get()
+			.keyFor(ObservableCollection.class).parameterized(PLANET_COLUMN_TYPE);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> selectedColumns = ObservableCollection.flattenValue(//
 			theSelectedColumns.map(columnSetType, columnSets::get));
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> planetColumns = ObservableCollection
@@ -360,7 +360,8 @@ public class PlanetTable {
 			).collect();
 
 		ObservableCollection<Research> researchColl = ObservableCollection.flattenValue(theUniGui.getSelectedAccount()
-			.<ObservableCollection<Research>> map(ObservableCollection.TYPE_KEY.getCompoundType(Research.class), account -> {
+			.<ObservableCollection<Research>> map(TypeTokens.get().keyFor(ObservableCollection.class).parameterized(Research.class),
+				account -> {
 				ObservableCollection<Research> rsrch = ObservableCollection.build(Research.class).safe(false).build();
 				if (account != null) {
 					rsrch.with(account.getResearch());
