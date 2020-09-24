@@ -1,6 +1,7 @@
 package org.quark.ogame.uni.ui;
 
 import java.awt.Color;
+import java.awt.event.KeyEvent;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.EnumMap;
@@ -18,6 +19,8 @@ import org.observe.config.ObservableConfig;
 import org.observe.config.ObservableConfigFormat;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.CategoryRenderStrategy;
+import org.observe.util.swing.CategoryRenderStrategy.CategoryKeyAdapter;
+import org.observe.util.swing.ModelCell;
 import org.observe.util.swing.PanelPopulation;
 import org.qommons.BiTuple;
 import org.qommons.io.AdjustableComponent;
@@ -33,6 +36,7 @@ import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.PlannedUpgrade;
 import org.quark.ogame.uni.Research;
 import org.quark.ogame.uni.ResearchType;
+import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.UpgradeAccount;
 import org.quark.ogame.uni.UpgradeAccount.UpgradePlanet;
@@ -206,7 +210,35 @@ public class PlanetTable {
 				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)) //
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> energyBldgs = ObservableCollection.of(PLANET_COLUMN_TYPE,
-			intPlanetColumn("Sats", AccountUpgradeType.SolarSatellite, 75), //
+			intPlanetColumn("Sats", AccountUpgradeType.SolarSatellite, 75)
+				.withKeyListener(new CategoryKeyAdapter<PlanetWithProduction, Levels>() {
+					@Override
+					public void keyTyped(ModelCell<? extends PlanetWithProduction, ? extends Levels> cell, KeyEvent e) {
+						if (cell.getModelValue().planet == null || e.getKeyChar() != '*') {
+							return;
+						}
+						int energyNeeded = -cell.getModelValue().getEnergy().totalNet;
+						if (energyNeeded < 0) {
+							return;
+						}
+						int satEnergy = theUniGui.getRules().get().economy().getSatelliteEnergy(theUniGui.getSelectedAccount().get(),
+							cell.getModelValue().planet);
+						if (satEnergy <= 0) {
+							return;
+						}
+						int newSats = (int) Math.ceil(energyNeeded * 1.0 / satEnergy);
+						int currentSats = cell.getModelValue().planet.getSolarSatellites();
+						cell.getModelValue().planet.setSolarSatellites(currentSats + newSats);
+						int energyExcess = theUniGui.getRules().get().economy().getProduction(theUniGui.getSelectedAccount().get(),
+							cell.getModelValue().planet, ResourceType.Energy, 1).totalNet;
+						if (energyExcess > satEnergy) {
+							// Bonuses like for Collector or Officers can bump this up
+							int removeSats = (int) Math.floor(energyExcess * 1.0 / (energyExcess + energyNeeded) * newSats);
+							cell.getModelValue().planet.setSolarSatellites(currentSats + newSats - removeSats);
+						}
+						e.consume();
+					}
+				}), //
 			intPlanetColumn("Solar", AccountUpgradeType.SolarPlant, 55), //
 			intPlanetColumn("Fusion", AccountUpgradeType.FusionReactor, 55),
 			planetColumn("Net Enrgy", int.class, p -> p.planet == null ? null : p.getEnergy().totalNet, null, 65));
@@ -638,6 +670,9 @@ public class PlanetTable {
 		return planetColumn(name, Levels.class, //
 			p -> {
 				UpgradeAccount ua = theUniGui.getUpgradeAccount().get();
+				if (ua == null) {
+					return new Levels(0, 0);
+				}
 				if (moon) {
 					if (p.planet == null) {
 						int current = 0, goal = 0;

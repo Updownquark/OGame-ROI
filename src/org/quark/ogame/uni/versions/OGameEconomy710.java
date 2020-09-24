@@ -551,7 +551,8 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				throw new IllegalStateException();
 			}
 
-			int typeAmount = production.base * account.getUniverse().getEconomySpeed();
+			int baseAmount;
+			int typeAmount = baseAmount = production.base * account.getUniverse().getEconomySpeed();
 			byType.put(ProductionSource.Base, typeAmount);
 			totalProduced += typeAmount;
 
@@ -566,6 +567,11 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			int mineProduction = (int) Math.floor(mineP);
 			typeAmount = mineProduction;
 			byType.put(mineType, typeAmount);
+			totalProduced += typeAmount;
+
+			double multiplier = getSlotProductionMultiplier(account, planet, resourceType);
+			typeAmount = (int) Math.round((baseAmount + mineP) * multiplier);
+			byType.put(ProductionSource.Slot, typeAmount);
 			totalProduced += typeAmount;
 
 			// Fusion consumption
@@ -629,6 +635,10 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 
 	protected int getMineEnergy(MineProduction production, int level, int utilization) {
 		return (int) Math.floor(production.energyMultiplier * level * utilization / 100.0 * Math.pow(1.1, level));
+	}
+
+	protected double getSlotProductionMultiplier(Account account, Planet planet, ResourceType resource) {
+		return 0;
 	}
 
 	protected int getUsableCrawlers(Account account, Planet planet) {

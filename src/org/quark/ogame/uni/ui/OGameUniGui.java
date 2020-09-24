@@ -120,8 +120,9 @@ public class OGameUniGui extends JPanel {
 					.withField("id", Account::getId, ObservableConfigFormat.INT)//
 					.build())
 			.buildValue(null);
-		theUpgradeAccount = theSelectedAccount.map(TypeTokens.get().of(UpgradeAccount.class), a -> a == null ? null : new UpgradeAccount(a),
-			opts -> opts.cache(true).reEvalOnUpdate(false).fireIfUnchanged(true));
+		theUpgradeAccount = theSelectedAccount.map(TypeTokens.get().of(UpgradeAccount.class), a -> {
+			return a == null ? null : new UpgradeAccount(a);
+		}, opts -> opts.cache(true).reEvalOnUpdate(false).fireIfUnchanged(true));
 
 		thePlanetRefresh = new SimpleObservable<>();
 		thePlanets = ObservableCollection

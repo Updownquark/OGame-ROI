@@ -48,7 +48,7 @@ public interface OGameEconomyRuleSet {
 			} else {
 				production += amount;
 			}
-			return new Production(byType, production, consumption);
+			return new Production(newByType, production, consumption);
 		}
 	}
 
@@ -90,6 +90,7 @@ public interface OGameEconomyRuleSet {
 			getProduction(account, planet, ResourceType.Crystal, energyFactor).totalNet, //
 			getProduction(account, planet, ResourceType.Deuterium, energyFactor).totalNet);
 	}
+
 	int getSatelliteEnergy(Account account, Planet planet);
 	long getStorage(Planet planet, ResourceType resourceType);
 	int getMaxCrawlers(Account account, Planet planet);

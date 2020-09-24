@@ -5,7 +5,7 @@ import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.ResourceType;
 
-public class OGameEconomy750 extends OGameEconomy711 {
+public class OGameEconomy750 extends OGameEconomy740 {
 	@Override
 	public int getMaxCrawlers(Account account, Planet planet) {
 		int superMax = super.getMaxCrawlers(account, planet);
@@ -25,9 +25,8 @@ public class OGameEconomy750 extends OGameEconomy711 {
 	}
 
 	@Override
-	public Production getProduction(Account account, Planet planet, ResourceType resourceType, double energyFactor) {
-		Production superP = super.getProduction(account, planet, resourceType, energyFactor);
-		if (resourceType == ResourceType.Metal) {
+	protected double getSlotProductionMultiplier(Account account, Planet planet, ResourceType resource) {
+		if (resource == ResourceType.Metal) {
 			double metalMult;
 			switch (planet.getCoordinates().getSlot()) {
 			case 6:
@@ -43,9 +42,11 @@ public class OGameEconomy750 extends OGameEconomy711 {
 				break;
 			default:
 				metalMult = 0;
+				break;
 			}
-			return superP.plus((int) (superP.byType.get(ProductionSource.Base) * metalMult), ProductionSource.Slot);
+			return metalMult;
+		} else {
+			return super.getSlotProductionMultiplier(account, planet, resource);
 		}
-		return superP;
 	}
 }

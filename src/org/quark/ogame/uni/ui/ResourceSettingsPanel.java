@@ -100,6 +100,7 @@ public class ResourceSettingsPanel extends JPanel {
 		Metal("Metal Mine"),
 		Crystal("Crystal Mine"),
 		Deut("Deuterium Synthesizer"), //
+		SlotBonus("Slot Bonus"), //
 		Solar("Solar Plant"),
 		Fusion("Fusion Reactor"),
 		Satellite("Solar Satellite"),
@@ -203,6 +204,8 @@ public class ResourceSettingsPanel extends JPanel {
 		case Crawler:
 			return Math.min(p.getCrawlers(), //
 				theUniGui.getRules().get().economy().getMaxCrawlers(a, p));
+		case SlotBonus:
+			return 0;
 		case Plasma:
 			return a.getResearch().getPlasma();
 		case Items:
@@ -259,6 +262,7 @@ public class ResourceSettingsPanel extends JPanel {
 		case Collector:
 			return value == 0 ? "" : "Active";
 		case Storage:
+		case SlotBonus:
 			return "";
 		case Divider:
 			return "-----";
@@ -350,6 +354,8 @@ public class ResourceSettingsPanel extends JPanel {
 			return printProduction(p.byType.getOrDefault(ProductionSource.Satellite, 0), ProductionDisplayType.Hourly);
 		case Crawler:
 			return printProduction(p.byType.getOrDefault(ProductionSource.Crawler, 0), ProductionDisplayType.Hourly);
+		case SlotBonus:
+			return printProduction(p.byType.getOrDefault(ProductionSource.Slot, 0), ProductionDisplayType.Hourly);
 		case Plasma:
 			return printProduction(p.byType.getOrDefault(ProductionSource.Plasma, 0), ProductionDisplayType.Hourly);
 		case Items:

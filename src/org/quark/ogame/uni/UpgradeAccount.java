@@ -45,7 +45,12 @@ public class UpgradeAccount implements Account {
 		if (upgrade.getType().research != null) {
 			theResearch.withUpgrade(upgrade);
 		} else {
-			getPlanets().getPlanet(upgrade.getPlanet()).withUpgrade(upgrade);
+			UpgradePlanet upgradePlanet = getPlanets()//
+				.getPlanet(//
+					upgrade.getPlanet());
+			if (upgradePlanet != null) {
+				upgradePlanet.withUpgrade(upgrade);
+			}
 		}
 		return this;
 	}
