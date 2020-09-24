@@ -14,6 +14,7 @@ import org.observe.config.SyncValueSet;
 import org.observe.util.TypeTokens;
 import org.qommons.ArrayUtils;
 import org.qommons.Nameable;
+import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 
 import com.google.common.reflect.TypeToken;
 
@@ -248,6 +249,7 @@ public class UpgradeAccount implements Account {
 
 	public class UpgradePlanet extends UpgradeRockyBody implements CondensedPlanet {
 		private UpgradeMoon theMoon;
+		private int theCrawlerUtil;
 		private int theFusionUtil;
 
 		public UpgradePlanet(Planet wrapped) {
@@ -256,17 +258,48 @@ public class UpgradeAccount implements Account {
 		}
 
 		public void optimizeEnergy(OGameEconomyRuleSet eco) {
-			theFusionUtil = ArrayUtils.binarySearch(0, 10, util -> {
-				theFusionUtil = util * 10;
-				double net = eco.getProduction(UpgradeAccount.this, this, ResourceType.Energy, 1).totalNet;
-				if (net == 0) {
-					return 0;
-				} else if (net < 0) {
-					return 1;
-				} else {
-					return -1;
+			theFusionUtil = 100;
+			theCrawlerUtil = eco.getMaxCrawlerUtilization(UpgradeAccount.this);
+			Production energy = eco.getProduction(UpgradeAccount.this, this, ResourceType.Energy, 1);
+			while (theCrawlerUtil > 100 && energy.totalNet < energy.totalConsumption / 500) {
+				theCrawlerUtil -= 10;
+				energy = eco.getProduction(UpgradeAccount.this, this, ResourceType.Energy, 1);
+			}
+			if (energy.totalNet < 0) {
+				// Adjust down the crawlers
+				theCrawlerUtil = ArrayUtils.binarySearch(0, 10, util -> {
+					theCrawlerUtil = util * 10;
+					double net = eco.getProduction(UpgradeAccount.this, this, ResourceType.Energy, 1).totalNet;
+					if (net == 0) {
+						return 0;
+					} else if (net < 0) {
+						return -1;
+					} else {
+						return 1;
+					}
+				});
+				if (theCrawlerUtil < 0) {
+					theCrawlerUtil = -theCrawlerUtil - 1;
 				}
-			}) * 10;
+				theCrawlerUtil *= 10;
+			} else {
+				// Adjust down the fusion
+				theFusionUtil = ArrayUtils.binarySearch(0, 10, util -> {
+					theFusionUtil = util * 10;
+					double net = eco.getProduction(UpgradeAccount.this, this, ResourceType.Energy, 1).totalNet;
+					if (net == 0) {
+						return 0;
+					} else if (net < 0) {
+						return 1;
+					} else {
+						return -1;
+					}
+				});
+				if (theFusionUtil < 0) {
+					theFusionUtil = -theFusionUtil - 1;
+				}
+				theFusionUtil *= 10;
+			}
 		}
 
 		@Override
@@ -386,7 +419,7 @@ public class UpgradeAccount implements Account {
 
 		@Override
 		public int getSolarPlantUtilization() {
-			return getWrapped().getSolarPlantUtilization();
+			return 100;
 		}
 
 		@Override
@@ -409,7 +442,7 @@ public class UpgradeAccount implements Account {
 
 		@Override
 		public int getSolarSatelliteUtilization() {
-			return getWrapped().getSolarSatelliteUtilization();
+			return 100;
 		}
 
 		@Override
@@ -419,6 +452,9 @@ public class UpgradeAccount implements Account {
 
 		@Override
 		public int getCrawlerUtilization() {
+			if (theCrawlerUtil >= 0) {
+				return theCrawlerUtil;
+			}
 			return getWrapped().getCrawlerUtilization();
 		}
 

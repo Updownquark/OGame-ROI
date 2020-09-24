@@ -61,11 +61,14 @@ public class ResourceSettingsPanel extends JPanel {
 						65))//
 					.withColumn(resourceColumn("Energy", String.class, goals,
 						(planet, row) -> printProductionBySource(planet, row, ResourceType.Energy, goals), null, selectedPlanet, "0", 65))//
-					.withColumn("Utilization", String.class, row -> getUtilization(selectedPlanet.get(), row), utilColumn -> utilColumn
+					.withColumn("Utilization", String.class, row -> getUtilization(selectedPlanet.get(), row, goals),
+						utilColumn -> utilColumn
 						.withWidths(60, 60, 60)
 						.withMutation(m -> m.mutateAttribute((row, u) -> setUtilization(selectedPlanet.get(), row, u))
 							.editableIf((row, u) -> !goals && isUtilEditable(row)).asCombo(s -> s, ObservableCollection
-								.of(TypeTokens.get().STRING, "100%", "90%", "80%", "70%", "60%", "50%", "40%", "30%", "20%", "10%", "0%"))
+								.of(TypeTokens.get().STRING, "150%", "140%", "130%", "120%", "110%", //
+									"100%", "90%", "80%", "70%", "60%", "50%", "40%", "30%", "20%", "10%", "0%"))//
+							.filterAccept((row, util) -> isUtilAcceptable(row.get(), util))//
 							.clicks(1)))//
 		);
 	}
@@ -382,22 +385,22 @@ public class ResourceSettingsPanel extends JPanel {
 		return "";
 	}
 
-	static String getUtilization(PlanetWithProduction planet, ResourceRow row) {
+	static String getUtilization(PlanetWithProduction planet, ResourceRow row, boolean goals) {
 		switch (row) {
 		case Metal:
-			return planet.planet.getMetalUtilization() + "%";
+			return (goals ? planet.upgradePlanet : planet.planet).getMetalUtilization() + "%";
 		case Crystal:
-			return planet.planet.getCrystalUtilization() + "%";
+			return (goals ? planet.upgradePlanet : planet.planet).getCrystalUtilization() + "%";
 		case Deut:
-			return planet.planet.getDeuteriumUtilization() + "%";
+			return (goals ? planet.upgradePlanet : planet.planet).getDeuteriumUtilization() + "%";
 		case Solar:
-			return planet.planet.getSolarPlantUtilization() + "%";
+			return (goals ? planet.upgradePlanet : planet.planet).getSolarPlantUtilization() + "%";
 		case Fusion:
-			return planet.planet.getFusionReactorUtilization() + "%";
+			return (goals ? planet.upgradePlanet : planet.planet).getFusionReactorUtilization() + "%";
 		case Satellite:
-			return planet.planet.getSolarSatelliteUtilization() + "%";
+			return (goals ? planet.upgradePlanet : planet.planet).getSolarSatelliteUtilization() + "%";
 		case Crawler:
-			return planet.planet.getCrawlerUtilization() + "%";
+			return (goals ? planet.upgradePlanet : planet.planet).getCrawlerUtilization() + "%";
 		case Divider:
 			return "-----------";
 		default:
@@ -419,6 +422,32 @@ public class ResourceSettingsPanel extends JPanel {
 			break;
 		}
 		return false;
+	}
+
+	String isUtilAcceptable(ResourceRow row, String util) {
+		int value = Integer.parseInt(util.substring(0, util.length() - 1));
+		switch (row) {
+		case Metal:
+		case Crystal:
+		case Deut:
+		case Solar:
+		case Fusion:
+		case Satellite:
+			if (value <= 100) {
+				return null;
+			}
+			return "Overclocking is only available on Crawlers";
+		case Crawler:
+			int maxUtil = theUniGui.getRules().get().economy().getMaxCrawlerUtilization(theUniGui.getSelectedAccount().get());
+			if (value <= maxUtil) {
+				return null;
+			} else {
+				return "Crawler overclocking is only available for the Collector class";
+			}
+		default:
+			break;
+		}
+		return null;
 	}
 
 	static void setUtilization(PlanetWithProduction planet, ResourceRow row, String util) {

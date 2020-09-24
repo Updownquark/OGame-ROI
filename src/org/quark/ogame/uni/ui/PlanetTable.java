@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.ListIterator;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -19,11 +20,14 @@ import org.observe.util.TypeTokens;
 import org.observe.util.swing.CategoryRenderStrategy;
 import org.observe.util.swing.PanelPopulation;
 import org.qommons.BiTuple;
+import org.qommons.io.AdjustableComponent;
+import org.qommons.io.ParsedAdjustable;
 import org.qommons.io.SpinnerFormat;
 import org.quark.ogame.OGameUtils;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
+import org.quark.ogame.uni.Coordinate;
 import org.quark.ogame.uni.Moon;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.PlannedUpgrade;
@@ -82,9 +86,9 @@ public class PlanetTable {
 			boolean currentlyHasDone = UPGRADE_DONE.equals(planetUpgrades.peekFirst());
 			boolean shouldHaveDone;
 			if (evt.getNewValue() == null || evt.getNewValue().planet == null) {
-				shouldHaveDone= false;
+				shouldHaveDone = false;
 			} else {
-				shouldHaveDone=evt.getNewValue().planet.getCurrentUpgrade() != null;
+				shouldHaveDone = evt.getNewValue().planet.getCurrentUpgrade() != null;
 			}
 			if (currentlyHasDone && !shouldHaveDone) {
 				planetUpgrades.removeFirst();
@@ -185,8 +189,7 @@ public class PlanetTable {
 					.withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)), //
 			planetColumn("D %", int.class, p -> p.planet == null ? null : p.planet.getDeuteriumUtilization(),
 				Planet::setDeuteriumUtilization, 45).withHeaderTooltip("Deuterium Synthesizer Utilization")
-					.formatText(v -> v == null ? "" : v + "%")
-					.withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)), //
+					.formatText(v -> v == null ? "" : v + "%").withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)), //
 			planetColumn("Cr %", int.class, p -> p.planet == null ? null : p.planet.getCrawlerUtilization(), Planet::setCrawlerUtilization,
 				45).withHeaderTooltip("Crawler Utilization").formatText(v -> v == null ? "" : v + "%")
 					.withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)) //
@@ -229,6 +232,17 @@ public class PlanetTable {
 			intPlanetColumn("Terraformer", AccountUpgradeType.Terraformer, 65), //
 			intPlanetColumn("Space Dock", AccountUpgradeType.SpaceDock, 65)//
 		);
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> coordColumn = ObservableCollection.of(PLANET_COLUMN_TYPE,
+			new CategoryRenderStrategy<PlanetWithProduction, PlanetTable.AdjustableCoords>("Coords",
+				TypeTokens.get().of(PlanetTable.AdjustableCoords.class),
+				p -> p.planet == null ? null : toAdjustable(p.planet.getCoordinates()))//
+					.withMutation(mut -> {
+						mut.asText(COORD_FORMAT).mutateAttribute((pwp, coords) -> {
+							if (pwp.planet != null) {
+								adjustCoord(pwp.planet.getCoordinates(), coords);
+							}
+						});
+					}));
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonBuildings = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			new CategoryRenderStrategy<PlanetWithProduction, Object>("Upgrd", TypeTokens.get().OBJECT,
 				p -> p.planet == null ? null : p.planet.getMoon().getCurrentUpgrade())//
@@ -288,8 +302,7 @@ public class PlanetTable {
 			shipColumn(ShipyardItemType.EspionageProbe, false, 55) //
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonDefenseColumns = ObservableCollection.of(
-			PLANET_COLUMN_TYPE,
-			shipColumn(ShipyardItemType.RocketLauncher, true, 55), //
+			PLANET_COLUMN_TYPE, shipColumn(ShipyardItemType.RocketLauncher, true, 55), //
 			shipColumn(ShipyardItemType.LightLaser, true, 55), //
 			shipColumn(ShipyardItemType.HeavyLaser, true, 55), //
 			shipColumn(ShipyardItemType.GaussCannon, true, 55), //
@@ -322,7 +335,7 @@ public class PlanetTable {
 			switch (columnSet) {
 			case Mines:
 				columnSets.put(columnSet, ObservableCollection.flattenCollections(PLANET_COLUMN_TYPE, //
-					mineColumns, energyBldgs, tempColumns, storageColumns).collect());
+					mineColumns, energyBldgs, tempColumns, storageColumns, coordColumn).collect());
 				break;
 			case Facilities:
 				columnSets.put(columnSet, ObservableCollection.flattenCollections(PLANET_COLUMN_TYPE, //
@@ -356,45 +369,46 @@ public class PlanetTable {
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> planetColumns = ObservableCollection
 			.flattenCollections(PLANET_COLUMN_TYPE, //
 				initPlanetColumns, //
-				selectedColumns
-			).collect();
+				selectedColumns)
+			.collect();
 
-		ObservableCollection<Research> researchColl = ObservableCollection.flattenValue(theUniGui.getSelectedAccount()
-			.<ObservableCollection<Research>> map(TypeTokens.get().keyFor(ObservableCollection.class).parameterized(Research.class),
-				account -> {
-				ObservableCollection<Research> rsrch = ObservableCollection.build(Research.class).safe(false).build();
-				if (account != null) {
-					rsrch.with(account.getResearch());
-				}
-				return rsrch;
-			}, opts -> opts.cache(true).reEvalOnUpdate(false)));
+		ObservableCollection<Research> researchColl = ObservableCollection
+			.flattenValue(theUniGui.getSelectedAccount().<ObservableCollection<Research>> map(
+				TypeTokens.get().keyFor(ObservableCollection.class).parameterized(Research.class), account -> {
+					ObservableCollection<Research> rsrch = ObservableCollection.build(Research.class).safe(false).build();
+					if (account != null) {
+						rsrch.with(account.getResearch());
+					}
+					return rsrch;
+				}, opts -> opts.cache(true).reEvalOnUpdate(false)));
 		researchColl.simpleChanges().act(__ -> theUniGui.refreshProduction());
 		panel.fill().fillV()//
 			.addTable(researchColl,
 				researchTable -> researchTable.fill().withAdaptiveHeight(1, 1, 1).decorate(d -> d.withTitledBorder("Research", Color.black))//
-					.withColumn("Upgrade", Object.class, r -> r.getCurrentUpgrade(), upgradeCol -> upgradeCol.withWidths(60, 60, 60)
-						.withHeaderTooltip("Current Research Upgrade")
-						.formatText(rsrch -> rsrch == null ? "" : ((ResearchType) rsrch).shortName).withMutation(m -> m.asCombo(rsrch -> {
-							if (rsrch instanceof ResearchType) {
-								return ((ResearchType) rsrch).shortName;
-							} else if (rsrch != null) {
-								return rsrch.toString();
-							} else {
-								return "";
-							}
-						}, researchUpgrades).clicks(1).mutateAttribute((r, rsrch) -> {
-							if (rsrch instanceof ResearchType) {
-								r.setCurrentUpgrade((ResearchType) rsrch);
-							} else {
-								ResearchType upgrade = r.getCurrentUpgrade();
-								r.setCurrentUpgrade(null);
-								if (UPGRADE_DONE.equals(rsrch)) {
-									upgrade(null, upgrade.getUpgrade());
-									researchColl.mutableElement(researchColl.getTerminalElement(true).getElementId())//
-										.set(theUniGui.getSelectedAccount().get().getResearch());
+					.withColumn("Upgrade", Object.class, r -> r.getCurrentUpgrade(),
+						upgradeCol -> upgradeCol.withWidths(60, 60, 60).withHeaderTooltip("Current Research Upgrade")
+							.formatText(rsrch -> rsrch == null ? "" : ((ResearchType) rsrch).shortName)
+							.withMutation(m -> m.asCombo(rsrch -> {
+								if (rsrch instanceof ResearchType) {
+									return ((ResearchType) rsrch).shortName;
+								} else if (rsrch != null) {
+									return rsrch.toString();
+								} else {
+									return "";
 								}
-							}
-						})))//
+							}, researchUpgrades).clicks(1).mutateAttribute((r, rsrch) -> {
+								if (rsrch instanceof ResearchType) {
+									r.setCurrentUpgrade((ResearchType) rsrch);
+								} else {
+									ResearchType upgrade = r.getCurrentUpgrade();
+									r.setCurrentUpgrade(null);
+									if (UPGRADE_DONE.equals(rsrch)) {
+										upgrade(null, upgrade.getUpgrade());
+										researchColl.mutableElement(researchColl.getTerminalElement(true).getElementId())//
+											.set(theUniGui.getSelectedAccount().get().getResearch());
+									}
+								}
+							})))//
 					.withColumn(intResearchColumn("Energy", ResearchType.Energy, 45))//
 					.withColumn(intResearchColumn("Laser", ResearchType.Laser, 40))//
 					.withColumn(intResearchColumn("Ion", ResearchType.Ion, 35))//
@@ -516,7 +530,7 @@ public class PlanetTable {
 			if (upgrade.getType().research == type && (upgrade.getQuantity() > 0) != (goalDiff > 0)) {
 				int qComp = Integer.compare(Math.abs(upgrade.getQuantity()), Math.abs(goalDiff));
 				if (qComp <= 0) {
-					goalDiff -= upgrade.getQuantity();
+					goalDiff += upgrade.getQuantity();
 					upgradeIter.remove();
 				} else {
 					upgrade.setQuantity(upgrade.getQuantity() - goalDiff);
@@ -608,82 +622,13 @@ public class PlanetTable {
 		}
 	}
 
-	static final SpinnerFormat<Levels> LEVELS_FORMAT = new SpinnerFormat<Levels>() {
-		@Override
-		public void append(StringBuilder text, Levels value) {
-			if (value == null) {
-				return;
-			}
-			text.append(value.current);
-			if (value.goal != value.current) {
-				text.append('/').append(value.goal);
-			}
-		}
+	static final SpinnerFormat<Levels> LEVELS_FORMAT=new SpinnerFormat<Levels>(){@Override public void append(StringBuilder text,Levels value){if(value==null){return;}text.append(value.current);if(value.goal!=value.current){text.append('/').append(value.goal);}}
 
-		@Override
-		public Levels parse(CharSequence text) throws ParseException {
-			int current = 0, goal = 0;
-			int c = 0;
-			while (c < text.length() && Character.isWhitespace(text.charAt(c))) {
-				c++;
-			}
-			int startCurrent = c;
-			for (; c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9'; c++) {
-				current = current * 10 + (text.charAt(c) - '0');
-			}
-			if (c == startCurrent) {
-				current=-1;
-			}
-			while (c < text.length() && Character.isWhitespace(text.charAt(c))) {
-				c++;
-			}
-			if (c < text.length()) {
-				if (text.charAt(c) != '/') {
-					throw new ParseException("Unrecognized character: '" + text.charAt(c) + "'", c);
-				}
-				c++;
-				while (c < text.length() && Character.isWhitespace(text.charAt(c))) {
-					c++;
-				}
-				int startGoal = c;
-				for (; c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9'; c++) {
-					goal = goal * 10 + (text.charAt(c) - '0');
-				}
-				if (c == startGoal) {
-					goal=-1;
-				}
-				if (current < 0 && goal < 0) {
-					throw new ParseException("Missing values", 0);
-				}
-			} else {
-				if (current < 0) {
-					throw new ParseException("Missing values", 0);
-				}
-				goal = current;
-			}
-			return new Levels(current, goal);
-		}
+	@Override public Levels parse(CharSequence text)throws ParseException{int current=0,goal=0;int c=0;while(c<text.length()&&Character.isWhitespace(text.charAt(c))){c++;}int startCurrent=c;for(;c<text.length()&&text.charAt(c)>='0'&&text.charAt(c)<='9';c++){current=current*10+(text.charAt(c)-'0');}if(c==startCurrent){current=-1;}while(c<text.length()&&Character.isWhitespace(text.charAt(c))){c++;}if(c<text.length()){if(text.charAt(c)!='/'){throw new ParseException("Unrecognized character: '"+text.charAt(c)+"'",c);}c++;while(c<text.length()&&Character.isWhitespace(text.charAt(c))){c++;}int startGoal=c;for(;c<text.length()&&text.charAt(c)>='0'&&text.charAt(c)<='9';c++){goal=goal*10+(text.charAt(c)-'0');}if(c==startGoal){goal=-1;}if(current<0&&goal<0){throw new ParseException("Missing values",0);}}else{if(current<0){throw new ParseException("Missing values",0);}goal=current;}return new Levels(current,goal);}
 
-		@Override
-		public boolean supportsAdjustment(boolean withContext) {
-			return withContext;
-		}
+	@Override public boolean supportsAdjustment(boolean withContext){return withContext;}
 
-		@Override
-		public BiTuple<Levels, String> adjust(Levels value, String formatted, int cursor, boolean up) {
-			int slashIdx = formatted.indexOf('/');
-			if (slashIdx < 0) {
-				int newValue = value.current + (up ? 1 : -1);
-				return new BiTuple<>(new Levels(newValue, newValue), "" + newValue);
-			} else if (cursor <= slashIdx) {
-				Levels newLevels = new Levels(value.current + (up ? 1 : -1), value.goal);
-				return new BiTuple<>(newLevels, newLevels.current + "/" + newLevels.goal);
-			} else {
-				Levels newLevels = new Levels(value.current, value.goal + (up ? 1 : -1));
-				return new BiTuple<>(newLevels, newLevels.current + "/" + newLevels.goal);
-			}
-		}
-	};
+	@Override public BiTuple<Levels,String>adjust(Levels value,String formatted,int cursor,boolean up){int slashIdx=formatted.indexOf('/');if(slashIdx<0){int newValue=value.current+(up?1:-1);return new BiTuple<>(new Levels(newValue,newValue),""+newValue);}else if(cursor<=slashIdx){Levels newLevels=new Levels(value.current+(up?1:-1),value.goal);return new BiTuple<>(newLevels,newLevels.current+"/"+newLevels.goal);}else{Levels newLevels=new Levels(value.current,value.goal+(up?1:-1));return new BiTuple<>(newLevels,newLevels.current+"/"+newLevels.goal);}}};
 
 	CategoryRenderStrategy<PlanetWithProduction, Levels> intPlanetColumn(String name, AccountUpgradeType type, int width) {
 		return intPlanetColumn(name, type, false, width);
@@ -834,5 +779,288 @@ public class PlanetTable {
 		adjustPlanet(ua, target, upgrade, currentLevel + 1, goal);
 	}
 
-	// private static final Format<int []> COORD_FORMAT=Format. TODO
+	class CoordComponent implements AdjustableComponent {
+		private final int theType;
+		private final int theValue;
+		private final int theStart;
+		private final int theEnd;
+
+		public CoordComponent(int type, int value, int start, int end) {
+			theType = type;
+			theValue = value;
+			theStart = start;
+			theEnd = end;
+		}
+
+		public int getValue() {
+			return theValue;
+		}
+
+		@Override
+		public int getStart() {
+			return theStart;
+		}
+
+		@Override
+		public int getEnd() {
+			return theEnd;
+		}
+
+		int getMax() {
+			switch (theType) {
+			case 0:
+				return theUniGui.getSelectedAccount().get().getUniverse().getGalaxies();
+			case 1:
+				return 499;
+			case 2:
+				return 15;
+			default:
+				return 16; // Allow this for expeditions later
+			}
+		}
+
+		CoordComponent adjust(int amount) {
+			if (amount == 0) {
+				return this;
+			}
+			int value;
+			int digitChange = 0;
+			if (amount > 0) {
+				if (theValue == getMax()) {
+					return this;
+				}
+				value = theValue + amount;
+				if (value > getMax()) {
+					value = getMax();
+				}
+				if (theValue < 10 && value >= 10) {
+					digitChange++;
+				}
+			} else {
+				if (theValue == 1) {
+					return this;
+				}
+				value = theValue + amount;
+				if (value < 1) {
+					value = 1;
+				}
+				if (value < 10 && theValue >= 10) {
+					digitChange++;
+				}
+			}
+			return new CoordComponent(theType, value, theStart, theEnd + digitChange);
+		}
+	}
+
+	class AdjustableCoords implements ParsedAdjustable<AdjustableCoords, CoordComponent> {
+		private final CoordComponent[] theComponents;
+
+		public AdjustableCoords(CoordComponent galaxy, CoordComponent system, CoordComponent slot) {
+			theComponents = new CoordComponent[] { galaxy, system, slot };
+		}
+
+		@Override
+		public List<CoordComponent> getComponents() {
+			return Arrays.asList(theComponents);
+		}
+
+		@Override
+		public AdjustableCoords adjust(int position, int amount) {
+			if (position >= theComponents[2].getStart()) {
+				if (position > theComponents[2].getEnd()) {
+					return this;
+				}
+				CoordComponent adjusted = theComponents[2].adjust(amount);
+				if (adjusted == theComponents[2]) {
+					return this;
+				} else {
+					return new AdjustableCoords(theComponents[0], theComponents[1], adjusted);
+				}
+			} else if (position >= theComponents[1].getStart()) {
+				if (position > theComponents[1].getEnd()) {
+					return this;
+				}
+				CoordComponent adjusted = theComponents[1].adjust(amount);
+				if (adjusted == theComponents[1]) {
+					return this;
+				} else if (adjusted.getEnd() == theComponents[1].getEnd()) {
+					return new AdjustableCoords(theComponents[0], adjusted, theComponents[2]);
+				} else {
+					int digitChange = adjusted.getEnd() - theComponents[1].getEnd();
+					return new AdjustableCoords(theComponents[0], adjusted, //
+						new CoordComponent(2, theComponents[2].getValue(), theComponents[2].getStart() + digitChange,
+							theComponents[2].getEnd() + digitChange));
+				}
+			} else if (position >= theComponents[0].getStart()) {
+				if (position > theComponents[0].getEnd()) {
+					return this;
+				}
+				CoordComponent adjusted = theComponents[0].adjust(amount);
+				if (adjusted == theComponents[0]) {
+					return this;
+				} else if (adjusted.getEnd() == theComponents[0].getEnd()) {
+					return new AdjustableCoords(adjusted, theComponents[1], theComponents[2]);
+				} else {
+					int digitChange = adjusted.getEnd() - theComponents[0].getEnd();
+					return new AdjustableCoords(adjusted, //
+						new CoordComponent(1, theComponents[1].getValue(), theComponents[1].getStart() + digitChange,
+							theComponents[1].getEnd() + digitChange),
+						new CoordComponent(2, theComponents[2].getValue(), theComponents[2].getStart() + digitChange,
+							theComponents[2].getEnd() + digitChange));
+				}
+			} else {
+				return this;
+			}
+		}
+
+		@Override
+		public String toString() {
+			StringBuilder str = new StringBuilder();
+			if (theComponents[0].getStart() > 0) {
+				str.append('[');
+			}
+			while (str.length() < theComponents[0].getStart()) {
+				str.append(' ');
+			}
+			str.append(theComponents[0].getValue());
+			while (str.length() < theComponents[0].getEnd()) {
+				str.append(' ');
+			}
+			str.append(':');
+			while (str.length() < theComponents[1].getStart()) {
+				str.append(' ');
+			}
+			str.append(theComponents[1].getValue());
+			while (str.length() < theComponents[1].getEnd()) {
+				str.append(' ');
+			}
+			str.append(':');
+			while (str.length() < theComponents[2].getStart()) {
+				str.append(' ');
+			}
+			str.append(theComponents[2].getValue());
+			while (str.length() < theComponents[2].getEnd()) {
+				str.append(' ');
+			}
+			str.append(']');
+			return str.toString();
+		}
+	}
+
+	AdjustableCoords toAdjustable(Coordinate coord) {
+		int sysLen = coord.getSystem() < 10 ? 1 : (coord.getSystem() < 100 ? 2 : 3);
+		int slotLen = coord.getSlot() < 10 ? 1 : 2;
+		return new AdjustableCoords(//
+			new CoordComponent(0, coord.getGalaxy(), 1, 2), //
+			new CoordComponent(1, coord.getSystem(), 3, 3 + sysLen), //
+			new CoordComponent(2, coord.getSlot(), 4 + sysLen, 4 + sysLen + slotLen));
+	}
+
+	static void adjustCoord(Coordinate coord, AdjustableCoords adjustable) {
+		coord.setGalaxy(adjustable.getComponents().get(0).getValue());
+		coord.setSystem(adjustable.getComponents().get(1).getValue());
+		coord.setSlot(adjustable.getComponents().get(2).getValue());
+	}
+
+	final SpinnerFormat<AdjustableCoords> COORD_FORMAT = SpinnerFormat.forAdjustable(new SpinnerFormat.SimpleParser<AdjustableCoords>() {
+		@Override
+		public AdjustableCoords parse(CharSequence text) throws ParseException {
+			String str = text.toString();
+			int start = 0;
+			if (str.length() > 0 && str.charAt(0) == '[') {
+				start++;
+			}
+			while (start < str.length() && Character.isWhitespace(str.charAt(start))) {
+				start++;
+			}
+			int colon = str.indexOf(':', start);
+			if (colon < 0) {
+				throw new ParseException("Colon expected", 0);
+			}
+			int gEnd = colon;
+			while (Character.isWhitespace(str.charAt(gEnd))) {
+				gEnd--;
+			}
+			int sysStart = colon + 1;
+			while (sysStart < str.length() && Character.isWhitespace(str.charAt(sysStart))) {
+				sysStart++;
+			}
+			int nextColon = str.indexOf(':', colon + 1);
+			if (nextColon < 0) {
+				throw new ParseException("Second colon expected", 0);
+			}
+			int sysEnd = nextColon;
+			while (Character.isWhitespace(str.charAt(sysEnd - 1))) {
+				sysEnd--;
+			}
+			int slotStart = nextColon + 1;
+			while (slotStart < str.length() && Character.isWhitespace(str.charAt(slotStart))) {
+				slotStart++;
+			}
+			int end = str.length();
+			if (str.charAt(end - 1) == ']') {
+				end--;
+			}
+			while (Character.isWhitespace(str.charAt(end - 1))) {
+				end--;
+			}
+			String galaxyStr = str.substring(start, gEnd);
+			if (galaxyStr.isEmpty()) {
+				throw new ParseException("Integer expected for galaxy", start);
+			}
+			int galaxy;
+			try {
+				galaxy = Integer.parseInt(galaxyStr);
+			} catch (NumberFormatException e) {
+				throw new ParseException("Integer expected for galaxy, not " + galaxyStr, start);
+			}
+			int maxGalaxies = theUniGui.getSelectedAccount().get().getUniverse().getGalaxies();
+			if (galaxy < 1) {
+				throw new ParseException("Galaxy must be at least 1: " + galaxy, start);
+			}
+			if (galaxy > maxGalaxies) {
+				throw new ParseException("Only " + maxGalaxies + " galaxies exist: " + galaxy, start);
+			}
+
+			String systemStr = str.substring(sysStart, sysEnd);
+			if (systemStr.isEmpty()) {
+				throw new ParseException("Integer expected for system", sysStart);
+			}
+			int system;
+			try {
+				system = Integer.parseInt(systemStr);
+			} catch (NumberFormatException e) {
+				throw new ParseException("Integer expected for system, not " + systemStr, sysStart);
+			}
+			int maxSystems = 499;
+			if (system < 1) {
+				throw new ParseException("System must be at least 1: " + system, sysStart);
+			}
+			if (system > maxSystems) {
+				throw new ParseException("Only " + maxSystems + " systems exist: " + system, sysStart);
+			}
+
+			String slotStr = str.substring(slotStart, end);
+			if (slotStr.isEmpty()) {
+				throw new ParseException("Integer expected for slot", slotStart);
+			}
+			int slot;
+			try {
+				slot = Integer.parseInt(slotStr);
+			} catch (NumberFormatException e) {
+				throw new ParseException("Integer expected for system, not " + slotStr, slotStart);
+			}
+			int maxSlots = 15;
+			if (slot < 1) {
+				throw new ParseException("Slot must be at least 1: " + slot, start);
+			}
+			if (slot > maxSlots) {
+				throw new ParseException("Only " + maxSlots + " slots exist: " + slot, slotStart);
+			}
+			return new AdjustableCoords(//
+				new CoordComponent(0, galaxy, start, gEnd), //
+				new CoordComponent(1, system, sysStart, sysEnd), //
+				new CoordComponent(2, slot, slotStart, end));
+		}
+	});
 }

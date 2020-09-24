@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.BiConsumer;
@@ -67,7 +68,9 @@ import org.quark.ogame.uni.TradeRatios;
 import org.quark.ogame.uni.UpgradeAccount;
 import org.quark.ogame.uni.UpgradeAccount.UpgradePlanet;
 import org.quark.ogame.uni.UpgradeCost;
+import org.quark.ogame.uni.versions.OGameRuleSet710;
 import org.quark.ogame.uni.versions.OGameRuleSet711;
+import org.quark.ogame.uni.versions.OGameRuleSet750;
 
 import com.google.common.reflect.TypeToken;
 
@@ -194,7 +197,7 @@ public class OGameUniGui extends JPanel {
 				}
 			}
 		});
-		theUpgrades.simpleChanges().act(evt -> refreshProduction());
+		theUpgrades.simpleChanges().act(evt -> ObservableSwingUtils.onEQ(this::refreshProduction));
 		refreshProduction();
 		updateTotalProduction(total, ZERO);
 
@@ -908,7 +911,8 @@ public class OGameUniGui extends JPanel {
 
 	public static void main(String[] args) {
 		List<OGameRuleSet> ruleSets = new ArrayList<>();
-		ruleSets.add(new OGameRuleSet711());
+		ruleSets.addAll(Arrays.asList(//
+			new OGameRuleSet710(), new OGameRuleSet711(), new OGameRuleSet750()));
 		ObservableSwingUtils.buildUI()//
 			.withConfig("ogame-config").withConfigAt("OGameUI.xml")//
 			.withTitle("OGame Account Helper").systemLandF().build(config -> {

@@ -475,7 +475,16 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			byType.put(ProductionSource.DeuteriumSynthesizer, -typeAmount);
 			totalConsumed += typeAmount;
 			// Crawlers
-			typeAmount = (int) Math.floor(getUsableCrawlers(account, planet) * 50 * planet.getCrawlerUtilization() / 100.0);
+			int energyPerCrawler = 50;
+			int crawlers = getUsableCrawlers(account, planet);
+			typeAmount = (int) Math.floor(crawlers * energyPerCrawler * Math.min(100, planet.getCrawlerUtilization()) / 100.0);
+			int overclock = (planet.getCrawlerUtilization() - 100) / 10;
+			if (overclock > 0) {
+				// Overclocking crawlers is available in 7.5.0, but I'm putting it here because it's easier and it's not possible
+				// to overclock before this patch.
+				// Overclocking drains twice as much energy
+				typeAmount += crawlers * energyPerCrawler * overclock / 5;
+			}
 			byType.put(ProductionSource.Crawler, -typeAmount);
 			totalConsumed += typeAmount;
 
@@ -631,6 +640,11 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 	@Override
 	public int getMaxCrawlers(Account account, Planet planet) {
 		return (planet.getMetalMine() + planet.getCrystalMine() + planet.getDeuteriumSynthesizer()) * 8;
+	}
+
+	@Override
+	public int getMaxCrawlerUtilization(Account account) {
+		return 100;
 	}
 
 	@Override

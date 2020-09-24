@@ -1,12 +1,14 @@
 package org.quark.ogame.uni;
 
 import java.time.Duration;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
 public interface OGameEconomyRuleSet {
 	public enum ProductionSource {
 		Base,
+		Slot,
 		MetalMine,
 		CrystalMine,
 		DeuteriumSynthesizer,
@@ -33,6 +35,20 @@ public interface OGameEconomyRuleSet {
 			this.totalProduction = produced;
 			this.totalConsumption = consumed;
 			this.totalNet = produced - consumed;
+		}
+
+		public Production plus(int amount, ProductionSource type) {
+			Map<ProductionSource, Integer> newByType = new EnumMap<>(ProductionSource.class);
+			newByType.putAll(byType);
+			newByType.compute(type, (__, old) -> old == null ? amount : old + amount);
+			int production = totalProduction;
+			int consumption = totalConsumption;
+			if (amount < 0) {
+				consumption -= amount;
+			} else {
+				production += amount;
+			}
+			return new Production(byType, production, consumption);
 		}
 	}
 
@@ -77,6 +93,7 @@ public interface OGameEconomyRuleSet {
 	int getSatelliteEnergy(Account account, Planet planet);
 	long getStorage(Planet planet, ResourceType resourceType);
 	int getMaxCrawlers(Account account, Planet planet);
+	int getMaxCrawlerUtilization(Account account);
 
 	UpgradeCost getUpgradeCost(Account account, RockyBody planetOrMoon, AccountUpgradeType upgrade, int fromLevel, int toLevel);
 	List<Requirement> getRequirements(AccountUpgradeType target);
