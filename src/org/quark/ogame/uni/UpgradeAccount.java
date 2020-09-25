@@ -510,7 +510,7 @@ public class UpgradeAccount implements Account {
 
 			@Override
 			public int getFieldBonus() {
-				return getMoon().getFieldBonus();
+				return getWrapped().getFieldBonus();
 			}
 
 			@Override
