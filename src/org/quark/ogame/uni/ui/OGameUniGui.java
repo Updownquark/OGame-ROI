@@ -33,6 +33,7 @@ import org.observe.collect.ObservableCollection;
 import org.observe.config.ObservableConfig;
 import org.observe.config.ObservableConfigFormat;
 import org.observe.config.SyncValueSet;
+import org.observe.util.EntityReflector;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.CategoryRenderStrategy;
 import org.observe.util.swing.JustifiedBoxLayout;
@@ -62,6 +63,8 @@ import org.quark.ogame.uni.OGameRuleSet;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.PlannedUpgrade;
 import org.quark.ogame.uni.PointType;
+import org.quark.ogame.uni.Research;
+import org.quark.ogame.uni.ResearchType;
 import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.TradeRatios;
@@ -146,7 +149,9 @@ public class OGameUniGui extends JPanel {
 		theUpgrades = ObservableCollection
 			.flattenValue(
 				theSelectedAccount.map(upgradeCollType, account -> account.getPlannedUpgrades().getValues(), opts -> opts.nullToNull(true)))//
-			.flow().map(TypeTokens.get().of(PlannedAccountUpgrade.class), pu -> new PlannedAccountUpgrade(pu)).collect();
+			.flow().transform(TypeTokens.get().of(PlannedAccountUpgrade.class),
+				tx -> tx.cache(true).reEvalOnUpdate(false).map(pu -> new PlannedAccountUpgrade(pu)))
+			.collect();
 		theUpgradeAccount.changes().act(evt -> {
 			UpgradeAccount ua = evt.getNewValue();
 			if (ua == null) {
@@ -199,6 +204,46 @@ public class OGameUniGui extends JPanel {
 			}
 		});
 		theUpgrades.simpleChanges().act(evt -> ObservableSwingUtils.onEQ(this::refreshProduction));
+		// When the user changes the current research upgrade or building upgrade on a planet,
+		// That upgrade's cost should clear out, and the old upgrade (if any) should then show a cost
+		ObservableValue<ResearchType> currentResearch = ObservableValue.flatten(theSelectedAccount.map(a -> {
+			ObservableValue<ResearchType> rsrch;
+			if (a == null) {
+				rsrch = null;
+			} else {
+				rsrch = EntityReflector.observeField(a.getResearch(), Research::getCurrentUpgrade);
+			}
+			return rsrch;
+		}));
+		currentResearch.noInitChanges().act(evt -> {
+			for (CollectionElement<PlannedAccountUpgrade> upgrade : theUpgrades.elements()) {
+				if (upgrade.get().planned.getType().research != null //
+					&& (upgrade.get().planned.getType().research == evt.getOldValue() //
+						|| upgrade.get().planned.getType().research == evt.getNewValue())) {
+					upgrade.get().clear();
+					theUpgrades.mutableElement(upgrade.getElementId()).set(upgrade.get());
+				}
+			}
+		});
+		ObservableCollection<BuildingType> upgradeBuildings = ObservableCollection
+			.flattenValue(//
+				theSelectedAccount.map(a -> a == null ? null : a.getPlanets().getValues()))//
+			.flow().flattenValues(BuildingType.class, p -> EntityReflector.observeField(p, Planet::getCurrentUpgrade))//
+			.collect();
+		upgradeBuildings.onChange(evt -> {
+			if (evt.getType() != CollectionChangeType.set) {
+				return;
+			}
+			long planet = thePlanets.get(evt.getIndex()).planet.getId();
+			for (CollectionElement<PlannedAccountUpgrade> upgrade : theUpgrades.elements()) {
+				if (upgrade.get().planned.getType().building != null && upgrade.get().planned.getPlanet() == planet //
+					&& (upgrade.get().planned.getType().building == evt.getOldValue() //
+						|| upgrade.get().planned.getType().building == evt.getNewValue())) {
+					upgrade.get().clear();
+					theUpgrades.mutableElement(upgrade.getElementId()).set(upgrade.get());
+				}
+			}
+		});
 		refreshProduction();
 		updateTotalProduction(total, ZERO);
 
@@ -1005,9 +1050,12 @@ public class OGameUniGui extends JPanel {
 				Account account = getSelectedAccount().get();
 				boolean alreadyPaid = false;
 				if (getFrom() == planned.getType().getLevel(account, thePlanet)) {
-					if (account.getResearch().getCurrentUpgrade() == planned.getType().research//
-						|| (thePlanet != null && thePlanet.getCurrentUpgrade() == planned.getType().building)) {
-						alreadyPaid = true;
+					if (planned.getType().research != null) {
+						alreadyPaid = account.getResearch().getCurrentUpgrade() == planned.getType().research;
+					} else if (planned.getType().building != null) {
+						alreadyPaid=thePlanet.getCurrentUpgrade()==planned.getType().building;
+					} else {
+						alreadyPaid=false;
 					}
 				}
 				isPaid = alreadyPaid;
@@ -1089,14 +1137,14 @@ public class OGameUniGui extends JPanel {
 		int planetIdx = account.getPlanets().getValues().indexOf(planet);
 		double currentProduction = 0, newProduction = 0, cost = 0;
 		TradeRatios tr = account.getUniverse().getTradeRatios();
+		List<FullProduction> productions = QommonsUtils.map(account.getPlanets().getValues(), //
+			p -> rules.economy().getFullProduction(account, p), false);
+		cost = upgrade.getCost().getMetalValue(tr);
+		for (FullProduction p : productions) {
+			currentProduction += p.asCost().getMetalValue(tr);
+		}
 		switch (upgrade.getUpgrade().getType().type) {
 		case Research:
-			List<FullProduction> productions = QommonsUtils.map(account.getPlanets().getValues(), //
-				p -> rules.economy().getFullProduction(account, p), false);
-			cost = upgrade.getCost().getMetalValue(tr);
-			for (FullProduction p : productions) {
-				currentProduction += p.asCost().getMetalValue(tr);
-			}
 			switch (upgrade.getUpgrade().getType().research) {
 			case Astrophysics:
 				int newPlanets = (upgrade.getTo() + 1) / 2 + 1;
@@ -1139,12 +1187,10 @@ public class OGameUniGui extends JPanel {
 			}
 			break;
 		default:
-			productions = QommonsUtils.map(account.getPlanets().getValues(), //
-				p -> rules.economy().getFullProduction(account, p), false);
-			cost = upgrade.getCost().getMetalValue(tr);
 			newProduction = currentProduction - productions.get(planetIdx).asCost().getMetalValue(tr);
 			UpgradeAccount upgradeAccount = new UpgradeAccount(account).withUpgrade(upgrade.getUpgrade());
 			UpgradeAccount.UpgradePlanet upgradePlanet = upgradeAccount.getPlanets().getUpgradePlanet(planet);
+			upgradePlanet.optimizeEnergy(rules.economy());
 			newProduction += rules.economy().getFullProduction(upgradeAccount, upgradePlanet).asCost().getMetalValue(tr);
 			break;
 		}
