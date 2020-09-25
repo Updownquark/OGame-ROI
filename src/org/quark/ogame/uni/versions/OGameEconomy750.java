@@ -4,6 +4,7 @@ import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.ResourceType;
+import org.quark.ogame.uni.Utilizable;
 
 public class OGameEconomy750 extends OGameEconomy740 {
 	@Override
@@ -16,11 +17,11 @@ public class OGameEconomy750 extends OGameEconomy740 {
 	}
 
 	@Override
-	public int getMaxCrawlerUtilization(Account account) {
-		if (account.getGameClass() == AccountClass.Collector) {
+	public int getMaxUtilization(Utilizable utilizable, Account account, Planet planet) {
+		if (utilizable == Utilizable.Crawler && account.getGameClass() == AccountClass.Collector) {
 			return 150;
 		} else {
-			return super.getMaxCrawlerUtilization(account);
+			return super.getMaxUtilization(utilizable, account, planet);
 		}
 	}
 

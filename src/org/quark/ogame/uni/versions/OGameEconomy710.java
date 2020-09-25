@@ -21,6 +21,7 @@ import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.RockyBody;
 import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.UpgradeType;
+import org.quark.ogame.uni.Utilizable;
 
 /** The OGame economy for version 7.1.0, just after the introduction of account classes and the class-specific ships */
 public class OGameEconomy710 implements OGameEconomyRuleSet {
@@ -653,7 +654,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 	}
 
 	@Override
-	public int getMaxCrawlerUtilization(Account account) {
+	public int getMaxUtilization(Utilizable utilizable, Account account, Planet planet) {
 		return 100;
 	}
 

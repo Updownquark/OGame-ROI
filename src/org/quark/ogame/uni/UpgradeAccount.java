@@ -264,7 +264,7 @@ public class UpgradeAccount implements Account {
 
 		public void optimizeEnergy(OGameEconomyRuleSet eco) {
 			theFusionUtil = 100;
-			theCrawlerUtil = eco.getMaxCrawlerUtilization(UpgradeAccount.this);
+			theCrawlerUtil = eco.getMaxUtilization(Utilizable.Crawler, UpgradeAccount.this, this);
 			Production energy = eco.getProduction(UpgradeAccount.this, this, ResourceType.Energy, 1);
 			while (theCrawlerUtil > 100 && energy.totalNet < energy.totalConsumption / 500) {
 				theCrawlerUtil -= 10;

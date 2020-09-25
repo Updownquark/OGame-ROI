@@ -1,5 +1,9 @@
 package org.quark.ogame.uni.ui;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.BiFunction;
 
 import javax.swing.JPanel;
@@ -21,12 +25,25 @@ import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
+import org.quark.ogame.uni.Utilizable;
 
 public class ResourceSettingsPanel extends JPanel {
 	private final OGameUniGui theUniGui;
+	private final Map<Integer, ObservableCollection<String>> thePercentages;
 
 	public ResourceSettingsPanel(OGameUniGui uniGui) {
 		theUniGui = uniGui;
+		thePercentages = new HashMap<>();
+	}
+
+	ObservableCollection<String> getPercentages(int max) {
+		return thePercentages.computeIfAbsent(max, __ -> {
+			List<String> pc = new ArrayList<>(max / 10 + 1);
+			for (int i = max; i >= 0; i -= 10) {
+				pc.add(i + "%");
+			}
+			return ObservableCollection.of(TypeTokens.get().STRING, pc);
+		});
 	}
 
 	public void addPanel(PanelPopulator<?, ?> panel) {
@@ -65,9 +82,11 @@ public class ResourceSettingsPanel extends JPanel {
 						utilColumn -> utilColumn
 						.withWidths(60, 60, 60)
 						.withMutation(m -> m.mutateAttribute((row, u) -> setUtilization(selectedPlanet.get(), row, u))
-							.editableIf((row, u) -> !goals && isUtilEditable(row)).asCombo(s -> s, ObservableCollection
-								.of(TypeTokens.get().STRING, "150%", "140%", "130%", "120%", "110%", //
-									"100%", "90%", "80%", "70%", "60%", "50%", "40%", "30%", "20%", "10%", "0%"))//
+								.editableIf((row, u) -> !goals && isUtilEditable(row)).asCombo(s -> s, (cell, until) -> {
+									int maxUtil = theUniGui.getRules().get().economy().getMaxUtilization(cell.getModelValue().utilizable, //
+										theUniGui.getSelectedAccount().get(), selectedPlanet.get().planet);
+									return getPercentages(maxUtil);
+								})
 							.filterAccept((row, util) -> isUtilAcceptable(row.get(), util))//
 							.clicks(1)))//
 		);
@@ -96,30 +115,32 @@ public class ResourceSettingsPanel extends JPanel {
 	}
 
 	enum ResourceRow {
-		Basic("Basic Income"),
-		Metal("Metal Mine"),
-		Crystal("Crystal Mine"),
-		Deut("Deuterium Synthesizer"), //
-		SlotBonus("Slot Bonus"), //
-		Solar("Solar Plant"),
-		Fusion("Fusion Reactor"),
-		Satellite("Solar Satellite"),
-		Crawler("Crawler"), //
-		Plasma("Plasma Technology"),
-		Items("Items"),
-		Geologist("Geologist"),
-		Engineer("Engineer"),
-		CommandingStaff("Commanding Staff"), //
-		Collector("Collector"),
-		Storage("Storage Capacity"),
-		Divider("-------------------"),
-		Hourly("Total per Hour"),
-		Daily("Total per Day"),
-		Weeky("Total per Week");
+		Basic(null, "Basic Income"),
+		Metal(Utilizable.MetalMine, "Metal Mine"),
+		Crystal(Utilizable.CrystalMine, "Crystal Mine"),
+		Deut(Utilizable.DeuteriumSynthesizer, "Deuterium Synthesizer"), //
+		SlotBonus(null, "Slot Bonus"), //
+		Solar(Utilizable.SolarPlant, "Solar Plant"),
+		Fusion(Utilizable.FusionReactor, "Fusion Reactor"),
+		Satellite(Utilizable.SolarSatellite, "Solar Satellite"),
+		Crawler(Utilizable.Crawler, "Crawler"), //
+		Plasma(null, "Plasma Technology"),
+		Items(null, "Items"),
+		Geologist(null, "Geologist"),
+		Engineer(null, "Engineer"),
+		CommandingStaff(null, "Commanding Staff"), //
+		Collector(null, "Collector"),
+		Storage(null, "Storage Capacity"),
+		Divider(null, "-------------------"),
+		Hourly(null, "Total per Hour"),
+		Daily(null, "Total per Day"),
+		Weeky(null, "Total per Week");
 
+		public final Utilizable utilizable;
 		private final String display;
 
-		private ResourceRow(String display) {
+		private ResourceRow(Utilizable util, String display) {
+			this.utilizable = util;
 			this.display = display;
 		}
 
@@ -415,44 +436,11 @@ public class ResourceSettingsPanel extends JPanel {
 	}
 
 	static boolean isUtilEditable(ResourceRow row) {
-		switch (row) {
-		case Metal:
-		case Crystal:
-		case Deut:
-		case Solar:
-		case Fusion:
-		case Satellite:
-		case Crawler:
-			return true;
-		default:
-			break;
-		}
-		return false;
+		return row.utilizable != null;
 	}
 
+	@SuppressWarnings("static-method")
 	String isUtilAcceptable(ResourceRow row, String util) {
-		int value = Integer.parseInt(util.substring(0, util.length() - 1));
-		switch (row) {
-		case Metal:
-		case Crystal:
-		case Deut:
-		case Solar:
-		case Fusion:
-		case Satellite:
-			if (value <= 100) {
-				return null;
-			}
-			return "Overclocking is only available on Crawlers";
-		case Crawler:
-			int maxUtil = theUniGui.getRules().get().economy().getMaxCrawlerUtilization(theUniGui.getSelectedAccount().get());
-			if (value <= maxUtil) {
-				return null;
-			} else {
-				return "Crawler overclocking is only available for the Collector class";
-			}
-		default:
-			break;
-		}
 		return null;
 	}
 

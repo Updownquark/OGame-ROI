@@ -94,7 +94,7 @@ public interface OGameEconomyRuleSet {
 	int getSatelliteEnergy(Account account, Planet planet);
 	long getStorage(Planet planet, ResourceType resourceType);
 	int getMaxCrawlers(Account account, Planet planet);
-	int getMaxCrawlerUtilization(Account account);
+	int getMaxUtilization(Utilizable type, Account account, Planet planet);
 
 	UpgradeCost getUpgradeCost(Account account, RockyBody planetOrMoon, AccountUpgradeType upgrade, int fromLevel, int toLevel);
 	List<Requirement> getRequirements(AccountUpgradeType target);
