@@ -654,13 +654,82 @@ public class PlanetTable {
 		}
 	}
 
-	static final SpinnerFormat<Levels> LEVELS_FORMAT=new SpinnerFormat<Levels>(){@Override public void append(StringBuilder text,Levels value){if(value==null){return;}text.append(value.current);if(value.goal!=value.current){text.append('/').append(value.goal);}}
+	static final SpinnerFormat<Levels> LEVELS_FORMAT = new SpinnerFormat<Levels>() {
+		@Override
+		public void append(StringBuilder text, Levels value) {
+			if (value == null) {
+				return;
+			}
+			text.append(value.current);
+			if (value.goal != value.current) {
+				text.append('/').append(value.goal);
+			}
+		}
 
-	@Override public Levels parse(CharSequence text)throws ParseException{int current=0,goal=0;int c=0;while(c<text.length()&&Character.isWhitespace(text.charAt(c))){c++;}int startCurrent=c;for(;c<text.length()&&text.charAt(c)>='0'&&text.charAt(c)<='9';c++){current=current*10+(text.charAt(c)-'0');}if(c==startCurrent){current=-1;}while(c<text.length()&&Character.isWhitespace(text.charAt(c))){c++;}if(c<text.length()){if(text.charAt(c)!='/'){throw new ParseException("Unrecognized character: '"+text.charAt(c)+"'",c);}c++;while(c<text.length()&&Character.isWhitespace(text.charAt(c))){c++;}int startGoal=c;for(;c<text.length()&&text.charAt(c)>='0'&&text.charAt(c)<='9';c++){goal=goal*10+(text.charAt(c)-'0');}if(c==startGoal){goal=-1;}if(current<0&&goal<0){throw new ParseException("Missing values",0);}}else{if(current<0){throw new ParseException("Missing values",0);}goal=current;}return new Levels(current,goal);}
+		@Override
+		public Levels parse(CharSequence text) throws ParseException {
+			int current = 0, goal = 0;
+			int c = 0;
+			while (c < text.length() && Character.isWhitespace(text.charAt(c))) {
+				c++;
+			}
+			int startCurrent = c;
+			for (; c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9'; c++) {
+				current = current * 10 + (text.charAt(c) - '0');
+			}
+			if (c == startCurrent) {
+				current = -1;
+			}
+			while (c < text.length() && Character.isWhitespace(text.charAt(c))) {
+				c++;
+			}
+			if (c < text.length()) {
+				if (text.charAt(c) != '/') {
+					throw new ParseException("Unrecognized character: '" + text.charAt(c) + "'", c);
+				}
+				c++;
+				while (c < text.length() && Character.isWhitespace(text.charAt(c))) {
+					c++;
+				}
+				int startGoal = c;
+				for (; c < text.length() && text.charAt(c) >= '0' && text.charAt(c) <= '9'; c++) {
+					goal = goal * 10 + (text.charAt(c) - '0');
+				}
+				if (c == startGoal) {
+					goal = -1;
+				}
+				if (current < 0 && goal < 0) {
+					throw new ParseException("Missing values", 0);
+				}
+			} else {
+				if (current < 0) {
+					throw new ParseException("Missing values", 0);
+				}
+				goal = current;
+			}
+			return new Levels(current, goal);
+		}
 
-	@Override public boolean supportsAdjustment(boolean withContext){return withContext;}
+		@Override
+		public boolean supportsAdjustment(boolean withContext) {
+			return withContext;
+		}
 
-	@Override public BiTuple<Levels,String>adjust(Levels value,String formatted,int cursor,boolean up){int slashIdx=formatted.indexOf('/');if(slashIdx<0){int newValue=value.current+(up?1:-1);return new BiTuple<>(new Levels(newValue,newValue),""+newValue);}else if(cursor<=slashIdx){Levels newLevels=new Levels(value.current+(up?1:-1),value.goal);return new BiTuple<>(newLevels,newLevels.current+"/"+newLevels.goal);}else{Levels newLevels=new Levels(value.current,value.goal+(up?1:-1));return new BiTuple<>(newLevels,newLevels.current+"/"+newLevels.goal);}}};
+		@Override
+		public BiTuple<Levels, String> adjust(Levels value, String formatted, int cursor, boolean up) {
+			int slashIdx = formatted.indexOf('/');
+			if (slashIdx < 0) {
+				int newValue = value.current + (up ? 1 : -1);
+				return new BiTuple<>(new Levels(newValue, newValue), "" + newValue);
+			} else if (cursor <= slashIdx) {
+				Levels newLevels = new Levels(value.current + (up ? 1 : -1), value.goal);
+				return new BiTuple<>(newLevels, newLevels.current + "/" + newLevels.goal);
+			} else {
+				Levels newLevels = new Levels(value.current, value.goal + (up ? 1 : -1));
+				return new BiTuple<>(newLevels, newLevels.current + "/" + newLevels.goal);
+			}
+		}
+	};
 
 	CategoryRenderStrategy<PlanetWithProduction, Levels> intPlanetColumn(String name, AccountUpgradeType type, int width) {
 		return intPlanetColumn(name, type, false, width);
