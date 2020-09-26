@@ -125,8 +125,6 @@ public class OGameUniGui extends JPanel {
 		theUpgradeAccount = theSelectedAccount.map(TypeTokens.get().of(UpgradeAccount.class), a -> {
 			return a == null ? null : new UpgradeAccount(a);
 		}, opts -> opts.cache(true).reEvalOnUpdate(false).fireIfUnchanged(true));
-		theSelectedAccount.changes().act(evt -> System.out.println("sa: " + evt));
-		theUpgradeAccount.changes().act(evt -> System.out.println("ua: " + evt));
 
 		thePlanetRefresh = new SimpleObservable<>();
 		thePlanets = ObservableCollection
@@ -177,14 +175,32 @@ public class OGameUniGui extends JPanel {
 			}
 		});
 		thePlanets.changes().act(evt -> {
-			if (evt.type == CollectionChangeType.set) {
-				for (PlanetWithProduction p : evt.getValues()) {
-					for (PlannedAccountUpgrade upgrade : theUpgrades) {
-						if (upgrade.getPlanet() == p.planet) {
-							upgrade.clear();
+			switch (evt.type) {
+			case add:
+				break;
+			case remove:
+				Account current = theSelectedAccount.get();
+				for (PlanetWithProduction p : evt.getOldValues()) {
+					if (p.planet.getAccount() == current) {
+						// Remove planet-specific upgrades to avoid orphaning them
+						for (CollectionElement<PlannedUpgrade> upgrade : current.getPlannedUpgrades().getValues().elements()) {
+							if (upgrade.get().getPlanet() == p.planet.getId()) {
+								current.getPlannedUpgrades().getValues().mutableElement(upgrade.getElementId()).remove();
+							}
 						}
 					}
-					updateProduction(p);
+				}
+				break;
+			case set:
+				if (evt.type == CollectionChangeType.set) {
+					for (PlanetWithProduction p : evt.getValues()) {
+						for (PlannedAccountUpgrade upgrade : theUpgrades) {
+							if (upgrade.getPlanet() == p.planet) {
+								upgrade.clear();
+							}
+						}
+						updateProduction(p);
+					}
 				}
 			}
 		});
