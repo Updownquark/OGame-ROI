@@ -552,8 +552,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				throw new IllegalStateException();
 			}
 
-			int baseAmount;
-			int typeAmount = baseAmount = production.base * account.getUniverse().getEconomySpeed();
+			int typeAmount = production.base * account.getUniverse().getEconomySpeed();
 			byType.put(ProductionSource.Base, typeAmount);
 			totalProduced += typeAmount;
 
@@ -570,21 +569,6 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			byType.put(mineType, typeAmount);
 			totalProduced += typeAmount;
 
-			double multiplier = getSlotProductionMultiplier(account, planet, resourceType);
-			typeAmount = (int) Math.round((baseAmount + mineP) * multiplier);
-			byType.put(ProductionSource.Slot, typeAmount);
-			totalProduced += typeAmount;
-
-			// Fusion consumption
-			if (resourceType == ResourceType.Deuterium) {
-				typeAmount = -(int) Math.floor(10.0 * planet.getFusionReactor() * Math.pow(1.1, planet.getFusionReactor())
-					* (planet.getFusionReactorUtilization() / 100.0) * account.getUniverse().getEconomySpeed());
-				byType.put(ProductionSource.Fusion, typeAmount);
-				totalConsumed += -typeAmount;
-			} else {
-				byType.put(ProductionSource.Fusion, 0);
-			}
-
 			// Crawler production
 			int crawlers = getUsableCrawlers(account, planet);
 			double crawlerBonus = production.crawlerBonus;
@@ -600,6 +584,32 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			typeAmount = (int) Math.round(mineProduction * production.plasmaBonus / 100 * account.getResearch().getPlasma());
 			byType.put(ProductionSource.Plasma, typeAmount);
 			totalProduced += typeAmount;
+
+			// Class bonus
+			if (account.getGameClass() == AccountClass.Collector) {
+				int collectorBonus = resourceType == ResourceType.Energy ? account.getUniverse().getCollectorEnergyBonus()
+					: account.getUniverse().getCollectorProductionBonus();
+				typeAmount = (int) Math.round(mineProduction * 1.0 * collectorBonus / 100.0);
+			} else {
+				typeAmount = 0;
+			}
+			byType.put(ProductionSource.Collector, typeAmount);
+			totalProduced += typeAmount;
+
+			double multiplier = getSlotProductionMultiplier(account, planet, resourceType);
+			typeAmount = (int) Math.round((totalProduced) * multiplier);
+			byType.put(ProductionSource.Slot, typeAmount);
+			totalProduced += typeAmount;
+
+			// Fusion consumption
+			if (resourceType == ResourceType.Deuterium) {
+				typeAmount = -(int) Math.floor(10.0 * planet.getFusionReactor() * Math.pow(1.1, planet.getFusionReactor())
+					* (planet.getFusionReactorUtilization() / 100.0) * account.getUniverse().getEconomySpeed());
+				byType.put(ProductionSource.Fusion, typeAmount);
+				totalConsumed += -typeAmount;
+			} else {
+				byType.put(ProductionSource.Fusion, 0);
+			}
 
 			// Active items
 			typeAmount = (int) Math.round(mineProduction * 1.0 * bonus / 100.0);
@@ -618,17 +628,6 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				typeAmount = (int) Math.round(mineProduction * 0.02);
 			}
 			byType.put(ProductionSource.CommandingStaff, typeAmount);
-			totalProduced += typeAmount;
-
-			// Class bonus
-			if (account.getGameClass() == AccountClass.Collector) {
-				int collectorBonus = resourceType == ResourceType.Energy ? account.getUniverse().getCollectorEnergyBonus()
-					: account.getUniverse().getCollectorProductionBonus();
-				typeAmount = (int) Math.round(mineProduction * 1.0 * collectorBonus / 100.0);
-			} else {
-				typeAmount = 0;
-			}
-			byType.put(ProductionSource.Collector, typeAmount);
 			totalProduced += typeAmount;
 		}
 		return new Production(byType, totalProduced, totalConsumed);
