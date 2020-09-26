@@ -28,6 +28,7 @@ import org.observe.Observable;
 import org.observe.ObservableValue;
 import org.observe.SettableValue;
 import org.observe.SimpleObservable;
+import org.observe.Subscription;
 import org.observe.collect.CollectionChangeType;
 import org.observe.collect.ObservableCollection;
 import org.observe.config.ObservableConfig;
@@ -44,9 +45,7 @@ import org.observe.util.swing.PanelPopulation;
 import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
 import org.qommons.ValueHolder;
-import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
-import org.qommons.collect.ElementId;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
 import org.quark.ogame.OGameUtils;
@@ -126,6 +125,8 @@ public class OGameUniGui extends JPanel {
 		theUpgradeAccount = theSelectedAccount.map(TypeTokens.get().of(UpgradeAccount.class), a -> {
 			return a == null ? null : new UpgradeAccount(a);
 		}, opts -> opts.cache(true).reEvalOnUpdate(false).fireIfUnchanged(true));
+		theSelectedAccount.changes().act(evt -> System.out.println("sa: " + evt));
+		theUpgradeAccount.changes().act(evt -> System.out.println("ua: " + evt));
 
 		thePlanetRefresh = new SimpleObservable<>();
 		thePlanets = ObservableCollection
@@ -164,33 +165,17 @@ public class OGameUniGui extends JPanel {
 				}
 				return;
 			} else {
-				for (CollectionElement<PlannedAccountUpgrade> upgrade : theUpgrades.elements()) {
-					BetterList<ElementId> upgradeEl = theUpgrades.getSourceElements(upgrade.getElementId(),
-						ua.getWrapped().getPlannedUpgrades().getValues());
-					if (upgradeEl.isEmpty()) {
-						return;
+				Subscription sub = ua.getWrapped().getPlannedUpgrades().getValues().subscribe(upgradeEvt -> {
+					if (upgradeEvt.getType() != CollectionChangeType.add) {
+						ua.withoutUpgrade(upgradeEvt.getOldValue());
 					}
-					ua.withUpgrade(upgrade.get().getUpgrade());
-				}
+					if (upgradeEvt.getType() != CollectionChangeType.remove) {
+						ua.withUpgrade(upgradeEvt.getNewValue());
+					}
+				}, true);
+				theUpgradeAccount.noInitChanges().take(1).act(__ -> sub.unsubscribe());
 			}
 		});
-		theUpgrades.subscribe(evt -> {
-			UpgradeAccount ua = theUpgradeAccount.get();
-			if (ua == null) {
-				return;
-			}
-			if (evt.getType() != CollectionChangeType.add) {
-				ua.withoutUpgrade(evt.getOldValue().getUpgrade());
-			}
-			if (evt.getType() != CollectionChangeType.remove) {
-				BetterList<ElementId> upgradeEl = theUpgrades.getSourceElements(evt.getElementId(),
-					ua.getWrapped().getPlannedUpgrades().getValues());
-				if (upgradeEl.isEmpty()) {
-					return;
-				}
-				ua.withUpgrade(evt.getNewValue().getUpgrade());
-			}
-		}, true);
 		thePlanets.changes().act(evt -> {
 			if (evt.type == CollectionChangeType.set) {
 				for (PlanetWithProduction p : evt.getValues()) {
