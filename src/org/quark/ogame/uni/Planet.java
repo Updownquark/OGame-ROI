@@ -211,6 +211,9 @@ public interface Planet extends RockyBody, Identified {
 	int getDeuteriumBonus();
 	Planet setDeuteriumBonus(int deutBonus);
 
+	int getEnergyBonus();
+	Planet setEnergyBonus(int energyBonus);
+
 	// Utilization Percentages
 
 	int getMetalUtilization();
@@ -242,6 +245,8 @@ public interface Planet extends RockyBody, Identified {
 			return getCrystalBonus();
 		case Deuterium:
 			return getDeuteriumBonus();
+		case Energy:
+			return getEnergyBonus();
 		default:
 			throw new IllegalStateException("Unrecognized resource type for bonus: " + type);
 		}
@@ -258,6 +263,8 @@ public interface Planet extends RockyBody, Identified {
 		case Deuterium:
 			setDeuteriumBonus(level);
 			break;
+		case Energy:
+			setEnergyBonus(level);
 		default:
 			throw new IllegalStateException("Unrecognized resource type for bonus: " + type);
 		}

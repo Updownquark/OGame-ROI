@@ -71,7 +71,7 @@ public class PlanetTable {
 	public void addPlanetTable(PanelPopulation.PanelPopulator<?, ?> panel) {
 		ObservableCollection<Integer> usageOptions = ObservableCollection.of(TypeTokens.get().INT, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
 			0);
-		ObservableCollection<Integer> itemOptions = ObservableCollection.of(TypeTokens.get().INT, 30, 20, 10, 0);
+		ObservableCollection<Integer> itemOptions = ObservableCollection.of(TypeTokens.get().INT, 40, 30, 20, 10, 0);
 
 		ObservableCollection<Object> planetUpgrades = ObservableCollection.build(Object.class).safe(false).build();
 		ObservableCollection<Object> moonUpgrades = ObservableCollection.build(Object.class).safe(false).build();
@@ -207,6 +207,9 @@ public class PlanetTable {
 				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)), //
 			planetColumn("D+", int.class, p -> p.planet == null ? null : p.planet.getDeuteriumBonus(), Planet::setDeuteriumBonus, 45)
 				.withHeaderTooltip("Deuterium Bonus Item").formatText(v -> v == null ? "" : v + "%")
+				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)), //
+			planetColumn("E+", int.class, p -> p.planet == null ? null : p.planet.getEnergyBonus(), Planet::setEnergyBonus, 45)
+				.withHeaderTooltip("Energy Bonus Item").formatText(v -> v == null ? "" : v + "%")
 				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)) //
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> energyBldgs = ObservableCollection.of(PLANET_COLUMN_TYPE,
@@ -367,7 +370,7 @@ public class PlanetTable {
 			switch (columnSet) {
 			case Mines:
 				columnSets.put(columnSet, ObservableCollection.flattenCollections(PLANET_COLUMN_TYPE, //
-					mineColumns, energyBldgs, tempColumns, storageColumns, coordColumn).collect());
+					mineColumns, energyBldgs, tempColumns, itemColumns, storageColumns, coordColumn).collect());
 				break;
 			case Facilities:
 				columnSets.put(columnSet, ObservableCollection.flattenCollections(PLANET_COLUMN_TYPE, //

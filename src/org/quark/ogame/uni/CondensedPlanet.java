@@ -215,6 +215,16 @@ public interface CondensedPlanet extends CondensedRockyBody, Planet {
 	}
 
 	@Override
+	default int getEnergyBonus() {
+		return getBonus(ResourceType.Energy);
+	}
+
+	@Override
+	default Planet setEnergyBonus(int energyBonus) {
+		return setBonus(ResourceType.Energy, energyBonus);
+	}
+
+	@Override
 	abstract int getBonus(ResourceType type);
 
 	@Override

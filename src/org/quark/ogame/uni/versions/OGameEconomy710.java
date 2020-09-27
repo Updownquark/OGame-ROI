@@ -504,6 +504,11 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			totalProduced += typeAmount;
 			int baseProduced = totalProduced;
 
+			int bonus = planet.getEnergyBonus();
+			typeAmount = (int) Math.round(baseProduced * 1.0 * bonus / 100.0);
+			byType.put(ProductionSource.Item, typeAmount);
+			totalProduced += typeAmount;
+
 			if (account.getGameClass() == AccountClass.Collector) {
 				typeAmount = (int) Math.floor(baseProduced * 0.10);
 				byType.put(ProductionSource.Collector, typeAmount);

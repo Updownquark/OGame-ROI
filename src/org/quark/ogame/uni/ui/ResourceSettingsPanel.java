@@ -240,6 +240,9 @@ public class ResourceSettingsPanel extends JPanel {
 			if (p.getDeuteriumBonus() > 0) {
 				items++;
 			}
+			if (p.getEnergyBonus() > 0) {
+				items++;
+			}
 			return items;
 		case Geologist:
 			return a.getOfficers().isGeologist() ? 1 : 0;
