@@ -240,7 +240,8 @@ public class UpgradeAccount implements Account {
 						level = Math.max(level, upgrade.getToLevel());
 					}
 				}
-			} else if (thePlannedUpgrades != null) {
+			}
+			if (thePlannedUpgrades != null) {
 				for (PlannedUpgrade upgrade : thePlannedUpgrades.getOrDefault(type, Collections.emptyList())) {
 					level += upgrade.getQuantity();
 				}
@@ -572,10 +573,17 @@ public class UpgradeAccount implements Account {
 		}
 
 		void withoutUpgrade(PlannedUpgrade upgrade) {
-			if (thePlannedUpgrades == null) {
-				return;
+			if (upgrade.getType().shipyardItem != null) {
+				if (upgrade.getType().shipyardItem.mobile) {
+					if (theFleet != null) {
+						theFleet.withoutUpgrade(upgrade);
+					}
+				} else if (theStructures != null) {
+					theStructures.withoutUpgrade(upgrade);
+				}
+			} else if (thePlannedUpgrades != null) {
+				thePlannedUpgrades.getOrDefault(upgrade.getType().building, Collections.emptyList()).remove(upgrade);
 			}
-			thePlannedUpgrades.getOrDefault(upgrade.getType().building, Collections.emptyList()).remove(upgrade);
 		}
 
 		@Override
@@ -623,7 +631,8 @@ public class UpgradeAccount implements Account {
 						level = Math.max(level, upgrade.getToLevel());
 					}
 				}
-			} else if (thePlannedUpgrades != null) {
+			}
+			if (thePlannedUpgrades != null) {
 				for (PlannedUpgrade upgrade : thePlannedUpgrades.getOrDefault(type, Collections.emptyList())) {
 					level += upgrade.getQuantity();
 				}
@@ -676,7 +685,8 @@ public class UpgradeAccount implements Account {
 							level = Math.max(level, upgrade.getToLevel());
 						}
 					}
-				} else if (thePlannedUpgrades != null) {
+				}
+				if (thePlannedUpgrades != null) {
 					for (PlannedUpgrade upgrade : thePlannedUpgrades.getOrDefault(type, Collections.emptyList())) {
 						level+=upgrade.getQuantity();
 					}
