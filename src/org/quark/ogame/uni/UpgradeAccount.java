@@ -266,10 +266,6 @@ public class UpgradeAccount implements Account {
 			theFusionUtil = 100;
 			theCrawlerUtil = eco.getMaxUtilization(Utilizable.Crawler, UpgradeAccount.this, this);
 			Production energy = eco.getProduction(UpgradeAccount.this, this, ResourceType.Energy, 1);
-			while (theCrawlerUtil > 100 && energy.totalNet < energy.totalConsumption / 500) {
-				theCrawlerUtil -= 10;
-				energy = eco.getProduction(UpgradeAccount.this, this, ResourceType.Energy, 1);
-			}
 			if (energy.totalNet < 0) {
 				// Adjust down the crawlers
 				theCrawlerUtil = ArrayUtils.binarySearch(0, 10, util -> {
