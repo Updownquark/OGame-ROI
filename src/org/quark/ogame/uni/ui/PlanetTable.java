@@ -32,11 +32,13 @@ import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
 import org.quark.ogame.uni.Coordinate;
 import org.quark.ogame.uni.Moon;
+import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.PlannedUpgrade;
 import org.quark.ogame.uni.Research;
 import org.quark.ogame.uni.ResearchType;
 import org.quark.ogame.uni.ResourceType;
+import org.quark.ogame.uni.RockyBody;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.UpgradeAccount;
 import org.quark.ogame.uni.UpgradeAccount.UpgradePlanet;
@@ -152,6 +154,9 @@ public class PlanetTable {
 				return theUniGui.getRules().get().economy().getFields(planet) - planet.getUsedFields();
 			}, null, 80)//
 		);
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonNameColumn = ObservableCollection.of(PLANET_COLUMN_TYPE,
+			planetColumn("Name", String.class, p -> p.planet == null ? "" : p.planet.getMoon().getName(),
+				(p, name) -> p.getMoon().setName(name), 100));
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonFieldColumns = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			intMoonColumn("Moon Fields", false, moon -> theUniGui.getRules().get().economy().getFields(moon), null, 80), //
 			intMoonColumn("Bonus Fields", false, Moon::getFieldBonus, Moon::setFieldBonus, 80), //
@@ -169,6 +174,31 @@ public class PlanetTable {
 				planet.setMinimumTemperature(t - 40);
 			}, 40)//
 		);
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> upgradeColumn = ObservableCollection.of(PLANET_COLUMN_TYPE,
+			new CategoryRenderStrategy<PlanetWithProduction, Object>("Upgrd", TypeTokens.get().OBJECT,
+				p -> p.planet == null ? null : p.planet.getCurrentUpgrade())//
+					.withWidths(45, 45, 45).formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName)
+					.withMutation(m -> m.asCombo(bdg -> {
+						if (bdg instanceof BuildingType) {
+							return ((BuildingType) bdg).shortName;
+						} else if (bdg != null) {
+							return bdg.toString();
+						} else {
+							return "";
+						}
+					}, moonUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
+						if (bdg instanceof BuildingType) {
+							p.planet.setCurrentUpgrade((BuildingType) bdg);
+						} else {
+							BuildingType upgrade = p.planet.getCurrentUpgrade();
+							p.planet.setCurrentUpgrade(null);
+							if (UPGRADE_DONE.equals(bdg)) {
+								upgrade(p.upgradePlanet, upgrade.getUpgrade());
+							}
+						}
+					}))//
+		);
+
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mineColumns = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			intPlanetColumn("M Mine", AccountUpgradeType.MetalMine, 55), //
 			intPlanetColumn("C Mine", AccountUpgradeType.CrystalMine, 55), //
@@ -220,25 +250,28 @@ public class PlanetTable {
 						if (cell.getModelValue().planet == null || e.getKeyChar() != '*') {
 							return;
 						}
-						int energyNeeded = -cell.getModelValue().getEnergy().totalNet;
+						int energyNeeded = -cell.getModelValue().getEnergy().totalNet
+							+ cell.getModelValue().getEnergy().byType.get(ProductionSource.Satellite);
+						int newSats;
 						if (energyNeeded < 0) {
-							return;
+							newSats = 0;
+						} else {
+							int satEnergy = theUniGui.getRules().get().economy().getSatelliteEnergy(theUniGui.getSelectedAccount().get(),
+								cell.getModelValue().planet);
+							if (satEnergy <= 0) {
+								return;
+							}
+							newSats = (int) Math.ceil(energyNeeded * 1.0 / satEnergy);
+							cell.getModelValue().planet.setSolarSatellites(newSats);
+							int energyExcess = theUniGui.getRules().get().economy().getProduction(theUniGui.getSelectedAccount().get(),
+								cell.getModelValue().planet, ResourceType.Energy, 1).totalNet;
+							if (energyExcess > satEnergy) {
+								// Bonuses like for Collector or Officers can bump this up
+								int removeSats = (int) Math.floor(energyExcess * 1.0 / (energyExcess + energyNeeded) * newSats);
+								newSats -= removeSats;
+							}
 						}
-						int satEnergy = theUniGui.getRules().get().economy().getSatelliteEnergy(theUniGui.getSelectedAccount().get(),
-							cell.getModelValue().planet);
-						if (satEnergy <= 0) {
-							return;
-						}
-						int newSats = (int) Math.ceil(energyNeeded * 1.0 / satEnergy);
-						int currentSats = cell.getModelValue().planet.getSolarSatellites();
-						cell.getModelValue().planet.setSolarSatellites(currentSats + newSats);
-						int energyExcess = theUniGui.getRules().get().economy().getProduction(theUniGui.getSelectedAccount().get(),
-							cell.getModelValue().planet, ResourceType.Energy, 1).totalNet;
-						if (energyExcess > satEnergy) {
-							// Bonuses like for Collector or Officers can bump this up
-							int removeSats = (int) Math.floor(energyExcess * 1.0 / (energyExcess + energyNeeded) * newSats);
-							cell.getModelValue().planet.setSolarSatellites(currentSats + newSats - removeSats);
-						}
+						cell.getModelValue().planet.setSolarSatellites(newSats);
 						e.consume();
 					}
 				}), //
@@ -370,11 +403,11 @@ public class PlanetTable {
 			switch (columnSet) {
 			case Mines:
 				columnSets.put(columnSet, ObservableCollection.flattenCollections(PLANET_COLUMN_TYPE, //
-					mineColumns, energyBldgs, tempColumns, itemColumns, storageColumns, coordColumn).collect());
+					upgradeColumn, mineColumns, energyBldgs, tempColumns, itemColumns, storageColumns, coordColumn).collect());
 				break;
 			case Facilities:
 				columnSets.put(columnSet, ObservableCollection.flattenCollections(PLANET_COLUMN_TYPE, //
-					fieldColumns, mainFacilities, otherFacilities).collect());
+					upgradeColumn, fieldColumns, mainFacilities, otherFacilities).collect());
 				break;
 			case Defense:
 				columnSets.put(columnSet, // ObservableCollection.flattenCollections(planetColumnType, //
@@ -388,7 +421,7 @@ public class PlanetTable {
 				break;
 			case Moon:
 				columnSets.put(columnSet, ObservableCollection.flattenCollections(PLANET_COLUMN_TYPE, //
-					moonFieldColumns, moonBuildings, moonDefenseColumns).collect());
+					moonNameColumn, moonFieldColumns, moonBuildings, moonDefenseColumns).collect());
 				break;
 			case MoonFleet:
 				columnSets.put(columnSet, // ObservableCollection.flattenCollections(planetColumnType, //
@@ -485,27 +518,6 @@ public class PlanetTable {
 								decorator.bold();
 							}
 						}))//
-					.withColumn("Upgrd", Object.class, p -> p.planet == null ? null : p.planet.getCurrentUpgrade(),
-						upgradeCol -> upgradeCol.withWidths(45, 45, 45).withHeaderTooltip("Current Building Upgrade")
-							.formatText(bdg -> bdg == null ? "" : ((BuildingType) bdg).shortName).withMutation(m -> m.asCombo(bdg -> {
-								if (bdg instanceof BuildingType) {
-									return ((BuildingType) bdg).shortName;
-								} else if (bdg != null) {
-									return bdg.toString();
-								} else {
-									return "";
-								}
-							}, planetUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
-								if (bdg instanceof BuildingType) {
-									p.planet.setCurrentUpgrade((BuildingType) bdg);
-								} else {
-									BuildingType upgrade = p.planet.getCurrentUpgrade();
-									p.planet.setCurrentUpgrade(null);
-									if (UPGRADE_DONE.equals(bdg)) {
-										upgrade(p.upgradePlanet, upgrade.getUpgrade());
-									}
-								}
-							})))//
 					.withColumns(planetColumns)//
 					.withSelection(selectedPlanet, false)//
 					.withAdd(() -> theUniGui.createPlanet(), null)//
@@ -542,48 +554,9 @@ public class PlanetTable {
 					ua.getResearch().getResearchLevel(type));
 			}, (r, levels) -> {
 				UpgradeAccount ua = theUniGui.getUpgradeAccount().get();
-				adjustResearch(ua, type, levels.current, levels.goal);
+				adjustLevels(ua, null, type.getUpgrade(), levels.current, levels.goal);
 			}, width)//
 				.withMutation(m -> m.asText(LEVELS_FORMAT).clicks(1));
-	}
-
-	public static void adjustResearch(UpgradeAccount account, ResearchType type, int currentLevel, int goalLevel) {
-		if (goalLevel < 0) { // Code for update the current value, but don't change the goal
-			goalLevel = account.getResearch().getResearchLevel(type);
-		} else if (currentLevel < 0) { // Code for update the goal, but don't change the current value
-			currentLevel = account.getWrapped().getResearch().getResearchLevel(type);
-		}
-		int current = account.getWrapped().getResearch().getResearchLevel(type);
-		int oldGoal = account.getResearch().getResearchLevel(type);
-		int goalDiff;
-		int currentDiff = currentLevel - current;
-		goalDiff = goalLevel - oldGoal - currentDiff;
-		account.getWrapped().getResearch().setResearchLevel(type, currentLevel);
-		ListIterator<PlannedUpgrade> upgradeIter = account.getWrapped().getPlannedUpgrades().getValues().reverse().listIterator();
-		while (upgradeIter.hasNext()) {
-			PlannedUpgrade upgrade = upgradeIter.next();
-			if (upgrade.getType().research == type && (upgrade.getQuantity() > 0) != (goalDiff > 0)) {
-				int qComp = Integer.compare(Math.abs(upgrade.getQuantity()), Math.abs(goalDiff));
-				if (qComp <= 0) {
-					goalDiff += upgrade.getQuantity();
-					upgradeIter.remove();
-				} else {
-					upgrade.setQuantity(upgrade.getQuantity() - goalDiff);
-					goalDiff = 0;
-					upgradeIter.set(upgrade);
-					break;
-				}
-			}
-		}
-		if (goalDiff != 0) {
-			int goalDiffAbs = Math.abs(goalDiff);
-			for (int i = 0; i < goalDiffAbs; i++) {
-				account.getWrapped().getPlannedUpgrades().create()//
-					.with(PlannedUpgrade::getType, type.getUpgrade())//
-					.with(PlannedUpgrade::getQuantity, goalDiff > 0 ? 1 : -1)//
-					.create();
-			}
-		}
 	}
 
 	void parseLevels(Research r, Levels levels, ResearchType type) {
@@ -773,25 +746,33 @@ public class PlanetTable {
 			}, (p, levels) -> {
 				UpgradeAccount ua = theUniGui.getUpgradeAccount().get();
 				UpgradeRockyBody upgradeTarget = moon ? ua.getPlanets().getUpgradePlanet(p).getMoon() : ua.getPlanets().getUpgradePlanet(p);
-				adjustPlanet(ua, upgradeTarget, type, levels.current, levels.goal);
+				adjustLevels(ua, upgradeTarget, type, levels.current, levels.goal);
 			}, width)//
 				.withMutation(m -> m.editableIf((p, lvl) -> p.planet != null).asText(LEVELS_FORMAT).clicks(1));
 	}
 
-	public static void adjustPlanet(UpgradeAccount account, UpgradeRockyBody p, AccountUpgradeType type, int newCurrent, int newGoal) {
+	public static void adjustLevels(UpgradeAccount account, UpgradeRockyBody p, AccountUpgradeType type, int newCurrent, int newGoal) {
 		if (newGoal < 0) { // Code for update the current value, but don't change the goal
 			newGoal = type.getLevel(account, p);
 		} else if (newCurrent < 0) { // Code for update the goal, but don't change the current value
-			newCurrent = type.getLevel(account.getWrapped(), p.getWrapped());
+			newCurrent = type.getLevel(account.getWrapped(), p == null ? null : p.getWrapped());
 		}
-		boolean moon = !(p instanceof Planet);
-		long planetId = moon ? ((UpgradeMoon) p).getPlanet().getWrapped().getId() : ((Planet) p.getWrapped()).getId();
-		int current = type.getLevel(account.getWrapped(), p.getWrapped());
+		RockyBody wrappedBody = p == null ? null : p.getWrapped();
+		boolean moon = p != null && !(p instanceof Planet);
+		long planetId;
+		if (p == null) {
+			planetId = 0;
+		} else if (moon) {
+			planetId = ((UpgradeMoon) p).getPlanet().getWrapped().getId();
+		} else {
+			planetId = ((Planet) wrappedBody).getId();
+		}
+		int current = type.getLevel(account.getWrapped(), wrappedBody);
 		int oldGoal = type.getLevel(account, p);
 		int goalDiff;
 		int currentDiff = newCurrent - current;
 		goalDiff = newGoal - oldGoal - currentDiff;
-		type.setLevel(account.getWrapped(), p.getWrapped(), newCurrent);
+		type.setLevel(account.getWrapped(), wrappedBody, newCurrent);
 		ListIterator<PlannedUpgrade> upgradeIter = account.getWrapped().getPlannedUpgrades().getValues().reverse().listIterator();
 		while (upgradeIter.hasNext()) {
 			PlannedUpgrade upgrade = upgradeIter.next();
@@ -817,13 +798,21 @@ public class PlanetTable {
 					.with(PlannedUpgrade::isMoon, moon)//
 					.with(PlannedUpgrade::getQuantity, goalDiff)//
 					.create();
-			} else {
+			} else if (type.building != null) {
 				int goalDiffAbs = Math.abs(goalDiff);
 				for (int i = 0; i < goalDiffAbs; i++) {
 					account.getWrapped().getPlannedUpgrades().create()//
 						.with(PlannedUpgrade::getType, type)//
 						.with(PlannedUpgrade::getPlanet, planetId)//
 						.with(PlannedUpgrade::isMoon, moon)//
+						.with(PlannedUpgrade::getQuantity, goalDiff > 0 ? 1 : -1)//
+						.create();
+				}
+			} else {
+				int goalDiffAbs = Math.abs(goalDiff);
+				for (int i = 0; i < goalDiffAbs; i++) {
+					account.getWrapped().getPlannedUpgrades().create()//
+						.with(PlannedUpgrade::getType, type)//
 						.with(PlannedUpgrade::getQuantity, goalDiff > 0 ? 1 : -1)//
 						.create();
 				}
@@ -873,7 +862,11 @@ public class PlanetTable {
 	}
 
 	CategoryRenderStrategy<PlanetWithProduction, Levels> shipColumn(ShipyardItemType type, boolean moon, int width) {
-		return intPlanetColumn(OGameUtils.abbreviate(type), type.getUpgrade(), width);
+		if (moon) {
+			return intMoonColumn(OGameUtils.abbreviate(type), type.getUpgrade(), width);
+		} else {
+			return intPlanetColumn(OGameUtils.abbreviate(type), type.getUpgrade(), width);
+		}
 	}
 
 	void upgrade(UpgradeRockyBody target, AccountUpgradeType upgrade) {
@@ -883,7 +876,7 @@ public class PlanetTable {
 		if (goal <= currentLevel) {
 			goal++;
 		}
-		adjustPlanet(ua, target, upgrade, currentLevel + 1, goal);
+		adjustLevels(ua, target, upgrade, currentLevel + 1, goal);
 	}
 
 	class CoordComponent implements AdjustableComponent {
