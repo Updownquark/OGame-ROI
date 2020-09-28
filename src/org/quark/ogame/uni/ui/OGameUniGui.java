@@ -372,9 +372,10 @@ public class OGameUniGui extends JPanel {
 			upgradeCrystal += planet.getUpgradeCrystal().totalNet;
 			upgradeDeuterium += planet.getUpgradeDeuterium().totalNet;
 		}
-		total.setProduction(zero, //
-			new Production(Collections.emptyMap(), metal, 0), //
-			new Production(Collections.emptyMap(), crystal, 0), //
+		total
+			.setProduction(zero, //
+				new Production(Collections.emptyMap(), metal, 0), //
+				new Production(Collections.emptyMap(), crystal, 0), //
 				new Production(Collections.emptyMap(), deuterium, 0))//
 			.setUpgradeProduction(zero, //
 				new Production(Collections.emptyMap(), upgradeMetal, 0), //
@@ -418,11 +419,28 @@ public class OGameUniGui extends JPanel {
 										}).asText(Format.TEXT)))//
 								.withColumn("Planets", Integer.class, account -> account.getPlanets().getValues().size(), //
 									planetColumn -> planetColumn.withWidths(50, 50, 50))//
+								.withColumn("Points", String.class, account -> OGameUniGui.this.printPoints(account, PointType.Total), //
+									pointsColumn -> pointsColumn.withWidths(75, 75, 75))//
 								.withColumn("Eco Points", String.class, account -> OGameUniGui.this.printPoints(account, PointType.Economy), //
 									pointsColumn -> pointsColumn.withWidths(75, 75, 75))//
 								.withColumn("Rsrch Points", String.class,
 									account -> OGameUniGui.this.printPoints(account, PointType.Research), //
 									pointsColumn -> pointsColumn.withWidths(75, 75, 75))//
+								.withColumn("Mil Points", String.class,
+									account -> OGameUniGui.this.printPoints(account, PointType.Military), //
+									pointsColumn -> pointsColumn.withWidths(75, 75, 75).withValueTooltip((a, __) -> {
+										int ships = 0;
+										for (Planet p : a.getPlanets().getValues()) {
+											for (ShipyardItemType type : ShipyardItemType.values()) {
+												if (type.defense) {
+													continue;
+												}
+												ships += p.getStationedShips(type);
+												ships += p.getMoon().getStationedShips(type);
+											}
+										}
+										return "Ships: " + ships;
+									}))//
 								.withSelection(theSelectedAccount, false)//
 								.withAdd(() -> initAccount(theAccounts.create()//
 									.with("name",
@@ -723,22 +741,26 @@ public class OGameUniGui extends JPanel {
 				for (Planet planet : account.getPlanets().getValues()) {
 					cost = cost
 						.plus(rules.economy().getUpgradeCost(account, planet, upgrade, 0, planet.getBuildingLevel(upgrade.building)));
+					cost = cost.plus(
+						rules.economy().getUpgradeCost(account, planet.getMoon(), upgrade, 0,
+							planet.getMoon().getBuildingLevel(upgrade.building)));
 				}
 				break;
 			case ShipyardItem:
 				for (Planet planet : account.getPlanets().getValues()) {
 					cost = cost
 						.plus(rules.economy().getUpgradeCost(account, planet, upgrade, 0, planet.getStationedShips(upgrade.shipyardItem)));
+					cost = cost.plus(rules.economy().getUpgradeCost(account, planet.getMoon(), upgrade, 0,
+						planet.getMoon().getStationedShips(upgrade.shipyardItem)));
 				}
 				break;
 			case Research:
-				cost = cost.plus(rules.economy().getUpgradeCost(account, account.getPlanets().getValues().getFirst(), upgrade, 0,
-					account.getResearch().getResearchLevel(upgrade.research)));
+				cost = cost.plus(
+					rules.economy().getUpgradeCost(account, null, upgrade, 0, account.getResearch().getResearchLevel(upgrade.research)));
 				break;
 			}
 		}
 		double value = cost.getPoints(type);
-		value /= 1E3;
 		return OGameUtils.printResourceAmount(value);
 	}
 
@@ -973,8 +995,7 @@ public class OGameUniGui extends JPanel {
 		// ObservableConfigFormat<Account> accountRefFormat = ObservableConfigFormat
 		// .<Account> buildReferenceFormat(fv -> accounts.get().getValues(), null)//
 		// .withField("id", Account::getId, ObservableConfigFormat.INT).build();
-		config.asValue(TypeTokens.get().of(Account.class))
-			.at(path).buildEntitySet(accounts);
+		config.asValue(TypeTokens.get().of(Account.class)).at(path).buildEntitySet(accounts);
 		return accounts.get();
 	}
 
@@ -1054,9 +1075,9 @@ public class OGameUniGui extends JPanel {
 					if (planned.getType().research != null) {
 						alreadyPaid = account.getResearch().getCurrentUpgrade() == planned.getType().research;
 					} else if (planned.getType().building != null) {
-						alreadyPaid=thePlanet.getCurrentUpgrade()==planned.getType().building;
+						alreadyPaid = thePlanet.getCurrentUpgrade() == planned.getType().building;
 					} else {
-						alreadyPaid=false;
+						alreadyPaid = false;
 					}
 				}
 				isPaid = alreadyPaid;

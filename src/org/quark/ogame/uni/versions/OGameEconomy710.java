@@ -51,6 +51,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		double resourceExponent;
 		double energyExponent;
 		double ecoWeight;
+		double milWeight;
 		List<Requirement> requirements;
 
 		/** Building/research constructor */
@@ -62,6 +63,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			this.resourceExponent = resourceExp;
 			this.energyExponent = resourceExp;
 			ecoWeight = 1;
+			milWeight = 0;
 			requirements = Collections.emptyList();
 		}
 
@@ -78,6 +80,11 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 
 		public CostDescrip withEcoWeight(double weight) {
 			ecoWeight = weight;
+			return this;
+		}
+
+		public CostDescrip withMilWeight(double weight) {
+			milWeight = weight;
 			return this;
 		}
 
@@ -140,21 +147,21 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				costs.put(upgrade, new CostDescrip(200, 400, 200, 2));
 				break;
 			case AllianceDepot:
-				costs.put(upgrade, new CostDescrip(20000, 40000, 0, 2));
+				costs.put(upgrade, new CostDescrip(20_000, 40_000, 0, 2));
 				break;
 			case MissileSilo:
-				costs.put(upgrade, new CostDescrip(20000, 20000, 1000, 2)//
+				costs.put(upgrade, new CostDescrip(20_000, 20_000, 1000, 2)//
 					.withRequirement(AccountUpgradeType.Shipyard, 1));
 				break;
 			case NaniteFactory:
 				costs.put(upgrade,
-					new CostDescrip(1000000, 500000, 100000, 2)//
+					new CostDescrip(1_000_000, 500_000, 100000, 2)//
 					.withRequirement(AccountUpgradeType.RoboticsFactory, 10)//
 						.withRequirement(AccountUpgradeType.Computer, 10));
 				break;
 			case Terraformer:
 				costs.put(upgrade,
-					new CostDescrip(0, 50000, 100000, 2).withEnergy(1000, 2)//
+					new CostDescrip(0, 50_000, 100_000, 2).withEnergy(1000, 2)//
 						.withRequirement(AccountUpgradeType.NaniteFactory, 1)//
 						.withRequirement(AccountUpgradeType.Energy, 12));
 				break;
@@ -163,14 +170,15 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 					.withRequirement(AccountUpgradeType.Shipyard, 2));
 				break;
 			case LunarBase:
-				costs.put(upgrade, new CostDescrip(20000, 40000, 20000, 2));
+				costs.put(upgrade, new CostDescrip(20_000, 40_000, 20_000, 2));
 				break;
 			case SensorPhalanx:
-				costs.put(upgrade, new CostDescrip(20000, 40000, 20000, 2).withEcoWeight(.5)//
+				costs.put(upgrade, new CostDescrip(20_000, 40_000, 20_000, 2).withEcoWeight(.5).withMilWeight(.5)//
 					.withRequirement(AccountUpgradeType.LunarBase, 1));
 				break;
 			case JumpGate:
-				costs.put(upgrade, new CostDescrip(2000000, 4000000, 2000000, 2).withEcoWeight(.5)//
+				costs.put(upgrade,
+					new CostDescrip(2_000_000, 4_000_000, 2_000_000, 2).withEcoWeight(.5).withMilWeight(.5)//
 						.withRequirement(AccountUpgradeType.LunarBase, 1)//
 						.withRequirement(AccountUpgradeType.Hyperspace, 7));
 				break;
@@ -270,33 +278,33 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			// Ships
 			case LightFighter:
 				costs.put(upgrade,
-					new CostDescrip(3000, 1000, 0).withEcoWeight(0)//
+					new CostDescrip(3000, 1000, 0).withEcoWeight(0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 1)//
 						.withRequirement(AccountUpgradeType.Combustion, 1));
 				break;
 			case HeavyFighter:
 				costs.put(upgrade,
-					new CostDescrip(6000, 4000, 0).withEcoWeight(0)//
+					new CostDescrip(6000, 4000, 0).withEcoWeight(0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 3)//
 						.withRequirement(AccountUpgradeType.Armor, 2)//
 						.withRequirement(AccountUpgradeType.Impulse, 2));
 				break;
 			case Cruiser:
 				costs.put(upgrade,
-					new CostDescrip(20000, 7000, 2000).withEcoWeight(0)//
+					new CostDescrip(20_000, 7000, 2000).withEcoWeight(0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 5)//
 						.withRequirement(AccountUpgradeType.Impulse, 4)//
 						.withRequirement(AccountUpgradeType.Ion, 2));
 				break;
 			case BattleShip:
 				costs.put(upgrade,
-					new CostDescrip(45000, 15000, 0).withEcoWeight(0)//
+					new CostDescrip(45_000, 15_000, 0).withEcoWeight(0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 7)//
 						.withRequirement(AccountUpgradeType.Hyperdrive, 4));
 				break;
 			case BattleCruiser:
 				costs.put(upgrade,
-					new CostDescrip(30000, 40000, 15000).withEcoWeight(0)//
+					new CostDescrip(30_000, 40_000, 15_000).withEcoWeight(0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 8)//
 						.withRequirement(AccountUpgradeType.Hyperspace, 5)//
 						.withRequirement(AccountUpgradeType.Hyperdrive, 5)//
@@ -304,21 +312,21 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				break;
 			case Bomber:
 				costs.put(upgrade,
-					new CostDescrip(50000, 25000, 15000).withEcoWeight(0)//
+					new CostDescrip(50_000, 25_000, 15_000).withEcoWeight(0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 8)//
 						.withRequirement(AccountUpgradeType.Impulse, 6)//
 						.withRequirement(AccountUpgradeType.Plasma, 5));
 				break;
 			case Destroyer:
 				costs.put(upgrade,
-					new CostDescrip(60000, 50000, 15000).withEcoWeight(0)//
+					new CostDescrip(60_000, 50_000, 15_000).withEcoWeight(0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 9)//
 						.withRequirement(AccountUpgradeType.Hyperspace, 5)//
 						.withRequirement(AccountUpgradeType.Hyperdrive, 6));
 				break;
 			case DeathStar:
 				costs.put(upgrade,
-					new CostDescrip(5000000, 4000000, 1000000).withEcoWeight(0)//
+					new CostDescrip(5_000_000, 4_000_000, 1_000_000).withEcoWeight(0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 12)//
 						.withRequirement(AccountUpgradeType.Hyperspace, 6)//
 						.withRequirement(AccountUpgradeType.Hyperdrive, 7)//
@@ -326,7 +334,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				break;
 			case Reaper:
 				costs.put(upgrade,
-					new CostDescrip(85000, 55000, 20000).withEcoWeight(0)//
+					new CostDescrip(85_000, 55_000, 20_000).withEcoWeight(0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 10)//
 						.withRequirement(AccountUpgradeType.Hyperspace, 6)//
 						.withRequirement(AccountUpgradeType.Hyperdrive, 7)//
@@ -334,50 +342,50 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				break;
 			case PathFinder:
 				costs.put(upgrade,
-					new CostDescrip(8000, 15000, 8000).withEcoWeight(.5)//
+					new CostDescrip(8000, 15_000, 8000).withEcoWeight(0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 5)//
 						.withRequirement(AccountUpgradeType.Hyperspace, 2)//
 						.withRequirement(AccountUpgradeType.Shielding, 4));
 				break;
 			case SmallCargo:
 				costs.put(upgrade,
-					new CostDescrip(2000, 2000, 0).withEcoWeight(.5)//
+					new CostDescrip(2000, 2000, 0).withEcoWeight(.5).withMilWeight(.5)//
 						.withRequirement(AccountUpgradeType.Shipyard, 2)//
 						.withRequirement(AccountUpgradeType.Combustion, 2));
 				break;
 			case LargeCargo:
 				costs.put(upgrade,
-					new CostDescrip(6000, 6000, 0).withEcoWeight(.5)//
+					new CostDescrip(6000, 6000, 0).withEcoWeight(.5).withMilWeight(.5)//
 						.withRequirement(AccountUpgradeType.Shipyard, 4)//
 						.withRequirement(AccountUpgradeType.Combustion, 6));
 				break;
 			case ColonyShip:
 				costs.put(upgrade,
-					new CostDescrip(10000, 20000, 10000).withEcoWeight(.5)//
+					new CostDescrip(10_000, 20_000, 10_000).withEcoWeight(.5).withMilWeight(.5)//
 						.withRequirement(AccountUpgradeType.Shipyard, 4)//
 						.withRequirement(AccountUpgradeType.Impulse, 3));
 				break;
 			case Recycler:
 				costs.put(upgrade,
-					new CostDescrip(10000, 6000, 2000).withEcoWeight(.5)//
+					new CostDescrip(10_000, 6000, 2000).withEcoWeight(.5).withMilWeight(.5)//
 						.withRequirement(AccountUpgradeType.Shipyard, 4)//
 						.withRequirement(AccountUpgradeType.Combustion, 6)//
 						.withRequirement(AccountUpgradeType.Shielding, 2));
 				break;
 			case EspionageProbe:
 				costs.put(upgrade,
-					new CostDescrip(0, 1000, 0).withEcoWeight(.5)//
+					new CostDescrip(0, 1000, 0).withEcoWeight(.5).withMilWeight(.5)//
 						.withRequirement(AccountUpgradeType.Shipyard, 3)//
 						.withRequirement(AccountUpgradeType.Combustion, 3)//
 						.withRequirement(AccountUpgradeType.Espionage, 2));
 				break;
 			case SolarSatellite:
-				costs.put(upgrade, new CostDescrip(0, 2000, 500).withEcoWeight(.5)//
+				costs.put(upgrade, new CostDescrip(0, 2000, 500).withEcoWeight(.5).withMilWeight(.5)//
 					.withRequirement(AccountUpgradeType.Shipyard, 1));
 				break;
 			case Crawler:
 				costs.put(upgrade,
-					new CostDescrip(2000, 2000, 1000).withEcoWeight(.5)//
+					new CostDescrip(2000, 2000, 1000).withEcoWeight(.5).withMilWeight(.5)//
 						.withRequirement(AccountUpgradeType.Shipyard, 5)//
 						.withRequirement(AccountUpgradeType.Combustion, 4)//
 						.withRequirement(AccountUpgradeType.Armor, 4)//
@@ -385,26 +393,26 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				break;
 			// StationaryStructures
 			case RocketLauncher:
-				costs.put(upgrade, new CostDescrip(2000, 0, 0).withEcoWeight(0)//
+				costs.put(upgrade, new CostDescrip(2000, 0, 0).withMilWeight(1)//
 					.withRequirement(AccountUpgradeType.Shipyard, 1));
 				break;
 			case LightLaser:
 				costs.put(upgrade,
-					new CostDescrip(1500, 500, 0).withEcoWeight(0)//
+					new CostDescrip(1500, 500, 0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 2)//
 						.withRequirement(AccountUpgradeType.Energy, 1)//
 						.withRequirement(AccountUpgradeType.Laser, 3));
 				break;
 			case HeavyLaser:
 				costs.put(upgrade,
-					new CostDescrip(6000, 2000, 0).withEcoWeight(0)//
+					new CostDescrip(6000, 2000, 0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 4)//
 						.withRequirement(AccountUpgradeType.Energy, 3)//
 						.withRequirement(AccountUpgradeType.Laser, 6));
 				break;
 			case GaussCannon:
 				costs.put(upgrade,
-					new CostDescrip(20000, 15000, 2000).withEcoWeight(0)//
+					new CostDescrip(20_000, 15_000, 2000).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 6)//
 						.withRequirement(AccountUpgradeType.Energy, 6)//
 						.withRequirement(AccountUpgradeType.Weapons, 3)//
@@ -412,38 +420,38 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				break;
 			case IonCannon:
 				costs.put(upgrade,
-					new CostDescrip(5000, 3000, 0).withEcoWeight(0)//
+					new CostDescrip(5000, 3000, 0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 4)//
 						.withRequirement(AccountUpgradeType.Ion, 4));
 				break;
 			case PlasmaTurret:
 				costs.put(upgrade,
-					new CostDescrip(50000, 50000, 30000).withEcoWeight(0)//
+					new CostDescrip(50_000, 50_000, 30_000).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 8)//
 						.withRequirement(AccountUpgradeType.Plasma, 7));
 				break;
 			case SmallShield:
 				costs.put(upgrade,
-					new CostDescrip(10000, 10000, 0).withEcoWeight(0)//
+					new CostDescrip(10_000, 10_000, 0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 1)//
 						.withRequirement(AccountUpgradeType.Shielding, 2));
 				break;
 			case LargeShield:
 				costs.put(upgrade,
-					new CostDescrip(50000, 50000, 0).withEcoWeight(0)//
+					new CostDescrip(50_000, 50_000, 0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 6)//
 						.withRequirement(AccountUpgradeType.Shielding, 6));
 				break;
 			// Missiles
 			case AntiBallisticMissile:
 				costs.put(upgrade,
-					new CostDescrip(8000, 2000, 0).withEcoWeight(0)//
+					new CostDescrip(8000, 2000, 0).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 1)//
 						.withRequirement(AccountUpgradeType.MissileSilo, 2));
 				break;
 			case InterPlanetaryMissile:
 				costs.put(upgrade,
-					new CostDescrip(12500, 2500, 10000).withEcoWeight(0)//
+					new CostDescrip(12_500, 2500, 10_000).withMilWeight(1)//
 						.withRequirement(AccountUpgradeType.Shipyard, 1)//
 						.withRequirement(AccountUpgradeType.MissileSilo, 4)//
 						.withRequirement(AccountUpgradeType.Impulse, 1));
@@ -709,28 +717,34 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		resAmounts[1] = cost.baseCrystal;
 		resAmounts[2] = cost.baseDeuterium;
 		resAmounts[3] = cost.baseEnergy;
-		double resMult = 1;
 		char t = 0;
 		switch (upgrade.type) {
 		case Building:
 		case Research:
+			double resMult = 1;
 			t = upgrade.type.name().charAt(0);
 			resMult = Math.pow(cost.resourceExponent, Math.min(fromLevel, toLevel))
 				* ((1 - Math.pow(cost.resourceExponent, Math.abs(toLevel - fromLevel))) / (1 - cost.resourceExponent));
 			if (toLevel < fromLevel) {
 				resMult = resMult / cost.resourceExponent * Math.max(1 - account.getResearch().getIon() * 0.04, 0);
 			}
+			for (int i = 0; i < 3; i++) {
+				resAmounts[i] = Math.round(resAmounts[i] * resMult);
+			}
 			break;
 		case ShipyardItem:
 			t = 's';
-			resMult = (toLevel - fromLevel);
 			if (toLevel < fromLevel) {
-				resMult *= 0.35; // Scrapping
+				resMult = (toLevel - fromLevel) * 0.35; // Scrapping
+				for (int i = 0; i < 3; i++) {
+					resAmounts[i] = Math.round(resAmounts[i] * resMult);
+				}
+			} else {
+				for (int i = 0; i < 3; i++) {
+					resAmounts[i] = Math.round(resAmounts[i] * (toLevel - fromLevel));
+				}
 			}
 			break;
-		}
-		for (int i = 0; i < 3; i++) {
-			resAmounts[i] = Math.round(resAmounts[i] * resMult);
 		}
 		if (cost.energyExponent > 1 && toLevel > fromLevel) {
 			double mult = Math.pow(cost.energyExponent, Math.min(fromLevel, toLevel))
@@ -740,18 +754,10 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		long seconds = getUpgradeTime(account, planetOrMoon, upgrade, resAmounts);
 		Duration time = Duration.ofSeconds(seconds);
 		if (upgrade.type == UpgradeType.Research) {
-			return UpgradeCost.of(t, 'r', resAmounts[0], resAmounts[1], resAmounts[2], (int) resAmounts[3], time);
-		} else if (cost.ecoWeight == 1.0) {
-			return UpgradeCost.of(t, 'e', resAmounts[0], resAmounts[1], resAmounts[2], (int) resAmounts[3], time);
-		} else if (cost.ecoWeight == 0.0) {
-			return UpgradeCost.of(t, 'm', resAmounts[0], resAmounts[1], resAmounts[2], (int) resAmounts[3], time);
+			return UpgradeCost.of(t, resAmounts[0], resAmounts[1], resAmounts[2], (int) resAmounts[3], time, 0, 1, 0);
 		} else {
-			long ecoMetal = Math.round(resAmounts[0] * cost.ecoWeight);
-			long ecoCrystal = Math.round(resAmounts[1] * cost.ecoWeight);
-			long ecoDeuterium = Math.round(resAmounts[2] * cost.ecoWeight);
-			Duration ecoTime = Duration.ofSeconds((long) Math.ceil(seconds * cost.ecoWeight));
-			return UpgradeCost.of(t, 'e', ecoMetal, ecoCrystal, ecoDeuterium, (int) resAmounts[3], ecoTime).plus(UpgradeCost.of(//
-				t, 'm', resAmounts[0] - ecoMetal, resAmounts[1] - ecoCrystal, resAmounts[2] - ecoDeuterium, 0, time.minus(ecoTime)));
+			return UpgradeCost.of(t, resAmounts[0], resAmounts[1], resAmounts[2], (int) resAmounts[3], time, cost.ecoWeight, 0,
+				cost.milWeight);
 		}
 	}
 

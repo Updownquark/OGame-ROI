@@ -66,7 +66,7 @@ public interface OGameEconomyRuleSet {
 		}
 
 		public UpgradeCost asCost() {
-			return UpgradeCost.of(UpgradeType.Building, PointType.Economy, metal, crystal, deuterium, energy, Duration.ZERO);
+			return UpgradeCost.of(UpgradeType.Building, metal, crystal, deuterium, energy, Duration.ZERO, 1, 0, 0);
 		}
 	}
 

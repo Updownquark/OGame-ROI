@@ -315,17 +315,17 @@ public class HoldingsPanel {
 			// But it's only done once (for each resource) when anything changes, so it may not be worth the trouble of optimizing
 			private double[] calcNeededTrade() {
 				UpgradeCost cost = theUniGui.getUpgradePanel().getTotalUpgrades().getCost();
-				cost = cost.plus(UpgradeCost.of('b', 'e', theTotalHolding.getMetal(), theTotalHolding.getCrystal(),
-					theTotalHolding.getDeuterium(), 0, Duration.ZERO).negate());
+				cost = cost.plus(UpgradeCost.of('b', theTotalHolding.getMetal(), theTotalHolding.getCrystal(),
+					theTotalHolding.getDeuterium(), 0, Duration.ZERO, 1, 0, 0).negate());
 				cost = cost.plus(UpgradeCost
-					.of('b', 'e', theTotalTrade.getMetal(), theTotalTrade.getCrystal(), theTotalTrade.getDeuterium(), 0, Duration.ZERO)
+					.of('b', theTotalTrade.getMetal(), theTotalTrade.getCrystal(), theTotalTrade.getDeuterium(), 0, Duration.ZERO, 1, 0, 0)
 					.negate());
 				UpgradeCost production = UpgradeCost.ZERO;
 				for (PlanetWithProduction planet : theUniGui.getPlanets()) {
-					UpgradeCost planetProduction = UpgradeCost.of('b', 'e', planet.getMetal().totalNet, planet.getCrystal().totalNet,
-						planet.getDeuterium().totalNet, 0, Duration.ZERO);
-					planetProduction = planetProduction.plus(UpgradeCost.of('b', 'e', planet.getMetal(true).totalNet,
-						planet.getCrystal(true).totalNet, planet.getDeuterium(true).totalNet, 0, Duration.ZERO));
+					UpgradeCost planetProduction = UpgradeCost.of('b', planet.getMetal().totalNet, planet.getCrystal().totalNet,
+						planet.getDeuterium().totalNet, 0, Duration.ZERO, 1, 0, 0);
+					planetProduction = planetProduction.plus(UpgradeCost.of('b', planet.getMetal(true).totalNet,
+						planet.getCrystal(true).totalNet, planet.getDeuterium(true).totalNet, 0, Duration.ZERO, 1, 0, 0));
 					planetProduction = planetProduction.divide(2);
 					production = production.plus(planetProduction);
 				}
