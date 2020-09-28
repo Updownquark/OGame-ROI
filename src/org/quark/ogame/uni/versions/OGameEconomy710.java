@@ -582,6 +582,12 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			byType.put(mineType, typeAmount);
 			totalProduced += typeAmount;
 
+			double multiplier = getSlotProductionMultiplier(account, planet, resourceType);
+			typeAmount = (int) Math.round((totalProduced) * multiplier);
+			byType.put(ProductionSource.Slot, typeAmount);
+			mineProduction += typeAmount;
+			totalProduced += typeAmount;
+
 			// Crawler production
 			int crawlers = getUsableCrawlers(account, planet);
 			double crawlerBonus = production.crawlerBonus;
@@ -607,11 +613,6 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				typeAmount = 0;
 			}
 			byType.put(ProductionSource.Collector, typeAmount);
-			totalProduced += typeAmount;
-
-			double multiplier = getSlotProductionMultiplier(account, planet, resourceType);
-			typeAmount = (int) Math.round((totalProduced) * multiplier);
-			byType.put(ProductionSource.Slot, typeAmount);
 			totalProduced += typeAmount;
 
 			// Fusion consumption

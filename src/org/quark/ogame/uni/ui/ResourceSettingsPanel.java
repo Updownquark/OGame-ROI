@@ -119,10 +119,10 @@ public class ResourceSettingsPanel extends JPanel {
 		Metal(Utilizable.MetalMine, "Metal Mine"),
 		Crystal(Utilizable.CrystalMine, "Crystal Mine"),
 		Deut(Utilizable.DeuteriumSynthesizer, "Deuterium Synthesizer"), //
-		SlotBonus(null, "Slot Bonus"), //
 		Solar(Utilizable.SolarPlant, "Solar Plant"),
 		Fusion(Utilizable.FusionReactor, "Fusion Reactor"),
 		Satellite(Utilizable.SolarSatellite, "Solar Satellite"),
+		SlotBonus(null, "Slot Bonus"), //
 		Crawler(Utilizable.Crawler, "Crawler"), //
 		Plasma(null, "Plasma Technology"),
 		Items(null, "Items"),
