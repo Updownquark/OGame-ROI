@@ -186,7 +186,7 @@ public class PlanetTable {
 						} else {
 							return "";
 						}
-					}, moonUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
+					}, planetUpgrades).clicks(1).mutateAttribute((p, bdg) -> {
 						if (bdg instanceof BuildingType) {
 							p.planet.setCurrentUpgrade((BuildingType) bdg);
 						} else {
