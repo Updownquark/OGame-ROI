@@ -171,7 +171,8 @@ public class OGameUniGui extends JPanel {
 						ua.withUpgrade(upgradeEvt.getNewValue());
 					}
 				}, true);
-				theUpgradeAccount.noInitChanges().take(1).act(__ -> sub.unsubscribe());
+				theUpgradeAccount.noInitChanges().filter(evt2 -> evt2.getNewValue() != evt2.getOldValue()).take(1)
+					.act(__ -> sub.unsubscribe());
 			}
 		});
 		thePlanets.changes().act(evt -> {
