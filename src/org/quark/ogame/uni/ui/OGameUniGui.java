@@ -2,6 +2,7 @@ package org.quark.ogame.uni.ui;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.EventQueue;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -28,7 +29,6 @@ import org.observe.Observable;
 import org.observe.ObservableValue;
 import org.observe.SettableValue;
 import org.observe.SimpleObservable;
-import org.observe.Subscription;
 import org.observe.collect.CollectionChangeType;
 import org.observe.collect.ObservableCollection;
 import org.observe.config.ObservableConfig;
@@ -55,7 +55,6 @@ import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
 import org.quark.ogame.uni.OGameEconomyRuleSet;
-import org.quark.ogame.uni.OGameEconomyRuleSet.FullProduction;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGamePageReader;
 import org.quark.ogame.uni.OGameRuleSet;
@@ -139,7 +138,7 @@ public class OGameUniGui extends JPanel {
 			.setProduction(ZERO, ZERO, ZERO, ZERO).setUpgradeProduction(ZERO, ZERO, ZERO, ZERO);
 		theTotalProduction = ObservableCollection.build(PlanetWithProduction.class).safe(false).build().with(total);
 		// Update total for each change
-		thePlanets.simpleChanges().act(__ -> updateTotalProduction(total, ZERO));
+		thePlanets.simpleChanges().act(__ -> EventQueue.invokeLater(this::recalcPlanning));
 		thePlanetsWithTotal = ObservableCollection.flattenCollections(TypeTokens.get().of(PlanetWithProduction.class), //
 			getPlanets(), theTotalProduction).collect();
 
@@ -151,30 +150,30 @@ public class OGameUniGui extends JPanel {
 			.flow().transform(TypeTokens.get().of(PlannedAccountUpgrade.class),
 				tx -> tx.cache(true).reEvalOnUpdate(false).map(pu -> new PlannedAccountUpgrade(pu)))
 			.collect();
-		theUpgradeAccount.changes().act(evt -> {
-			UpgradeAccount ua = evt.getNewValue();
-			if (ua == null) {
-				return;
-			} else if (evt.getNewValue() == evt.getOldValue()) {
-				for (PlannedAccountUpgrade upgrade : theUpgrades) {
-					if (upgrade.getPlanet() == null) {
-						upgrade.clear();
-					}
-				}
-				return;
-			} else {
-				Subscription sub = ua.getWrapped().getPlannedUpgrades().getValues().subscribe(upgradeEvt -> {
-					if (upgradeEvt.getType() != CollectionChangeType.add) {
-						ua.withoutUpgrade(upgradeEvt.getOldValue());
-					}
-					if (upgradeEvt.getType() != CollectionChangeType.remove) {
-						ua.withUpgrade(upgradeEvt.getNewValue());
-					}
-				}, true);
-				theUpgradeAccount.noInitChanges().filter(evt2 -> evt2.getNewValue() != evt2.getOldValue()).take(1)
-					.act(__ -> sub.unsubscribe());
-			}
-		});
+//		theUpgradeAccount.changes().act(evt -> {
+//			UpgradeAccount ua = evt.getNewValue();
+//			if (ua == null) {
+//				return;
+//			} else if (evt.getNewValue() == evt.getOldValue()) {
+//				for (PlannedAccountUpgrade upgrade : theUpgrades) {
+//					if (upgrade.getPlanet() == null) {
+//						upgrade.clear();
+//					}
+//				}
+//				return;
+//			} else {
+//				Subscription sub = ua.getWrapped().getPlannedUpgrades().getValues().subscribe(upgradeEvt -> {
+//					if (upgradeEvt.getType() != CollectionChangeType.add) {
+//						ua.withoutUpgrade(upgradeEvt.getOldValue());
+//					}
+//					if (upgradeEvt.getType() != CollectionChangeType.remove) {
+//						ua.withUpgrade(upgradeEvt.getNewValue());
+//					}
+//				}, true);
+//				theUpgradeAccount.noInitChanges().filter(evt2 -> evt2.getNewValue() != evt2.getOldValue()).take(1)
+//					.act(__ -> sub.unsubscribe());
+//			}
+//		});
 		thePlanets.changes().act(evt -> {
 			switch (evt.type) {
 			case add:
@@ -205,7 +204,9 @@ public class OGameUniGui extends JPanel {
 				}
 			}
 		});
-		theUpgrades.simpleChanges().act(evt -> ObservableSwingUtils.onEQ(this::refreshProduction));
+		theUpgrades.simpleChanges().act(evt -> ObservableSwingUtils.onEQ(()->{
+			recalcPlanning();
+		}));
 		// When the user changes the current research upgrade or building upgrade on a planet,
 		// That upgrade's cost should clear out, and the old upgrade (if any) should then show a cost
 		ObservableValue<ResearchType> currentResearch = ObservableValue.flatten(theSelectedAccount.map(a -> {
@@ -247,7 +248,7 @@ public class OGameUniGui extends JPanel {
 			}
 		});
 		refreshProduction();
-		updateTotalProduction(total, ZERO);
+		recalcPlanning();
 
 		thePlanetEmpireFile = SettableValue.build(File.class).safe(false).build();
 		theMoonEmpireFile = SettableValue.build(File.class).safe(false).build();
@@ -340,24 +341,38 @@ public class OGameUniGui extends JPanel {
 
 	void updateProduction(PlanetWithProduction p) {
 		OGameEconomyRuleSet eco = theSelectedRuleSet.get().economy();
-		UpgradeAccount account = theUpgradeAccount.get();
-		p.upgradePlanet.optimizeEnergy(eco);
-		Production energy = eco.getProduction(account, p.upgradePlanet, ResourceType.Energy, 1);
+		Account account=theSelectedAccount.get();
+		Production energy = eco.getProduction(account, p.planet, ResourceType.Energy, 1);
 		double energyFactor = Math.min(1, energy.totalProduction * 1.0 / energy.totalConsumption);
-		Production metal = eco.getProduction(account, p.upgradePlanet, ResourceType.Metal, energyFactor);
-		Production crystal = eco.getProduction(account, p.upgradePlanet, ResourceType.Crystal, energyFactor);
-		Production deuterium = eco.getProduction(account, p.upgradePlanet, ResourceType.Deuterium, energyFactor);
-		p.setUpgradeProduction(energy, metal, crystal, deuterium);
-
-		energy = eco.getProduction(account.getWrapped(), p.planet, ResourceType.Energy, 1);
-		energyFactor = Math.min(1, energy.totalProduction * 1.0 / energy.totalConsumption);
-		metal = eco.getProduction(account.getWrapped(), p.planet, ResourceType.Metal, energyFactor);
-		crystal = eco.getProduction(account.getWrapped(), p.planet, ResourceType.Crystal, energyFactor);
-		deuterium = eco.getProduction(account.getWrapped(), p.planet, ResourceType.Deuterium, energyFactor);
+		Production metal = eco.getProduction(account, p.planet, ResourceType.Metal, energyFactor);
+		Production crystal = eco.getProduction(account, p.planet, ResourceType.Crystal, energyFactor);
+		Production deuterium = eco.getProduction(account, p.planet, ResourceType.Deuterium, energyFactor);
 		p.setProduction(energy, metal, crystal, deuterium);
+
+		// At some point there may be a use case for adding each component of production,
+		// e.g. to see how much deuterium you're using on fusion throughout the empire.
+		// But at the moment, all that's needed is the total net production of material resources
+		// and the calculation for all that detail is cumbersome.
+		int totalMetal = 0, totalCrystal = 0, totalDeuterium = 0;
+		for (PlanetWithProduction planet : thePlanets) {
+			totalMetal += planet.getMetal().totalNet;
+			totalCrystal += planet.getCrystal().totalNet;
+			totalDeuterium += planet.getDeuterium().totalNet;
+		}
+		theTotalProduction.getFirst()
+			.setProduction(ZERO, //
+				new Production(Collections.emptyMap(), totalMetal, 0), //
+				new Production(Collections.emptyMap(), totalCrystal, 0), //
+				new Production(Collections.emptyMap(), totalDeuterium, 0))//
+			.setUpgradeProduction(ZERO, //
+				new Production(Collections.emptyMap(), totalMetal, 0), //
+				new Production(Collections.emptyMap(), totalCrystal, 0), //
+				new Production(Collections.emptyMap(), totalDeuterium, 0));
+		
+		recalcPlanning();
 	}
 
-	void updateTotalProduction(PlanetWithProduction total, Production zero) {
+	void updateTotalProduction(PlanetWithProduction total) {
 		// At some point there may be a use case for adding each component of production,
 		// e.g. to see how much deuterium you're using on fusion throughout the empire.
 		// But at the moment, all that's needed is the total net production of material resources
@@ -374,14 +389,29 @@ public class OGameUniGui extends JPanel {
 			upgradeDeuterium += planet.getUpgradeDeuterium().totalNet;
 		}
 		total
-			.setProduction(zero, //
+			.setProduction(ZERO, //
 				new Production(Collections.emptyMap(), metal, 0), //
 				new Production(Collections.emptyMap(), crystal, 0), //
 				new Production(Collections.emptyMap(), deuterium, 0))//
-			.setUpgradeProduction(zero, //
+			.setUpgradeProduction(ZERO, //
 				new Production(Collections.emptyMap(), upgradeMetal, 0), //
 				new Production(Collections.emptyMap(), upgradeCrystal, 0), //
 				new Production(Collections.emptyMap(), upgradeDeuterium, 0));
+		theTotalProduction.mutableElement(theTotalProduction.getTerminalElement(true).getElementId()).set(total);
+	}
+	
+	void recalcPlanning(){
+		UpgradeAccount ua=theUpgradeAccount.get();
+		if(ua==null) {
+			return;
+		}
+		ua.clearUpgrades();
+		PlanetWithProduction total=theTotalProduction.getFirst();
+		OGameRuleSet rules=theSelectedRuleSet.get();
+		for(PlannedAccountUpgrade upgrade : theUpgrades){
+			upgrade.clear();
+			upgrade.roi= getROI(rules, ua, upgrade, thePlanets, total);
+		}
 		theTotalProduction.mutableElement(theTotalProduction.getTerminalElement(true).getElementId()).set(total);
 	}
 
@@ -1039,22 +1069,12 @@ public class OGameUniGui extends JPanel {
 		Planet getPlanet() {
 			return thePlanet;
 		}
+		
+		void setFrom(int from){
+			theFrom=from;
+		}
 
 		int getFrom() {
-			if (theFrom >= 0 || planned == null) {
-				return theFrom;
-			}
-			int level = planned.getType().getLevel(getSelectedAccount().get(), thePlanet);
-			for (PlannedUpgrade upgrade : getSelectedAccount().get().getPlannedUpgrades().getValues()) {
-				if (upgrade == planned) {
-					break;
-				} else if (upgrade.getType() == planned.getType()//
-					&& upgrade.getPlanet() == planned.getPlanet()//
-					&& upgrade.isMoon() == planned.isMoon()) {
-					level += upgrade.getQuantity();
-				}
-			}
-			theFrom = level;
 			return theFrom;
 		}
 
@@ -1096,9 +1116,6 @@ public class OGameUniGui extends JPanel {
 		}
 
 		Duration getROI() {
-			if (roi == null && planned != null && !isPaid()) {
-				roi = OGameUniGui.getROI(getRules().get(), getSelectedAccount().get(), this);
-			}
 			return roi;
 		}
 
@@ -1118,28 +1135,36 @@ public class OGameUniGui extends JPanel {
 		}
 	}
 
-	static Duration getROI(OGameRuleSet rules, Account account, PlannedAccountUpgrade upgrade) {
-		if (upgrade.getUpgrade().getQuantity() <= 0) {
-			return null;
-		}
+	static Duration getROI(OGameRuleSet rules, UpgradeAccount account, PlannedAccountUpgrade upgrade, 
+		List<PlanetWithProduction> planetProductions, PlanetWithProduction total) {
+		boolean checkEnergy = false;
+		boolean calcProduction = true;
+		boolean calcROI = upgrade.getUpgrade().getQuantity() > 0;
 		switch (upgrade.getUpgrade().getType().type) {
 		case Research:
 			switch (upgrade.getUpgrade().getType().research) {
 			case Astrophysics:
+				return getAstroRoi(rules, account, upgrade, planetProductions, total);
 			case Plasma:
 				break;
-			case Energy: // TODO Involves adjusting usages, maybe will do it later
+			case Energy:
+				calcROI = false;
+				checkEnergy = true;
+				break;
 			default:
-				return null;
+				calcProduction = false;
+				break;
 			}
 			break;
 		case ShipyardItem:
 			switch (upgrade.getUpgrade().getType().shipyardItem) {
 			case Crawler:
 			case SolarSatellite:
+				checkEnergy = true;
 				break;
 			default:
-				return null;
+				calcProduction = false;
+				break;
 			}
 			break;
 		case Building:
@@ -1147,80 +1172,160 @@ public class OGameUniGui extends JPanel {
 			case MetalMine:
 			case CrystalMine:
 			case DeuteriumSynthesizer:
+				checkEnergy = true;
+				break;
 			case SolarPlant:
-			case FusionReactor: // TODO Technically should adjust usages to calculate the real ROI, but that's tricky
+			case FusionReactor:
+				calcROI = false;
+				checkEnergy = true;
 				break;
 			default:
-				return null;
+				calcProduction = false;
+				break;
 			}
 			break;
 		}
-
-		Planet planet = upgrade.getPlanet();
-		int planetIdx = account.getPlanets().getValues().indexOf(planet);
-		double currentProduction = 0, newProduction = 0, cost = 0;
-		TradeRatios tr = account.getUniverse().getTradeRatios();
-		List<FullProduction> productions = QommonsUtils.map(account.getPlanets().getValues(), //
-			p -> rules.economy().getFullProduction(account, p), false);
-		cost = upgrade.getCost().getMetalValue(tr);
-		for (FullProduction p : productions) {
-			currentProduction += p.asCost().getMetalValue(tr);
-		}
-		switch (upgrade.getUpgrade().getType().type) {
-		case Research:
-			switch (upgrade.getUpgrade().getType().research) {
-			case Astrophysics:
-				int newPlanets = (upgrade.getTo() + 1) / 2 + 1;
-				newProduction = currentProduction * newPlanets / productions.size();
-				double planetCost = 0;
-				for (AccountUpgradeType u : AccountUpgradeType.values()) {
-					switch (u.type) {
-					case Building:
-						for (Planet p : account.getPlanets().getValues()) {
-							planetCost += rules.economy().getUpgradeCost(account, p, u, 0, p.getBuildingLevel(u.building))
-								.getMetalValue(tr);
-						}
-						break;
-					case ShipyardItem:
-						if (u.shipyardItem.mobile) {
-							continue;
-						}
-						for (Planet p : account.getPlanets().getValues()) {
-							planetCost += rules.economy().getUpgradeCost(account, p, u, 0, p.getStationedShips(u.shipyardItem))
-								.getMetalValue(tr);
-						}
-						break;
-					default:
-						break;
-					}
+		if (!calcProduction) {
+			if (upgrade.getPlanet() != null) {
+				int planetIdx = account.getWrapped().getPlanets().getValues().indexOf(upgrade.getPlanet());
+				if (planetIdx < 0) {
+					return null; // ??
 				}
-				cost += planetCost / productions.size();
-				break;
-			case Plasma:
-				if (upgrade.getPlanet() == null) {
-					UpgradeAccount upgradeAccount = new UpgradeAccount(account).withUpgrade(upgrade.getUpgrade());
-					newProduction = 0;
-					for (Planet p : account.getPlanets().getValues()) {
-						newProduction += rules.economy().getFullProduction(upgradeAccount, p).asCost().getMetalValue(tr);
-					}
-				}
-				break;
-			default:
-				return null;
+				PlanetWithProduction planet = planetProductions.get(planetIdx);
+				int from = upgrade.getUpgrade().getType().getLevel(account,
+					upgrade.getUpgrade().isMoon() ? planet.upgradePlanet.getMoon() : planet.upgradePlanet);
+				upgrade.setFrom(from);
+				account.withUpgrade(upgrade.planned);
+			} else {
+				int from = upgrade.getUpgrade().getType().getLevel(account, null);
+				upgrade.setFrom(from);
+				account.withUpgrade(upgrade.planned);
 			}
-			break;
-		default:
-			newProduction = currentProduction - productions.get(planetIdx).asCost().getMetalValue(tr);
-			UpgradeAccount upgradeAccount = new UpgradeAccount(account).withUpgrade(upgrade.getUpgrade());
-			UpgradeAccount.UpgradePlanet upgradePlanet = upgradeAccount.getPlanets().getUpgradePlanet(planet);
-			upgradePlanet.optimizeEnergy(rules.economy());
-			newProduction += rules.economy().getFullProduction(upgradeAccount, upgradePlanet).asCost().getMetalValue(tr);
-			break;
-		}
-		if (newProduction <= currentProduction) {
 			return null;
 		}
-		double seconds = cost / (newProduction - currentProduction) * 3600;
+
+		UpgradeCost cost;
+		TradeRatios tr = account.getUniverse().getTradeRatios();
+		double oldProduction=total.getUpgradeMetal().totalNet//
+			+(total.getUpgradeCrystal().totalNet/tr.getCrystal()*tr.getMetal())//
+			+(total.getUpgradeDeuterium().totalNet/tr.getDeuterium()*tr.getMetal());
+		if(upgrade.getPlanet()==null){
+			int from=upgrade.getUpgrade().getType().getLevel(account, null);
+			upgrade.setFrom(from);
+			if (calcROI) {
+				cost=rules.economy().getUpgradeCost(account, null, upgrade.getUpgrade().getType(), from, from+upgrade.getUpgrade().getQuantity());
+			} else {
+				cost=null;
+			}
+			account.withUpgrade(upgrade.planned);
+			int totalMetal=0, totalCrystal=0, totalDeut=0;
+			for(PlanetWithProduction planet : planetProductions){
+				if (checkEnergy) {
+					planet.upgradePlanet.optimizeEnergy(rules.economy());
+				}
+				Production energy=rules.economy().getProduction(account, planet.upgradePlanet, ResourceType.Energy, 1);
+				double energyFactor=Math.min(1, energy.totalProduction/energy.totalConsumption);
+				Production metal=rules.economy().getProduction(account, planet.upgradePlanet, ResourceType.Metal, energyFactor);
+				Production crystal=rules.economy().getProduction(account, planet.upgradePlanet, ResourceType.Crystal, energyFactor);
+				Production deut=rules.economy().getProduction(account, planet.upgradePlanet, ResourceType.Deuterium, energyFactor);
+				planet.setUpgradeProduction(energy, metal, crystal, deut);
+				totalMetal+=metal.totalNet;
+				totalCrystal+=crystal.totalNet;
+				totalDeut+=deut.totalNet;
+			}
+			total
+			.setUpgradeProduction(ZERO, //
+				new Production(Collections.emptyMap(), totalMetal, 0), //
+				new Production(Collections.emptyMap(), totalCrystal, 0), //
+				new Production(Collections.emptyMap(), totalDeut, 0));
+		} else{
+			int planetIdx = account.getWrapped().getPlanets().getValues().indexOf(upgrade.getPlanet());
+			if(planetIdx<0){
+				return null; //??
+			}
+			PlanetWithProduction planet=planetProductions.get(planetIdx);
+			int from = upgrade.getUpgrade().getType().getLevel(account,
+				upgrade.getUpgrade().isMoon() ? planet.upgradePlanet.getMoon() : planet.upgradePlanet);
+			upgrade.setFrom(from);
+			if (calcROI) {
+				cost = rules.economy().getUpgradeCost(account, planet.upgradePlanet, upgrade.getUpgrade().getType(), from,
+					from+upgrade.getUpgrade().getQuantity());
+			} else {
+				cost=null;
+			}
+			account.withUpgrade(upgrade.planned);
+			if (checkEnergy) {
+				planet.upgradePlanet.optimizeEnergy(rules.economy());
+			}
+			Production energy=rules.economy().getProduction(account, planet.upgradePlanet, ResourceType.Energy, 1);
+			double energyFactor=Math.min(1, energy.totalProduction/energy.totalConsumption);
+			Production metal=rules.economy().getProduction(account, planet.upgradePlanet, ResourceType.Metal, energyFactor);
+			Production crystal=rules.economy().getProduction(account, planet.upgradePlanet, ResourceType.Crystal, energyFactor);
+			Production deut=rules.economy().getProduction(account, planet.upgradePlanet, ResourceType.Deuterium, energyFactor);
+			int oldMetal=planet.getUpgradeMetal().totalNet;
+			int oldCrystal=planet.getUpgradeCrystal().totalNet;
+			int oldDeut=planet.getUpgradeDeuterium().totalNet;
+			planet.setUpgradeProduction(energy, metal, crystal, deut);
+			
+			int newTotalMetal=total.getUpgradeMetal().totalNet-oldMetal+planet.getUpgradeMetal().totalNet;
+			int newTotalCrystal=total.getUpgradeCrystal().totalNet-oldCrystal+planet.getUpgradeCrystal().totalNet;
+			int newTotalDeut=total.getUpgradeDeuterium().totalNet-oldDeut+planet.getUpgradeDeuterium().totalNet;
+			total
+			.setUpgradeProduction(ZERO, //
+				new Production(Collections.emptyMap(), newTotalMetal, 0), //
+				new Production(Collections.emptyMap(), newTotalCrystal, 0), //
+				new Production(Collections.emptyMap(), newTotalDeut, 0));
+			
+		}
+		if (!calcROI) {
+			return null;
+		}
+		double newProduction=total.getUpgradeMetal().totalNet//
+			+(total.getUpgradeCrystal().totalNet/tr.getCrystal()*tr.getMetal())//
+			+(total.getUpgradeDeuterium().totalNet/tr.getDeuterium()*tr.getMetal());
+		double seconds = cost.getMetalValue(tr) / (newProduction - oldProduction) * 3600;
+		return Duration.ofSeconds((long) seconds);
+	}
+
+	private static Duration getAstroRoi(OGameRuleSet rules, UpgradeAccount account, PlannedAccountUpgrade upgrade,
+		List<PlanetWithProduction> planets, PlanetWithProduction total) {
+		TradeRatios tr = account.getUniverse().getTradeRatios();
+		double oldProduction = total.getUpgradeMetal().totalNet//
+			+ (total.getUpgradeCrystal().totalNet / tr.getCrystal() * tr.getMetal())//
+			+ (total.getUpgradeDeuterium().totalNet / tr.getDeuterium() * tr.getMetal());
+		upgrade.setFrom(account.getResearch().getAstrophysics());
+		UpgradeCost cost = rules.economy().getUpgradeCost(account, null, upgrade.getUpgrade().getType(), upgrade.getFrom(),
+			upgrade.getTo());
+		account.withUpgrade(upgrade.getUpgrade());
+		int oldPlanets = (upgrade.getFrom() + 1) / 2 + 1;
+		int newPlanets = (upgrade.getTo() + 1) / 2 + 1;
+		if (oldPlanets >= newPlanets) {
+			return null;
+		}
+		double newProduction = oldProduction / oldPlanets * newPlanets;
+		double planetCost = 0;
+		// Add cost to get the new planet level with the average of the others
+		for (AccountUpgradeType u : AccountUpgradeType.values()) {
+			switch (u.type) {
+			case Building:
+				for (Planet p : account.getPlanets().getValues()) {
+					planetCost += rules.economy().getUpgradeCost(account, p, u, 0, p.getBuildingLevel(u.building)).getMetalValue(tr);
+				}
+				break;
+			case ShipyardItem:
+				if (u.shipyardItem.mobile) {
+					continue;
+				}
+				for (Planet p : account.getPlanets().getValues()) {
+					planetCost += rules.economy().getUpgradeCost(account, p, u, 0, p.getStationedShips(u.shipyardItem)).getMetalValue(tr);
+				}
+				break;
+			default:
+				break;
+			}
+		}
+		double totalCost = cost.getMetalValue(tr) + planetCost / planets.size();
+		double seconds = totalCost / (newProduction - oldProduction) * 3600;
 		return Duration.ofSeconds((long) seconds);
 	}
 }
