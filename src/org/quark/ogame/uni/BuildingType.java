@@ -35,4 +35,17 @@ public enum BuildingType {
 	public AccountUpgradeType getUpgrade() {
 		return AccountUpgradeType.getBuildingUpgrade(this);
 	}
+
+	public ResourceType isMine() {
+		switch (this) {
+		case MetalMine:
+			return ResourceType.Metal;
+		case CrystalMine:
+			return ResourceType.Crystal;
+		case DeuteriumSynthesizer:
+			return ResourceType.Deuterium;
+		default:
+			return null;
+		}
+	}
 }

@@ -1,6 +1,5 @@
 package org.quark.ogame.uni;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -13,8 +12,8 @@ import org.observe.config.ConfiguredValueType;
 import org.observe.config.SyncValueCreator;
 import org.observe.config.SyncValueSet;
 import org.observe.util.TypeTokens;
-import org.qommons.ArrayUtils;
 import org.qommons.Nameable;
+import org.quark.ogame.OGameUtils;
 
 import com.google.common.reflect.TypeToken;
 
@@ -251,57 +250,11 @@ public class UpgradeAccount implements Account {
 		public UpgradePlanet(Planet wrapped) {
 			super(wrapped);
 			theFusionUtil = -1;
+			theCrawlerUtil = -1;
 		}
 
 		public void optimizeEnergy(OGameEconomyRuleSet eco) {
-			int maxFusion = eco.getMaxUtilization(Utilizable.FusionReactor, UpgradeAccount.this, this);
-			int maxCrawler = eco.getMaxUtilization(Utilizable.Crawler, UpgradeAccount.this, this);
-			theFusionUtil = maxFusion;
-			theCrawlerUtil = maxCrawler;
-			// Find the fusion/crawler utilization combination with the best production
-			double bestProduction = optimizeCrawlerUtil(eco);
-			if (getFusionReactor() > 0) {
-				for (int f = maxFusion - 10; f >= 0; f -= 10) {
-					int preCrawlerUtil = theCrawlerUtil;
-					theFusionUtil = f;
-					double production = optimizeCrawlerUtil(eco);
-					if (production < bestProduction) {
-						theFusionUtil += 10;
-						theCrawlerUtil = preCrawlerUtil;
-						break;
-					}
-				}
-			}
-		}
-
-		private double optimizeCrawlerUtil(OGameEconomyRuleSet eco) {
-			int maxCrawler = eco.getMaxUtilization(Utilizable.Crawler, UpgradeAccount.this, this);
-			double[] productions = new double[maxCrawler / 10 + 1];
-			Arrays.fill(productions, Double.NaN);
-			TradeRatios tr = UpgradeAccount.this.getWrapped().getUniverse().getTradeRatios();
-			int best = ArrayUtils.binarySearch(0, productions.length, util -> {
-				if (Double.isNaN(productions[util])) {
-					theCrawlerUtil = util * 10;
-					productions[util] = eco.getFullProduction(UpgradeAccount.this, this).asCost().getMetalValue(tr);
-				}
-				if (util > 0 && Double.isNaN(productions[util - 1])) {
-					theCrawlerUtil = (util - 1) * 10;
-					productions[util - 1] = eco.getFullProduction(UpgradeAccount.this, this).asCost().getMetalValue(tr);
-					if (productions[util - 1] > productions[util]) {
-						return -1;
-					}
-				}
-				if (util < productions.length - 1 && Double.isNaN(productions[util + 1])) {
-					theCrawlerUtil = (util + 1) * 10;
-					productions[util + 1] = eco.getFullProduction(UpgradeAccount.this, this).asCost().getMetalValue(tr);
-					if (productions[util + 1] > productions[util]) {
-						return 1;
-					}
-				}
-				return 0;
-			});
-			theCrawlerUtil = best * 10;
-			return productions[best];
+			OGameUtils.optimizeEnergy(UpgradeAccount.this, this, eco);
 		}
 
 		@Override
@@ -438,6 +391,7 @@ public class UpgradeAccount implements Account {
 
 		@Override
 		public Planet setFusionReactorUtilization(int utilization) {
+			theFusionUtil = utilization;
 			return this;
 		}
 
@@ -461,6 +415,7 @@ public class UpgradeAccount implements Account {
 
 		@Override
 		public Planet setCrawlerUtilization(int utilization) {
+			theCrawlerUtil = utilization;
 			return this;
 		}
 

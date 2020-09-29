@@ -1,20 +1,29 @@
 package org.quark.ogame.uni.ui;
 
+import java.awt.Dialog.ModalityType;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.swing.JDialog;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 
+import org.observe.Observable;
 import org.observe.collect.ObservableCollection;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.PanelPopulation.PanelPopulator;
+import org.observe.util.swing.WindowPopulation;
 import org.qommons.ArrayUtils;
 import org.qommons.QommonsUtils;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementId;
 import org.qommons.io.Format;
+import org.qommons.threading.QommonsTimer;
 import org.quark.ogame.OGameUtils;
+import org.quark.ogame.roi.RoiSequence;
+import org.quark.ogame.roi.RoiSequenceElement;
+import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.UpgradeCost;
@@ -77,75 +86,77 @@ public class UpgradePanel extends JPanel {
 
 	public void addPanel(PanelPopulator<?, ?> panel) {
 		Format<Double> commaFormat = Format.doubleFormat("#,##0");
-		panel.addTable(theUpgrades, upgradeTable -> upgradeTable.fill()//
+		// panel.addButton("Generate ROI Sequence", __ -> genRoiSequence(), null);
+		panel.addTable(theUpgrades,
+			upgradeTable -> upgradeTable.fill()//
 				.dragSourceRow(null).dragAcceptRow(null)// Make the rows draggable
-			.withColumn("Planet", String.class, upgrade -> {
-				if (upgrade == theTotalUpgrade) {
-					return "Total";
-				} else if (upgrade == thePlanetTotalUpgrade) {
-					return "Planet Total";
-				} else if (upgrade.getPlanet() != null) {
-					return upgrade.getPlanet().getName() + (upgrade.getUpgrade().isMoon() ? " Moon" : "");
-				} else {
-					return "";
-				}
-			}, planetCol -> {
-				planetCol.decorate((cell, d) -> {
-					PlanetWithProduction p = theUniGui.getSelectedPlanet().get();
-					if (p != null && cell.getModelValue().getPlanet() == p.planet) {
-						d.bold();
+				.withColumn("Planet", String.class, upgrade -> {
+					if (upgrade == theTotalUpgrade) {
+						return "Total";
+					} else if (upgrade == thePlanetTotalUpgrade) {
+						return "Planet Total";
+					} else if (upgrade.getPlanet() != null) {
+						return upgrade.getPlanet().getName() + (upgrade.getUpgrade().isMoon() ? " Moon" : "");
+					} else {
+						return "";
 					}
-				});
-			})//
-			.withColumn("Upgrade", AccountUpgradeType.class,
-				upgrade -> upgrade.getUpgrade() == null ? null : upgrade.getUpgrade().getType(),
-				c -> c.formatText(t -> t == null ? "" : t.toString()))//
-			.withColumn("From", int.class, upgrade -> upgrade.getFrom(),
+				}, planetCol -> {
+					planetCol.decorate((cell, d) -> {
+						PlanetWithProduction p = theUniGui.getSelectedPlanet().get();
+						if (p != null && cell.getModelValue().getPlanet() == p.planet) {
+							d.bold();
+						}
+					});
+				})//
+				.withColumn("Upgrade", AccountUpgradeType.class,
+					upgrade -> upgrade.getUpgrade() == null ? null : upgrade.getUpgrade().getType(),
+					c -> c.formatText(t -> t == null ? "" : t.toString()))//
+				.withColumn("From", int.class, upgrade -> upgrade.getFrom(),
 					fromCol -> fromCol.withWidths(25, 45, 100)//
-					.formatText((u, i) -> u.getUpgrade() == null ? "" : ("" + i)))//
-			.withColumn("To", int.class, upgrade -> upgrade.getTo(),
+						.formatText((u, i) -> u.getUpgrade() == null ? "" : ("" + i)))//
+				.withColumn("To", int.class, upgrade -> upgrade.getTo(),
 					toCol -> toCol.withWidths(25, 45, 100)//
-					.formatText((u, i) -> u.getUpgrade() == null ? "" : ("" + i)))//
-			.withColumn("Metal", String.class,
-				upgrade -> upgrade.getCost() == null ? "" : OGameUtils.printResourceAmount(upgrade.getCost().getMetal()),
-				metalCol -> metalCol.decorate((cell, d) -> {
-					if (cell.getModelValue().getUpgrade() == null) {
-						d.bold();
+						.formatText((u, i) -> u.getUpgrade() == null ? "" : ("" + i)))//
+				.withColumn("Metal", String.class,
+					upgrade -> upgrade.getCost() == null ? "" : OGameUtils.printResourceAmount(upgrade.getCost().getMetal()),
+					metalCol -> metalCol.decorate((cell, d) -> {
+						if (cell.getModelValue().getUpgrade() == null) {
+							d.bold();
+						}
+					}))//
+				.withColumn("Crystal", String.class,
+					upgrade -> upgrade.getCost() == null ? "" : OGameUtils.printResourceAmount(upgrade.getCost().getCrystal()),
+					crystalCol -> crystalCol.decorate((cell, d) -> {
+						if (cell.getModelValue().getUpgrade() == null) {
+							d.bold();
+						}
+					}))//
+				.withColumn("Deut", String.class,
+					upgrade -> upgrade.getCost() == null ? "" : OGameUtils.printResourceAmount(upgrade.getCost().getDeuterium()),
+					deutCol -> deutCol.decorate((cell, d) -> {
+						if (cell.getModelValue().getUpgrade() == null) {
+							d.bold();
+						}
+					}))//
+				.withColumn("Time", String.class, upgrade -> {
+					if (upgrade.getCost() == null || upgrade.getCost().getUpgradeTime() == null) {
+						return "";
 					}
-				}))//
-			.withColumn("Crystal", String.class,
-				upgrade -> upgrade.getCost() == null ? "" : OGameUtils.printResourceAmount(upgrade.getCost().getCrystal()),
-				crystalCol -> crystalCol.decorate((cell, d) -> {
-					if (cell.getModelValue().getUpgrade() == null) {
-						d.bold();
+					return OGameUniGui.printUpgradeTime(upgrade.getCost().getUpgradeTime());
+				}, timeCol -> timeCol.withWidths(40, 100, 120))//
+				.withColumn("Cargoes", Long.class, upgrade -> {
+					if (upgrade.getUpgrade() == null || upgrade.getCost() == null) {
+						return null;
 					}
-				}))//
-			.withColumn("Deut", String.class,
-				upgrade -> upgrade.getCost() == null ? "" : OGameUtils.printResourceAmount(upgrade.getCost().getDeuterium()),
-				deutCol -> deutCol.decorate((cell, d) -> {
-					if (cell.getModelValue().getUpgrade() == null) {
-						d.bold();
-					}
-				}))//
-			.withColumn("Time", String.class, upgrade -> {
-				if (upgrade.getCost() == null || upgrade.getCost().getUpgradeTime() == null) {
-					return "";
-				}
-				return OGameUniGui.printUpgradeTime(upgrade.getCost().getUpgradeTime());
-			}, timeCol -> timeCol.withWidths(40, 100, 120))//
-			.withColumn("Cargoes", Long.class, upgrade -> {
-				if (upgrade.getUpgrade() == null || upgrade.getCost() == null) {
-					return null;
-				}
-				long cost = upgrade.getCost().getTotal();
-				int cargoSpace = theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.LargeCargo,
-					theUniGui.getSelectedAccount().get());
-				return (long) Math.ceil(cost * 1.0 / cargoSpace);
-			}, cargoCol -> cargoCol.formatText(i -> i == null ? "" : commaFormat.format(i * 1.0)).withWidths(40, 50, 80))//
-			.withColumn("ROI", Duration.class, upgrade -> upgrade.getROI(), //
-				roiCol -> roiCol.formatText(roi -> roi == null ? "" : QommonsUtils.printDuration(roi, true)).withWidths(50, 100, 150))//
-				.withMultiAction(upgrades -> sortUpgrades(upgrades), action -> action//
-					.allowWhenMulti(items -> canSortUpgrades(items), null).modifyButton(button -> button.withText("Sort by ROI")))
+					long cost = upgrade.getCost().getTotal();
+					int cargoSpace = theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.LargeCargo,
+						theUniGui.getSelectedAccount().get());
+					return (long) Math.ceil(cost * 1.0 / cargoSpace);
+				}, cargoCol -> cargoCol.formatText(i -> i == null ? "" : commaFormat.format(i * 1.0)).withWidths(40, 50, 80))//
+				.withColumn("ROI", Duration.class, upgrade -> upgrade.getROI(), //
+					roiCol -> roiCol.formatText(roi -> roi == null ? "" : QommonsUtils.printDuration(roi, true)).withWidths(50, 100, 150))//
+		// .withMultiAction(upgrades -> sortUpgrades(upgrades), action -> action//
+		// .allowWhenMulti(items -> canSortUpgrades(items), null).modifyButton(button -> button.withText("Sort by ROI")))
 		);
 	}
 
@@ -211,5 +222,34 @@ public class UpgradePanel extends JPanel {
 			}
 		}
 		return null;
+	}
+
+	private void genRoiSequence() {
+		ObservableCollection<RoiSequenceElement> sequence = ObservableCollection.build(RoiSequenceElement.class).build(); // Safe
+		Account account = theUniGui.getSelectedAccount().get();
+		WindowPopulation
+			.populateDialog(new JDialog(SwingUtilities.getWindowAncestor(this), "ROI Sequence", ModalityType.MODELESS), //
+				Observable.empty(), true)//
+			.withVContent(panel -> panel.fill().fillV().addTable(sequence,
+				table -> table.fill().fillV()//
+				.withColumn("Upgrade", AccountUpgradeType.class, el -> el.upgrade, null)//
+					.withColumn("Planet", String.class, el -> {
+						if (el.planetIndex < 0) {
+							return "";
+						} else if (el.planetIndex < account.getPlanets().getValues().size()) {
+							return account.getPlanets().getValues().get(el.planetIndex).getName();
+						} else {
+							return "Planet " + (el.planetIndex + 1);
+						}
+					}, null)//
+					.withColumn("Level", Integer.class, el -> el.getTargetLevel(), null)//
+					.withColumn("ROI", Duration.class, el -> el.roi == 0 ? null : Duration.ofHours(el.roi),
+						col -> col.formatText(d -> d == null ? "" : QommonsUtils.printDuration(d, true)))//
+					.withColumn("Time", Duration.class, el -> el.getTime() == 0 ? null : Duration.ofSeconds(el.getTime()),
+						col -> col.formatText(d -> d == null ? "" : QommonsUtils.printDuration(d, true)))//
+			)).getWindow().setVisible(true);
+		QommonsTimer.getCommonInstance().offload(() -> {
+			new RoiSequence(theUniGui.getRules().get(), account).produceSequence(sequence);
+		});
 	}
 }

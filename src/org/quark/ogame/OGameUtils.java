@@ -1,9 +1,19 @@
 package org.quark.ogame;
 
 import java.text.DecimalFormat;
+import java.util.Arrays;
 
+import org.qommons.ArrayUtils;
 import org.qommons.io.Format;
+import org.quark.ogame.uni.Account;
+import org.quark.ogame.uni.OGameEconomyRuleSet;
+import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
+import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
+import org.quark.ogame.uni.Planet;
+import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
+import org.quark.ogame.uni.TradeRatios;
+import org.quark.ogame.uni.Utilizable;
 
 public class OGameUtils {
 	public static final Format<Double> FORMAT = Format.doubleFormat(5).printIntFor(6, false).withExpCondition(4, -1)//
@@ -80,5 +90,82 @@ public class OGameUtils {
 			return "IPM";
 		}
 		throw new IllegalStateException("Unrecognized ship: " + type);
+	}
+
+	public static int getRequiredSatellites(Account account, Planet planet, OGameEconomyRuleSet economy) {
+		Production energy = economy.getProduction(account, planet, ResourceType.Energy, 1);
+		int energyNeeded = -energy.totalNet + energy.byType.get(ProductionSource.Satellite);
+		int newSats;
+		if (energyNeeded < 0) {
+			newSats = 0;
+		} else {
+			int satEnergy = economy.getSatelliteEnergy(account, planet);
+			if (satEnergy <= 0) {
+				return -1;
+			}
+			newSats = (int) Math.ceil(energyNeeded * 1.0 / satEnergy);
+			int preSats = planet.getSolarSatellites();
+			planet.setSolarSatellites(newSats);
+			int energyExcess = economy.getProduction(account, planet, ResourceType.Energy, 1).totalNet;
+			if (energyExcess > satEnergy) {
+				// Bonuses like for Collector or Officers can bump this up
+				int removeSats = (int) Math.floor(energyExcess * 1.0 / (energyExcess + energyNeeded) * newSats);
+				newSats -= removeSats;
+			}
+			planet.setSolarSatellites(preSats);
+		}
+		return newSats;
+	}
+
+	public static double optimizeEnergy(Account account, Planet planet, OGameEconomyRuleSet economy) {
+		int maxFusion = economy.getMaxUtilization(Utilizable.FusionReactor, account, planet);
+		int maxCrawler = economy.getMaxUtilization(Utilizable.Crawler, account, planet);
+		planet.setFusionReactorUtilization(maxFusion);
+		planet.setCrawlerUtilization(maxCrawler);
+		// Find the fusion/crawler utilization combination with the best production
+		double bestProduction = optimizeCrawlerUtil(account, planet, economy);
+		if (planet.getFusionReactor() > 0) {
+			for (int f = maxFusion - 10; f >= 0; f -= 10) {
+				int preCrawlerUtil = planet.getCrawlerUtilization();
+				planet.setFusionReactorUtilization(f);
+				double production = optimizeCrawlerUtil(account, planet, economy);
+				if (production < bestProduction) {
+					planet.setFusionReactorUtilization(f + 10);
+					planet.setCrawlerUtilization(preCrawlerUtil);
+					break;
+				}
+			}
+		}
+		return bestProduction;
+	}
+
+	private static double optimizeCrawlerUtil(Account account, Planet planet, OGameEconomyRuleSet eco) {
+		int maxCrawler = eco.getMaxUtilization(Utilizable.Crawler, account, planet);
+		double[] productions = new double[maxCrawler / 10 + 1];
+		Arrays.fill(productions, Double.NaN);
+		TradeRatios tr = account.getUniverse().getTradeRatios();
+		int best = ArrayUtils.binarySearch(0, productions.length, util -> {
+			if (Double.isNaN(productions[util])) {
+				planet.setCrawlerUtilization(util * 10);
+				productions[util] = eco.getFullProduction(account, planet).asCost().getMetalValue(tr);
+			}
+			if (util > 0 && Double.isNaN(productions[util - 1])) {
+				planet.setCrawlerUtilization((util - 1) * 10);
+				productions[util - 1] = eco.getFullProduction(account, planet).asCost().getMetalValue(tr);
+				if (productions[util - 1] > productions[util]) {
+					return -1;
+				}
+			}
+			if (util < productions.length - 1 && Double.isNaN(productions[util + 1])) {
+				planet.setCrawlerUtilization((util + 1) * 10);
+				productions[util + 1] = eco.getFullProduction(account, planet).asCost().getMetalValue(tr);
+				if (productions[util + 1] > productions[util]) {
+					return 1;
+				}
+			}
+			return 0;
+		});
+		planet.setCrawlerUtilization(best * 10);
+		return productions[best];
 	}
 }

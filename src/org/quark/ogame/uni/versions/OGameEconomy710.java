@@ -565,6 +565,11 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				throw new IllegalStateException();
 			}
 
+			if (energyFactor < 0) {
+				energyFactor = 0;
+			} else if (energyFactor > 1) {
+				energyFactor=1;
+			}
 			int typeAmount = production.base * account.getUniverse().getEconomySpeed();
 			byType.put(ProductionSource.Base, typeAmount);
 			totalProduced += typeAmount;
@@ -742,7 +747,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			if (toLevel < fromLevel) {
 				resMult = (toLevel - fromLevel) * 0.35; // Scrapping
 				for (int i = 0; i < 3; i++) {
-					resAmounts[i] = Math.round(resAmounts[i] * resMult);
+					resAmounts[i] = -Math.round(resAmounts[i] * resMult);
 				}
 			} else {
 				for (int i = 0; i < 3; i++) {

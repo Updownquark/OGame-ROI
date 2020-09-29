@@ -4,25 +4,38 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.ResourceType;
 
 public enum OGameImprovementType {
 	// Helper improvements
-	Robotics(true, false), Nanite(true, false), ResearchLab(true, false), IRN(true, false), //
+	Robotics(AccountUpgradeType.RoboticsFactory, true, false),
+	Nanite(AccountUpgradeType.NaniteFactory, true, false),
+	ResearchLab(AccountUpgradeType.ResearchLab, true, false),
+	IRN(AccountUpgradeType.IntergalacticResearchNetwork, true, false), //
 	// Buildings
-	Metal(false, false, Robotics, Nanite), Crystal(false, false, Robotics, Nanite), Deut(false, false, Robotics, Nanite), Fusion(false, true, Robotics, Nanite), //
+	Metal(AccountUpgradeType.MetalMine, false, false, Robotics, Nanite),
+	Crystal(AccountUpgradeType.CrystalMine, false, false, Robotics, Nanite),
+	Deut(AccountUpgradeType.DeuteriumSynthesizer, false, false, Robotics, Nanite),
+	Fusion(AccountUpgradeType.FusionReactor, false, true, Robotics, Nanite), //
 	// Research
-	Energy(false, true, ResearchLab, IRN), Plasma(false, false, ResearchLab, IRN), Planet(false, false, ResearchLab, IRN),//
+	Energy(AccountUpgradeType.Energy, false, true, ResearchLab, IRN),
+	Plasma(AccountUpgradeType.Plasma, false, false, ResearchLab, IRN),
+	Planet(AccountUpgradeType.Astrophysics, false, false, ResearchLab, IRN), //
 	//Storage
-	MetalStorage(false, false), CrystalStorage(false, false), DeutStorage(false, false),//
+	MetalStorage(AccountUpgradeType.MetalStorage, false, false),
+	CrystalStorage(AccountUpgradeType.CrystalStorage, false, false),
+	DeutStorage(AccountUpgradeType.DeuteriumStorage, false, false), //
 	
-	Crawler(false, false);
+	Crawler(AccountUpgradeType.Crawler, false, false);
 
+	public final AccountUpgradeType upgradeType;
 	public final boolean isHelper;
 	public final boolean energyType;
 	public final List<OGameImprovementType> helpers;
 
-	private OGameImprovementType(boolean helper, boolean energyType, OGameImprovementType... helpers) {
+	private OGameImprovementType(AccountUpgradeType type, boolean helper, boolean energyType, OGameImprovementType... helpers) {
+		upgradeType = type;
 		isHelper=helper;
 		this.energyType=energyType;
 		this.helpers = Collections.unmodifiableList(Arrays.asList(helpers));
