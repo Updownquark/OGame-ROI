@@ -101,10 +101,10 @@ public class UpgradePanel extends JPanel {
 				upgrade -> upgrade.getUpgrade() == null ? null : upgrade.getUpgrade().getType(),
 				c -> c.formatText(t -> t == null ? "" : t.toString()))//
 			.withColumn("From", int.class, upgrade -> upgrade.getFrom(),
-				fromCol -> fromCol.withWidths(25, 35, 40)//
+					fromCol -> fromCol.withWidths(25, 45, 100)//
 					.formatText((u, i) -> u.getUpgrade() == null ? "" : ("" + i)))//
 			.withColumn("To", int.class, upgrade -> upgrade.getTo(),
-				toCol -> toCol.withWidths(25, 35, 40)//
+					toCol -> toCol.withWidths(25, 45, 100)//
 					.formatText((u, i) -> u.getUpgrade() == null ? "" : ("" + i)))//
 			.withColumn("Metal", String.class,
 				upgrade -> upgrade.getCost() == null ? "" : OGameUtils.printResourceAmount(upgrade.getCost().getMetal()),
