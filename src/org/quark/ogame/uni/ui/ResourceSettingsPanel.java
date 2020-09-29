@@ -1,9 +1,9 @@
 package org.quark.ogame.uni.ui;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 
 import javax.swing.JPanel;
@@ -28,22 +28,22 @@ import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.Utilizable;
 
 public class ResourceSettingsPanel extends JPanel {
+	private static final Map<Integer, ObservableCollection<Integer>> PERCENTAGE_OPTIONS = new ConcurrentHashMap<>();
+
+	public static ObservableCollection<Integer> getPercentages(int max) {
+		return PERCENTAGE_OPTIONS.computeIfAbsent(max, __ -> {
+			List<Integer> pc = new ArrayList<>(max / 10 + 1);
+			for (int i = max; i >= 0; i -= 10) {
+				pc.add(i);
+			}
+			return ObservableCollection.of(TypeTokens.get().INT, pc);
+		});
+	}
+
 	private final OGameUniGui theUniGui;
-	private final Map<Integer, ObservableCollection<String>> thePercentages;
 
 	public ResourceSettingsPanel(OGameUniGui uniGui) {
 		theUniGui = uniGui;
-		thePercentages = new HashMap<>();
-	}
-
-	ObservableCollection<String> getPercentages(int max) {
-		return thePercentages.computeIfAbsent(max, __ -> {
-			List<String> pc = new ArrayList<>(max / 10 + 1);
-			for (int i = max; i >= 0; i -= 10) {
-				pc.add(i + "%");
-			}
-			return ObservableCollection.of(TypeTokens.get().STRING, pc);
-		});
 	}
 
 	public void addPanel(PanelPopulator<?, ?> panel) {
@@ -85,7 +85,8 @@ public class ResourceSettingsPanel extends JPanel {
 								.editableIf((row, u) -> !goals && isUtilEditable(row)).asCombo(s -> s, (cell, until) -> {
 									int maxUtil = theUniGui.getRules().get().economy().getMaxUtilization(cell.getModelValue().utilizable, //
 										theUniGui.getSelectedAccount().get(), selectedPlanet.get().planet);
-									return getPercentages(maxUtil);
+									return getPercentages(maxUtil).flow().transform(TypeTokens.get().STRING, //
+										tx -> tx.cache(false).map(p -> p + "%")).collectPassive();
 								})
 							.filterAccept((row, util) -> isUtilAcceptable(row.get(), util))//
 							.clicks(1)))//

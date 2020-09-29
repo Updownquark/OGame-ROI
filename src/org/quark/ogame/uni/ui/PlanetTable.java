@@ -44,6 +44,7 @@ import org.quark.ogame.uni.UpgradeAccount;
 import org.quark.ogame.uni.UpgradeAccount.UpgradePlanet;
 import org.quark.ogame.uni.UpgradeAccount.UpgradePlanet.UpgradeMoon;
 import org.quark.ogame.uni.UpgradeAccount.UpgradeRockyBody;
+import org.quark.ogame.uni.Utilizable;
 
 import com.google.common.reflect.TypeToken;
 
@@ -54,7 +55,7 @@ public class PlanetTable {
 	}
 
 	enum PlanetColumnSet {
-		Mines, Facilities, Defense, Fleet, Moon, MoonFleet
+		Mines, Utilization, Facilities, Defense, Fleet, Moon, MoonFleet
 	}
 	private final OGameUniGui theUniGui;
 
@@ -71,8 +72,6 @@ public class PlanetTable {
 	static final String UPGRADE_DONE = "Done";
 
 	public void addPlanetTable(PanelPopulation.PanelPopulator<?, ?> panel) {
-		ObservableCollection<Integer> usageOptions = ObservableCollection.of(TypeTokens.get().INT, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10,
-			0);
 		ObservableCollection<Integer> itemOptions = ObservableCollection.of(TypeTokens.get().INT, 40, 30, 20, 10, 0);
 
 		ObservableCollection<Object> planetUpgrades = ObservableCollection.build(Object.class).safe(false).build();
@@ -217,16 +216,32 @@ public class PlanetTable {
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> usageColumns1 = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			planetColumn("M %", int.class, p -> p.planet == null ? null : p.planet.getMetalUtilization(), Planet::setMetalUtilization, 45)
 				.withHeaderTooltip("Metal Mine Utilization").formatText(v -> v == null ? "" : v + "%")
-				.withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)), //
+				.withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
+					int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.MetalMine,
+						theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
+					return ResourceSettingsPanel.getPercentages(max);
+				}).clicks(1)), //
 			planetColumn("C %", int.class, p -> p.planet == null ? null : p.planet.getCrystalUtilization(), Planet::setCrystalUtilization,
 				45).withHeaderTooltip("Crystal Mine Utilization").formatText(v -> v == null ? "" : v + "%")
-					.withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)), //
+					.withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
+						int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.CrystalMine,
+							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
+						return ResourceSettingsPanel.getPercentages(max);
+					}).clicks(1)), //
 			planetColumn("D %", int.class, p -> p.planet == null ? null : p.planet.getDeuteriumUtilization(),
 				Planet::setDeuteriumUtilization, 45).withHeaderTooltip("Deuterium Synthesizer Utilization")
-					.formatText(v -> v == null ? "" : v + "%").withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)), //
+					.formatText(v -> v == null ? "" : v + "%").withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
+						int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.DeuteriumSynthesizer,
+							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
+						return ResourceSettingsPanel.getPercentages(max);
+					}).clicks(1)), //
 			planetColumn("Cr %", int.class, p -> p.planet == null ? null : p.planet.getCrawlerUtilization(), Planet::setCrawlerUtilization,
 				45).withHeaderTooltip("Crawler Utilization").formatText(v -> v == null ? "" : v + "%")
-					.withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)) //
+					.withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
+						int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.Crawler,
+							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
+						return ResourceSettingsPanel.getPercentages(max);
+					}).clicks(1)) //
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> itemColumns = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			planetColumn("M+", int.class, p -> p.planet == null ? null : p.planet.getMetalBonus(), Planet::setMetalBonus, 45)
@@ -279,14 +294,33 @@ public class PlanetTable {
 			intPlanetColumn("Fusion", AccountUpgradeType.FusionReactor, 55),
 			planetColumn("Net Enrgy", int.class, p -> p.planet == null ? null : p.getEnergy().totalNet, null, 65));
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> usageColumns2 = ObservableCollection.of(PLANET_COLUMN_TYPE,
+			planetColumn("Solar %", int.class, p -> p.planet == null ? null : p.planet.getSolarPlantUtilization(),
+				Planet::setSolarPlantUtilization, 55).withHeaderTooltip("Solar Plant Utilization").formatText(v -> v == null ? "" : v + "%")
+					.withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
+						int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.SolarPlant,
+							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
+						return ResourceSettingsPanel.getPercentages(max);
+					}).clicks(1)), //
+			planetColumn("Sat %", int.class, p -> p.planet == null ? null : p.planet.getSolarSatelliteUtilization(),
+				Planet::setSolarSatelliteUtilization, 45).withHeaderTooltip("Solar Satellite Utilization")
+					.formatText(v -> v == null ? "" : v + "%").withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
+						int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.SolarSatellite,
+							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
+						return ResourceSettingsPanel.getPercentages(max);
+					}).clicks(1)), //
 			planetColumn("FZN %", int.class, p -> p.planet == null ? null : p.planet.getFusionReactorUtilization(),
 				Planet::setFusionReactorUtilization, 45).withHeaderTooltip("Fusion Reactor Utilization")
-					.formatText(v -> v == null ? "" : v + "%").withMutation(m -> m.asCombo(v -> v + "%", usageOptions).clicks(1)) //
+					.formatText(v -> v == null ? "" : v + "%").withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
+						int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.FusionReactor,
+							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
+						return ResourceSettingsPanel.getPercentages(max);
+					}).clicks(1)), //
+			planetColumn("Net Enrgy", int.class, p -> p.planet == null ? null : p.getEnergy().totalNet, null, 65)
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> storageColumns = ObservableCollection.of(PLANET_COLUMN_TYPE,
-			intPlanetColumn("M Stor", AccountUpgradeType.MetalStorage, 55), //
-			intPlanetColumn("C Stor", AccountUpgradeType.CrystalStorage, 55), //
-			intPlanetColumn("D Stor", AccountUpgradeType.DeuteriumStorage, 55)//
+			intPlanetColumn("M Stor", AccountUpgradeType.MetalStorage, 45), //
+			intPlanetColumn("C Stor", AccountUpgradeType.CrystalStorage, 45), //
+			intPlanetColumn("D Stor", AccountUpgradeType.DeuteriumStorage, 45)//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mainFacilities = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			intPlanetColumn("Robotics", AccountUpgradeType.RoboticsFactory, 60), //
@@ -403,7 +437,11 @@ public class PlanetTable {
 			switch (columnSet) {
 			case Mines:
 				columnSets.put(columnSet, ObservableCollection.flattenCollections(PLANET_COLUMN_TYPE, //
-					upgradeColumn, mineColumns, energyBldgs, tempColumns, itemColumns, storageColumns, coordColumn).collect());
+					upgradeColumn, mineColumns, energyBldgs, tempColumns, storageColumns, coordColumn).collect());
+				break;
+			case Utilization:
+				columnSets.put(columnSet, ObservableCollection.flattenCollections(PLANET_COLUMN_TYPE, //
+					usageColumns1, itemColumns, usageColumns2).collect());
 				break;
 			case Facilities:
 				columnSets.put(columnSet, ObservableCollection.flattenCollections(PLANET_COLUMN_TYPE, //
