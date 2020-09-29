@@ -534,8 +534,7 @@ public class UpgradeAccount implements Account {
 	public static abstract class UpgradeRockyBody implements CondensedRockyBody {
 		private final RockyBody theWrappedBody;
 		private Map<BuildingType, List<PlannedUpgrade>> thePlannedUpgrades;
-		private UpgradeStructures theStructures;
-		private UpgradeFleet theFleet;
+		private UpgradeShips theStructures;
 
 		UpgradeRockyBody(RockyBody wrappedBody) {
 			theWrappedBody = wrappedBody;
@@ -547,11 +546,7 @@ public class UpgradeAccount implements Account {
 
 		void withUpgrade(PlannedUpgrade upgrade) {
 			if (upgrade.getType().shipyardItem != null) {
-				if (upgrade.getType().shipyardItem.mobile) {
-					getStationedFleet().withUpgrade(upgrade);
-				} else {
-					getStationaryStructures().withUpgrade(upgrade);
-				}
+				getStationaryStructures().withUpgrade(upgrade);
 				return;
 			}
 			if (thePlannedUpgrades == null) {
@@ -565,11 +560,7 @@ public class UpgradeAccount implements Account {
 
 		void withoutUpgrade(PlannedUpgrade upgrade) {
 			if (upgrade.getType().shipyardItem != null) {
-				if (upgrade.getType().shipyardItem.mobile) {
-					if (theFleet != null) {
-						theFleet.withoutUpgrade(upgrade);
-					}
-				} else if (theStructures != null) {
+				if (theStructures != null) {
 					theStructures.withoutUpgrade(upgrade);
 				}
 			} else if (thePlannedUpgrades != null) {
@@ -583,9 +574,6 @@ public class UpgradeAccount implements Account {
 			}
 			if (theStructures != null) {
 				theStructures.clearUpgrades();
-			}
-			if (theFleet != null) {
-				theFleet.clearUpgrades();
 			}
 		}
 
@@ -605,19 +593,19 @@ public class UpgradeAccount implements Account {
 		}
 
 		@Override
-		public UpgradeStructures getStationaryStructures() {
+		public UpgradeShips getStationaryStructures() {
 			if (theStructures == null) {
-				theStructures = new UpgradeStructures();
+				theStructures = new UpgradeShips();
 			}
 			return theStructures;
 		}
 
 		@Override
-		public UpgradeFleet getStationedFleet() {
-			if (theFleet == null) {
-				theFleet = new UpgradeFleet();
+		public UpgradeShips getStationedFleet() {
+			if (theStructures == null) {
+				theStructures = new UpgradeShips();
 			}
-			return theFleet;
+			return theStructures;
 		}
 
 		@Override
@@ -641,10 +629,10 @@ public class UpgradeAccount implements Account {
 			return this;
 		}
 
-		public class UpgradeStructures implements CondensedStationaryStructures {
+		public class UpgradeShips implements CondensedStationaryStructures, CondensedFleet {
 			private Map<ShipyardItemType, List<PlannedUpgrade>> thePlannedUpgrades;
 
-			UpgradeStructures() {}
+			UpgradeShips() {}
 
 			void withUpgrade(PlannedUpgrade upgrade) {
 				if (thePlannedUpgrades == null) {
@@ -672,7 +660,7 @@ public class UpgradeAccount implements Account {
 
 			@Override
 			public int getItems(ShipyardItemType type) {
-				int level = theWrappedBody.getStationaryStructures().getItems(type);
+				int level = theWrappedBody.getStationedShips(type);
 				if (thePlannedUpgrades != null) {
 					for (PlannedUpgrade upgrade : thePlannedUpgrades.getOrDefault(type, Collections.emptyList())) {
 						level+=upgrade.getQuantity();
@@ -682,53 +670,7 @@ public class UpgradeAccount implements Account {
 			}
 
 			@Override
-			public UpgradeStructures setItems(ShipyardItemType type, int number) {
-				return this;
-			}
-		}
-
-		public class UpgradeFleet implements CondensedFleet {
-			private Map<ShipyardItemType, List<PlannedUpgrade>> thePlannedUpgrades;
-
-			UpgradeFleet() {}
-
-			void withUpgrade(PlannedUpgrade upgrade) {
-				if (thePlannedUpgrades == null) {
-					thePlannedUpgrades = new HashMap<>();
-				}
-				List<PlannedUpgrade> upgrades = thePlannedUpgrades.computeIfAbsent(upgrade.getType().shipyardItem,
-					__ -> new LinkedList<>());
-				if (!upgrades.contains(upgrade)) {
-					upgrades.add(upgrade);
-				}
-			}
-
-			void withoutUpgrade(PlannedUpgrade upgrade) {
-				if (thePlannedUpgrades == null) {
-					return;
-				}
-				thePlannedUpgrades.getOrDefault(upgrade.getType().shipyardItem, Collections.emptyList()).remove(upgrade);
-			}
-
-			void clearUpgrades() {
-				if (thePlannedUpgrades != null) {
-					thePlannedUpgrades.clear();
-				}
-			}
-
-			@Override
-			public int getItems(ShipyardItemType type) {
-				int level = theWrappedBody.getStationedFleet().getItems(type);
-				if (thePlannedUpgrades != null) {
-					for (PlannedUpgrade upgrade : thePlannedUpgrades.getOrDefault(type, Collections.emptyList())) {
-						level += upgrade.getQuantity();
-					}
-				}
-				return level;
-			}
-
-			@Override
-			public UpgradeFleet setItems(ShipyardItemType type, int number) {
+			public UpgradeShips setItems(ShipyardItemType type, int number) {
 				return this;
 			}
 		}
