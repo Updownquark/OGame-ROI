@@ -583,10 +583,14 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			totalProduced += typeAmount;
 
 			double multiplier = getSlotProductionMultiplier(account, planet, resourceType);
-			typeAmount = (int) Math.round((totalProduced) * multiplier);
-			byType.put(ProductionSource.Slot, typeAmount);
-			mineProduction += typeAmount;
-			totalProduced += typeAmount;
+			if (multiplier > 0) {
+				typeAmount = (int) Math.round(totalProduced * multiplier);
+				mineProduction = (int) Math.round((1 + multiplier) * mineProduction);
+				byType.put(ProductionSource.Slot, typeAmount);
+				totalProduced += typeAmount;
+			} else {
+				byType.put(ProductionSource.Slot, 0);
+			}
 
 			// Crawler production
 			int crawlers = getUsableCrawlers(account, planet);
