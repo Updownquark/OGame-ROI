@@ -137,8 +137,6 @@ public class OGameUniGui extends JPanel {
 		PlanetWithProduction total = new PlanetWithProduction(null, null)//
 			.setProduction(ZERO, ZERO, ZERO, ZERO).setUpgradeProduction(ZERO, ZERO, ZERO, ZERO);
 		theTotalProduction = ObservableCollection.build(PlanetWithProduction.class).safe(false).build().with(total);
-		// Update total for each change
-		thePlanets.simpleChanges().act(__ -> EventQueue.invokeLater(this::recalcPlanning));
 		thePlanetsWithTotal = ObservableCollection.flattenCollections(TypeTokens.get().of(PlanetWithProduction.class), //
 			getPlanets(), theTotalProduction).collect();
 
@@ -150,33 +148,12 @@ public class OGameUniGui extends JPanel {
 			.flow().transform(TypeTokens.get().of(PlannedAccountUpgrade.class),
 				tx -> tx.cache(true).reEvalOnUpdate(false).map(pu -> new PlannedAccountUpgrade(pu)))
 			.collect();
-//		theUpgradeAccount.changes().act(evt -> {
-//			UpgradeAccount ua = evt.getNewValue();
-//			if (ua == null) {
-//				return;
-//			} else if (evt.getNewValue() == evt.getOldValue()) {
-//				for (PlannedAccountUpgrade upgrade : theUpgrades) {
-//					if (upgrade.getPlanet() == null) {
-//						upgrade.clear();
-//					}
-//				}
-//				return;
-//			} else {
-//				Subscription sub = ua.getWrapped().getPlannedUpgrades().getValues().subscribe(upgradeEvt -> {
-//					if (upgradeEvt.getType() != CollectionChangeType.add) {
-//						ua.withoutUpgrade(upgradeEvt.getOldValue());
-//					}
-//					if (upgradeEvt.getType() != CollectionChangeType.remove) {
-//						ua.withUpgrade(upgradeEvt.getNewValue());
-//					}
-//				}, true);
-//				theUpgradeAccount.noInitChanges().filter(evt2 -> evt2.getNewValue() != evt2.getOldValue()).take(1)
-//					.act(__ -> sub.unsubscribe());
-//			}
-//		});
 		thePlanets.changes().act(evt -> {
 			switch (evt.type) {
 			case add:
+				for (PlanetWithProduction p : evt.getValues()) {
+					updateProduction(p);
+				}
 				break;
 			case remove:
 				Account current = theSelectedAccount.get();
@@ -192,21 +169,18 @@ public class OGameUniGui extends JPanel {
 				}
 				break;
 			case set:
-				if (evt.type == CollectionChangeType.set) {
-					for (PlanetWithProduction p : evt.getValues()) {
-						for (PlannedAccountUpgrade upgrade : theUpgrades) {
-							if (upgrade.getPlanet() == p.planet) {
-								upgrade.clear();
-							}
+				for (PlanetWithProduction p : evt.getValues()) {
+					for (PlannedAccountUpgrade upgrade : theUpgrades) {
+						if (upgrade.getPlanet() == p.planet) {
+							upgrade.clear();
 						}
-						updateProduction(p);
 					}
+					updateProduction(p);
 				}
 			}
+			doPlanningLater();
 		});
-		theUpgrades.simpleChanges().act(evt -> ObservableSwingUtils.onEQ(()->{
-			recalcPlanning();
-		}));
+		theUpgrades.simpleChanges().act(__ -> doPlanningLater());
 		// When the user changes the current research upgrade or building upgrade on a planet,
 		// That upgrade's cost should clear out, and the old upgrade (if any) should then show a cost
 		ObservableValue<ResearchType> currentResearch = ObservableValue.flatten(theSelectedAccount.map(a -> {
@@ -248,7 +222,7 @@ public class OGameUniGui extends JPanel {
 			}
 		});
 		refreshProduction();
-		recalcPlanning();
+		doPlanningLater();
 
 		thePlanetEmpireFile = SettableValue.build(File.class).safe(false).build();
 		theMoonEmpireFile = SettableValue.build(File.class).safe(false).build();
@@ -348,6 +322,7 @@ public class OGameUniGui extends JPanel {
 		Production crystal = eco.getProduction(account, p.planet, ResourceType.Crystal, energyFactor);
 		Production deuterium = eco.getProduction(account, p.planet, ResourceType.Deuterium, energyFactor);
 		p.setProduction(energy, metal, crystal, deuterium);
+		p.setUpgradeProduction(energy, metal, crystal, deuterium);
 
 		// At some point there may be a use case for adding each component of production,
 		// e.g. to see how much deuterium you're using on fusion throughout the empire.
@@ -369,7 +344,7 @@ public class OGameUniGui extends JPanel {
 				new Production(Collections.emptyMap(), totalCrystal, 0), //
 				new Production(Collections.emptyMap(), totalDeuterium, 0));
 		
-		recalcPlanning();
+		doPlanningLater();
 	}
 
 	void updateTotalProduction(PlanetWithProduction total) {
@@ -400,7 +375,20 @@ public class OGameUniGui extends JPanel {
 		theTotalProduction.mutableElement(theTotalProduction.getTerminalElement(true).getElementId()).set(total);
 	}
 	
-	void recalcPlanning(){
+	void doPlanningLater() {
+		long now = System.currentTimeMillis();
+		isPlanningDirty = now;
+		EventQueue.invokeLater(() -> {
+			if (isPlanningDirty == now) {
+				recalcPlanning();
+			}
+		});
+	}
+
+	private long isPlanningDirty;
+
+	private void recalcPlanning() {
+		isPlanningDirty = 0;
 		UpgradeAccount ua=theUpgradeAccount.get();
 		if(ua==null) {
 			return;
@@ -422,11 +410,6 @@ public class OGameUniGui extends JPanel {
 		 * Spitballing (general upgrade costs without reference to an account)
 		 * Hyperspace tech guide
 		 */
-		ObservableCollection<Account> referenceAccounts = ObservableCollection.flattenCollections(TypeTokens.get().of(Account.class), //
-			ObservableCollection.of(TypeTokens.get().of(Account.class), (Account) null), //
-			theAccounts.getValues().flow().refresh(theSelectedAccount.noInitChanges())
-				.filter(account -> account == theSelectedAccount.get() ? "Selected" : null).collect()//
-		).collect();
 		SettableValue<String> selectedTab = theConfig.asValue(String.class).at("selected-tab").withFormat(Format.TEXT, () -> "settings")
 			.buildValue(null);
 
