@@ -2,7 +2,6 @@ package org.quark.ogame.roi;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
@@ -45,18 +44,19 @@ import org.quark.ogame.uni.Universe;
 import com.google.common.reflect.TypeToken;
 
 public class RoiAccount implements Account {
-	private final RoiSequence theSequence;
+	private final RoiSequenceGenerator theSequence;
 	private final Account theTarget;
 	private final RoiResearch theResearch;
 	private final RoiValueSet<RoiPlanet> thePlanets;
 
 	private long theTotalBaseProduction;
 	private long theTotalUpgradedProduction;
+	private long theFlushTime;
 	private long theTime;
 	private long theHoldings;
 	private long theNextUpgradeCompletion;
 
-	public RoiAccount(RoiSequence sequence, Account target) {
+	public RoiAccount(RoiSequenceGenerator sequence, Account target) {
 		theSequence = sequence;
 		theTarget = target;
 		theResearch = new RoiResearch();
@@ -76,7 +76,7 @@ public class RoiAccount implements Account {
 	}
 
 	public long getProduction() {
-		for (RoiPlanet planet : RoiPlanets()) {
+		for (RoiPlanet planet : roiPlanets()) {
 			planet.getProduction(); // Flush production
 		}
 		return theTotalUpgradedProduction;
@@ -101,6 +101,7 @@ public class RoiAccount implements Account {
 	public void clear() {
 		theTotalUpgradedProduction = theTotalBaseProduction;
 		theResearch.clear();
+		theTime = theFlushTime;
 		while (!thePlanets.getValues().isEmpty() && !thePlanets.getValues().getLast().isFlushed) {
 			thePlanets.getValues().removeLast();
 		}
@@ -121,6 +122,7 @@ public class RoiAccount implements Account {
 		for (RoiPlanet planet : thePlanets.getValues()) {
 			planet.flush();
 		}
+		theFlushTime = theTime;
 	}
 
 	/**
@@ -143,7 +145,7 @@ public class RoiAccount implements Account {
 		}
 	}
 
-	/** Resets all upgrades done to this account, including {@link #flush(Consumer) flushed} ones */
+	/** Resets all upgrades done to this account, including {@link #flush() flushed} ones */
 	public void reset() {
 		theResearch.reset();
 		while (thePlanets.getValues().size() > 0 && thePlanets.getValues().getLast().getTargetBody() == null) {
@@ -153,10 +155,10 @@ public class RoiAccount implements Account {
 			planet.reset();
 		}
 		theHoldings = 0;
-		theTime = 0;
+		theTime = theFlushTime = 0;
 		theNextUpgradeCompletion = -1;
 		theTotalBaseProduction = 0;
-		for (RoiPlanet p : RoiPlanets()) {
+		for (RoiPlanet p : roiPlanets()) {
 			theTotalBaseProduction += p.getProduction();
 		}
 		theTotalUpgradedProduction = theTotalBaseProduction;
@@ -172,11 +174,11 @@ public class RoiAccount implements Account {
 		}
 		while (theNextUpgradeCompletion >= 0 && time >= theNextUpgradeCompletion) {
 			long next = theNextUpgradeCompletion;
-			theHoldings += theTotalUpgradedProduction * (next - theTime) / 3_600_000;
+			theHoldings += theTotalUpgradedProduction * (next - theTime) / 3_600;
 			finishNextUpgrades();
 			theTime = next;
 		}
-		theHoldings += theTotalUpgradedProduction * (time - theTime) / 3_600_000;
+		theHoldings += theTotalUpgradedProduction * (time - theTime) / 3_600;
 		theTime = time;
 	}
 
@@ -188,7 +190,7 @@ public class RoiAccount implements Account {
 		long waitTime = theTime + Math.round(amount * 3_600.0 / theTotalUpgradedProduction);
 		while (theNextUpgradeCompletion >= 0 && waitTime >= theNextUpgradeCompletion) {
 			long next = theNextUpgradeCompletion;
-			theHoldings += theTotalUpgradedProduction * (next - theTime) / 3_600_000;
+			theHoldings += theTotalUpgradedProduction * (next - theTime) / 3_600;
 			finishNextUpgrades();
 			theTime = next;
 			waitTime = theTime + Math.round(amount * 3_600.0 / theTotalUpgradedProduction);
@@ -257,7 +259,7 @@ public class RoiAccount implements Account {
 		return (RoiValueSet<Planet>) (RoiValueSet<?>) thePlanets;
 	}
 
-	public ObservableCollection<RoiPlanet> RoiPlanets() {
+	public ObservableCollection<RoiPlanet> roiPlanets() {
 		return thePlanets.getValues();
 	}
 
@@ -320,45 +322,52 @@ public class RoiAccount implements Account {
 	}
 
 	public class RoiResearch implements CondensedResearch {
-		private final int[] theResearch;
+		private final int[] theResearchLevels;
 		private final Map<ResearchType, Integer> theUpgrades;
 		private ResearchType theCurrentUpgrade;
 		private int theUpgradeAmount;
 		private long theUpgradeCompletion;
+		private boolean isUpgradeFlushed;
 
 		RoiResearch() {
-			theResearch = new int[ResearchType.values().length];
+			theResearchLevels = new int[ResearchType.values().length];
 			theUpgrades = new LinkedHashMap<>();
 			reset();
 		}
 
 		void reset() {
 			for (ResearchType r : ResearchType.values()) {
-				theResearch[r.ordinal()] = theTarget.getResearch().getResearchLevel(r);
+				theResearchLevels[r.ordinal()] = theTarget.getResearch().getResearchLevel(r);
 			}
-			theCurrentUpgrade = theTarget.getResearch().getCurrentUpgrade();
+			isUpgradeFlushed = false;
 			clear();
 		}
 
 		void clear() {
+			if (!isUpgradeFlushed) {
+				theUpgradeCompletion = 0;
+				theCurrentUpgrade = null;
+			}
 			theUpgrades.clear();
 		}
 
 		void flush() {
 			for (Map.Entry<ResearchType, Integer> upgrade : theUpgrades.entrySet()) {
-				theResearch[upgrade.getKey().ordinal()] += upgrade.getValue();
+				theResearchLevels[upgrade.getKey().ordinal()] += upgrade.getValue();
 			}
 			theUpgrades.clear();
+			isUpgradeFlushed = true;
 		}
 
 		void start(ResearchType type, int amount, long completionTime) {
+			isUpgradeFlushed = false;
 			theCurrentUpgrade = type;
 			theUpgradeAmount = amount;
 			theUpgradeCompletion = completionTime;
 		}
 
 		void finishUpgradeTo(long time) {
-			if (time <= theUpgradeCompletion) {
+			if (theCurrentUpgrade != null && time <= theUpgradeCompletion) {
 				upgrade(theCurrentUpgrade, theUpgradeAmount);
 				theCurrentUpgrade = null;
 				theUpgradeCompletion = 0;
@@ -366,10 +375,13 @@ public class RoiAccount implements Account {
 		}
 
 		public void upgrade(ResearchType type, int upgrade) {
+			if (type == null) {
+				BreakpointHere.breakpoint();
+			}
 			theUpgrades.compute(type, (__, current) -> current == null ? upgrade : current + upgrade);
 			switch (type) {
 			case Plasma:
-				for (RoiPlanet planet : RoiPlanets()) {
+				for (RoiPlanet planet : roiPlanets()) {
 					planet.isProductionDirty = true;
 				}
 				break;
@@ -386,6 +398,10 @@ public class RoiAccount implements Account {
 			return theUpgradeCompletion;
 		}
 
+		public int getUpgradeAmount() {
+			return theUpgradeAmount;
+		}
+
 		@Override
 		public Research setCurrentUpgrade(ResearchType activeResearch) {
 			throw new UnsupportedOperationException();
@@ -393,12 +409,12 @@ public class RoiAccount implements Account {
 
 		@Override
 		public int getResearchLevel(ResearchType type) {
-			return theResearch[type.ordinal()] + theUpgrades.getOrDefault(type, 0);
+			return theResearchLevels[type.ordinal()] + theUpgrades.getOrDefault(type, 0);
 		}
 
 		@Override
 		public void setResearchLevel(ResearchType type, int level) {
-			theResearch[type.ordinal()] = level;
+			theResearchLevels[type.ordinal()] = level;
 		}
 	}
 
@@ -407,9 +423,10 @@ public class RoiAccount implements Account {
 		private final int[] theBuildings;
 		private final Map<BuildingType, Integer> theUpgrades;
 		private final RoiShipSet theShips;
-		private BuildingType theCurrentBuildingUpgrade;
+		private BuildingType theCurrentUpgrade;
 		private int theUpgradeAmount;
 		private long theUpgradeCompletion;
+		private boolean isUpgradeFlushed;
 
 		RoiRockyBody(RockyBody target) {
 			theTargetBody = target;
@@ -419,7 +436,7 @@ public class RoiAccount implements Account {
 				for (BuildingType building : BuildingType.values()) {
 					theBuildings[building.ordinal()] = target.getBuildingLevel(building);
 				}
-				theCurrentBuildingUpgrade = target.getCurrentUpgrade();
+				theCurrentUpgrade = target.getCurrentUpgrade();
 			}
 			theShips = new RoiShipSet(this);
 			reset();
@@ -434,10 +451,10 @@ public class RoiAccount implements Account {
 				for (BuildingType building : BuildingType.values()) {
 					theBuildings[building.ordinal()] = theTargetBody.getBuildingLevel(building);
 				}
-				theCurrentBuildingUpgrade = theTargetBody.getCurrentUpgrade();
 			}
 			theShips.reset(theTargetBody == null ? null : theTargetBody.getStationaryStructures(),
 				theTargetBody == null ? null : theTargetBody.getStationedFleet());
+			isUpgradeFlushed = false;
 			clear();
 		}
 
@@ -447,9 +464,14 @@ public class RoiAccount implements Account {
 			}
 			theUpgrades.clear();
 			theShips.flush();
+			isUpgradeFlushed = true;
 		}
 
 		void clear() {
+			if (!isUpgradeFlushed) {
+				theUpgradeCompletion = 0;
+				theCurrentUpgrade = null;
+			}
 			theUpgrades.clear();
 			theShips.clear();
 		}
@@ -467,8 +489,9 @@ public class RoiAccount implements Account {
 		}
 
 		void start(AccountUpgradeType type, int amount, long completionTime) {
+			isUpgradeFlushed = false;
 			if (type.building != null) {
-				theCurrentBuildingUpgrade = type.building;
+				theCurrentUpgrade = type.building;
 				theUpgradeAmount = amount;
 				theUpgradeCompletion = completionTime;
 			} else {
@@ -477,9 +500,9 @@ public class RoiAccount implements Account {
 		}
 
 		void finishUpgradesTo(long time) {
-			if (time <= theUpgradeCompletion) {
-				upgrade(theCurrentBuildingUpgrade, theUpgradeAmount);
-				theCurrentBuildingUpgrade = null;
+			if (theCurrentUpgrade != null && time <= theUpgradeCompletion) {
+				upgrade(theCurrentUpgrade, theUpgradeAmount);
+				theCurrentUpgrade = null;
 				theUpgradeCompletion = 0;
 			}
 			theShips.finishUpgradeTo(time);
@@ -487,12 +510,12 @@ public class RoiAccount implements Account {
 
 		@Override
 		public BuildingType getCurrentUpgrade() {
-			return theCurrentBuildingUpgrade;
+			return theCurrentUpgrade;
 		}
 
 		@Override
 		public RockyBody setCurrentUpgrade(BuildingType building) {
-			theCurrentBuildingUpgrade = building;
+			theCurrentUpgrade = building;
 			return this;
 		}
 
@@ -646,7 +669,7 @@ public class RoiAccount implements Account {
 
 				@Override
 				public int getSlot() {
-					return theSequence.getNewPlanetSlot();
+					return theSequence.getNewPlanetSlot().get();
 				}
 
 				@Override
@@ -661,7 +684,7 @@ public class RoiAccount implements Account {
 			if (getTargetBody() != null) {
 				return getTargetBody().getBaseFields();
 			} else {
-				return theSequence.getNewPlanetFields();
+				return theSequence.getNewPlanetFields().get();
 			}
 		}
 
@@ -672,7 +695,7 @@ public class RoiAccount implements Account {
 
 		@Override
 		public int getMinimumTemperature() {
-			return getTargetBody() != null ? getTargetBody().getMinimumTemperature() : theSequence.getNewPlanetTemp() - 20;
+			return getTargetBody() != null ? getTargetBody().getMinimumTemperature() : theSequence.getNewPlanetTemp().get() - 20;
 		}
 
 		@Override
@@ -682,7 +705,7 @@ public class RoiAccount implements Account {
 
 		@Override
 		public int getMaximumTemperature() {
-			return getTargetBody() != null ? getTargetBody().getMaximumTemperature() : theSequence.getNewPlanetTemp() + 20;
+			return getTargetBody() != null ? getTargetBody().getMaximumTemperature() : theSequence.getNewPlanetTemp().get() + 20;
 		}
 
 		@Override
@@ -872,6 +895,7 @@ public class RoiAccount implements Account {
 		private ShipyardItemType theCurrentUpgrade;
 		private int theUpgradeAmount;
 		private long theUpgradeCompletion;
+		private boolean isUpgradeFlushed;
 
 		RoiShipSet(RoiRockyBody owner) {
 			theOwner = owner;
@@ -890,10 +914,17 @@ public class RoiAccount implements Account {
 					}
 				}
 			}
+			isUpgradeFlushed = false;
+			theCurrentUpgrade = null;
+			theUpgradeCompletion = 0;
 			clear();
 		}
 
 		void clear() {
+			if (!isUpgradeFlushed) {
+				theCurrentUpgrade = null;
+				theUpgradeCompletion = 0;
+			}
 			theUpgrades.clear();
 		}
 
@@ -902,6 +933,7 @@ public class RoiAccount implements Account {
 				theShips[upgrade.getKey().ordinal()] += upgrade.getValue();
 			}
 			theUpgrades.clear();
+			isUpgradeFlushed = true;
 		}
 
 		void upgrade(ShipyardItemType type, int upgrade) {
@@ -921,18 +953,23 @@ public class RoiAccount implements Account {
 			return theCurrentUpgrade;
 		}
 
+		public int getUpgradeAmount() {
+			return theUpgradeAmount;
+		}
+
 		public long getUpgradeCompletion() {
 			return theUpgradeCompletion;
 		}
 
 		void start(ShipyardItemType type, int amount, long completionTime) {
+			isUpgradeFlushed = false;
 			theCurrentUpgrade = type;
 			theUpgradeAmount = amount;
 			theUpgradeCompletion = completionTime;
 		}
 
 		void finishUpgradeTo(long time) {
-			if (time <= theUpgradeCompletion) {
+			if (theCurrentUpgrade != null && time <= theUpgradeCompletion) {
 				theUpgradeCompletion = 0;
 				upgrade(theCurrentUpgrade, theUpgradeAmount);
 				theCurrentUpgrade = null;

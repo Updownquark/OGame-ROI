@@ -1,15 +1,21 @@
 package org.quark.ogame.uni.ui;
 
+import java.awt.Color;
 import java.awt.Dialog.ModalityType;
+import java.awt.EventQueue;
+import java.text.ParseException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.swing.JDialog;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
 import org.observe.Observable;
+import org.observe.ObservableValue;
 import org.observe.collect.ObservableCollection;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.PanelPopulation.PanelPopulator;
@@ -19,12 +25,15 @@ import org.qommons.QommonsUtils;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementId;
 import org.qommons.io.Format;
+import org.qommons.io.SpinnerFormat;
 import org.qommons.threading.QommonsTimer;
 import org.quark.ogame.OGameUtils;
-import org.quark.ogame.roi.RoiSequence;
+import org.quark.ogame.roi.RoiCompoundSequenceElement;
 import org.quark.ogame.roi.RoiSequenceElement;
+import org.quark.ogame.roi.RoiSequenceGenerator;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountUpgradeType;
+import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.ui.OGameUniGui.PlannedAccountUpgrade;
@@ -86,7 +95,7 @@ public class UpgradePanel extends JPanel {
 
 	public void addPanel(PanelPopulator<?, ?> panel) {
 		Format<Double> commaFormat = Format.doubleFormat("#,##0");
-		// panel.addButton("Generate ROI Sequence", __ -> genRoiSequence(), null);
+		panel.addButton("Generate ROI Sequence", __ -> showRoiSequenceConfigPanel(), null);
 		panel.addTable(theUpgrades,
 			upgradeTable -> upgradeTable.fill()//
 				.dragSourceRow(null).dragAcceptRow(null)// Make the rows draggable
@@ -224,32 +233,180 @@ public class UpgradePanel extends JPanel {
 		return null;
 	}
 
-	private void genRoiSequence() {
-		ObservableCollection<RoiSequenceElement> sequence = ObservableCollection.build(RoiSequenceElement.class).build(); // Safe
+	void showRoiSequenceConfigPanel() {
 		Account account = theUniGui.getSelectedAccount().get();
-		WindowPopulation
+		RoiSequenceGenerator sequenceGenerator = new RoiSequenceGenerator(theUniGui.getRules().get(), account);
+		JDialog dialog = WindowPopulation
 			.populateDialog(new JDialog(SwingUtilities.getWindowAncestor(this), "ROI Sequence", ModalityType.MODELESS), //
 				Observable.empty(), true)//
-			.withVContent(panel -> panel.fill().fillV().addTable(sequence,
-				table -> table.fill().fillV()//
-				.withColumn("Upgrade", AccountUpgradeType.class, el -> el.upgrade, null)//
-					.withColumn("Planet", String.class, el -> {
-						if (el.planetIndex < 0) {
-							return "";
-						} else if (el.planetIndex < account.getPlanets().getValues().size()) {
-							return account.getPlanets().getValues().get(el.planetIndex).getName();
-						} else {
-							return "Planet " + (el.planetIndex + 1);
+			.withVContent(panel -> panel.fill().fillV()//
+				.addLabel(null, ObservableValue.of("THIS IS AN ALPHA FEATURE!"), Format.TEXT,
+					f -> f.decorate(deco -> deco.bold().withFontSize(20).withForeground(Color.red)))//
+				.addLabel(null, ObservableValue.of("It may do weird things, cause errors, or give stupid advice."), Format.TEXT,
+					f -> f.decorate(deco -> deco.bold().withFontSize(14).withForeground(Color.red)))//
+				.addTextField("Target Planet:", sequenceGenerator.getTargetPlanet(), SpinnerFormat.INT, f -> f.fill())//
+				.addTextField("New Planet Slot:", sequenceGenerator.getNewPlanetSlot(), SpinnerFormat.INT, f -> f.fill())//
+				.addTextField("New Planet Temp:", sequenceGenerator.getNewPlanetTemp(), SpinnerFormat.INT, f -> f.fill())//
+				.addButton("Generate", __ -> genRoiSequence(account, sequenceGenerator),
+					btn -> btn.disableWith(sequenceGenerator.isActive())))
+			.getWindow();
+		dialog.setSize(500, 200);
+		dialog.setLocationRelativeTo(this);
+		dialog.setVisible(true);
+	}
+
+	private static final Map<AccountUpgradeType, Color> upgradeColors;
+	static {
+		upgradeColors = new HashMap<>();
+		for (AccountUpgradeType upgrade : AccountUpgradeType.values()) {
+			Color color = null;
+			switch (upgrade) {
+			case Astrophysics:
+				color = Color.blue;
+				break;
+			case Plasma:
+				color = Color.green;
+				break;
+			case MetalMine:
+				color = Color.orange;
+				break;
+			case CrystalMine:
+				color = Color.cyan;
+				break;
+			case DeuteriumSynthesizer:
+				color = new Color(128, 128, 255);
+				break;
+			case Crawler:
+			case SolarSatellite:
+			case SolarPlant:
+			case FusionReactor:
+				color = Color.pink;
+				break;
+			case RoboticsFactory:
+			case NaniteFactory:
+			case Shipyard:
+			case ResearchLab:
+			case IntergalacticResearchNetwork:
+				color = Color.yellow;
+				break;
+			default:
+				break;
+			}
+			if (color != null) {
+				upgradeColors.put(upgrade, color);
+			}
+		}
+	}
+
+	private void genRoiSequence(Account account, RoiSequenceGenerator sequenceGenerator) {
+		Format<Double> dblFormat = Format.doubleFormat(3).build();
+		ObservableCollection<RoiSequenceElement> sequence = ObservableCollection.build(RoiSequenceElement.class).build(); // Safe
+		JDialog dialog = WindowPopulation
+			.populateDialog(new JDialog(SwingUtilities.getWindowAncestor(this), "ROI Sequence", ModalityType.MODELESS), //
+				Observable.empty(), true)//
+			.withVContent(panel -> panel.fill().fillV()//
+				.addLabel("Status:", sequenceGenerator.getStatus(), Format.TEXT, null)//
+				.addLabel("Stage Progress:", sequenceGenerator.getProgress(), new Format<Integer>() {
+					@Override
+					public void append(StringBuilder text, Integer value) {
+						if (value == null) {
+							return;
 						}
-					}, null)//
-					.withColumn("Level", Integer.class, el -> el.getTargetLevel(), null)//
-					.withColumn("ROI", Duration.class, el -> el.roi == 0 ? null : Duration.ofHours(el.roi),
-						col -> col.formatText(d -> d == null ? "" : QommonsUtils.printDuration(d, true)))//
-					.withColumn("Time", Duration.class, el -> el.getTime() == 0 ? null : Duration.ofSeconds(el.getTime()),
-						col -> col.formatText(d -> d == null ? "" : QommonsUtils.printDuration(d, true)))//
-			)).getWindow().setVisible(true);
+						text.append(value).append(" of ").append(sequence.size()).append(" (");
+						if (sequence.isEmpty()) {
+							text.append('0');
+						} else {
+							double pc = value * 100.0 / sequence.size();
+							dblFormat.append(text, pc);
+						}
+						text.append("%)");
+					}
+
+					@Override
+					public Integer parse(CharSequence text) throws ParseException {
+						throw new IllegalStateException();
+					}
+				}, null)//
+				.addLabel("Sequence Time:", sequenceGenerator.getLifetimeMetric(), Format.DURATION, null)//
+				.addTable(sequence,
+					table -> table.fill().fillV()//
+						.withIndexColumn("#", col -> col.withWidths(20, 30, 60))//
+						.withColumn("Upgrade", AccountUpgradeType.class, el -> el.upgrade, col -> {
+							col.decorate((cell, deco) -> {
+								Color borderColor = upgradeColors.get(cell.getCellValue());
+								if (borderColor != null) {
+									deco.withLineBorder(borderColor, 2, false);
+								}
+							});
+						})//
+						.withColumn("Planet", String.class, el -> {
+							if (el.planetIndex < 0) {
+								return "";
+							} else if (el.planetIndex < account.getPlanets().getValues().size()) {
+								return account.getPlanets().getValues().get(el.planetIndex).getName();
+							} else {
+								return "Planet " + (el.planetIndex + 1);
+							}
+						}, null)//
+						.withColumn("Level", Integer.class, el -> el.getTargetLevel(), null)//
+						.withColumn("ROI", Duration.class, el -> el.roi == 0 ? null : Duration.ofHours(el.roi),
+							col -> col.formatText(d -> d == null ? "" : QommonsUtils.printDuration(d, true)))//
+						.withColumn("Time", Duration.class, el -> el.getTime() == 0 ? null : Duration.ofSeconds(el.getTime()),
+							col -> col.formatText(d -> d == null ? "" : QommonsUtils.printDuration(d, true)))//
+			)).getWindow();
+		dialog.setSize(500, 700);
+		dialog.setLocationRelativeTo(this);
+		dialog.setVisible(true);
 		QommonsTimer.getCommonInstance().offload(() -> {
-			new RoiSequence(theUniGui.getRules().get(), account).produceSequence(sequence);
+			sequenceGenerator.produceSequence(sequence);
+			List<RoiCompoundSequenceElement> condensed = RoiSequenceGenerator.condense(sequence);
+			EventQueue.invokeLater(() -> displayRoiSequence(condensed, account, sequenceGenerator));
+			// dialog.setVisible(false);
 		});
+	}
+
+	private void displayRoiSequence(List<RoiCompoundSequenceElement> condensed, Account account, RoiSequenceGenerator sequenceGenerator) {
+		List<String> planetNames = QommonsUtils.map(account.getPlanets().getValues(), Planet::getName, true);
+		JDialog dialog = WindowPopulation
+			.populateDialog(new JDialog(SwingUtilities.getWindowAncestor(this), "ROI Sequence", ModalityType.MODELESS), //
+				Observable.empty(), true)//
+			.withVContent(panel -> panel.fill().fillV()//
+				.addLabel("Account:", ObservableValue.of(account.getName()), Format.TEXT, null)//
+				.addLabel("Sequence Time:", ObservableValue.of(sequenceGenerator.getLifetimeMetric().get()), Format.DURATION, null)//
+				.addTable(ObservableCollection.of(RoiCompoundSequenceElement.class, condensed),
+					table -> table.fill().fillV()//
+						.withIndexColumn("#", col -> col.withWidths(20, 30, 60))//
+						.withColumn("Upgrade", AccountUpgradeType.class, el -> el.upgrade, col -> {
+							col.decorate((cell, deco) -> {
+								Color borderColor = upgradeColors.get(cell.getCellValue());
+								if (borderColor != null) {
+									deco.withLineBorder(borderColor, 2, false);
+								}
+							});
+						})//
+						.withColumn("Level", Integer.class, el -> el.level, null)//
+						.withColumn("Planets", String.class, el -> {
+							if (el.planetIndexes == null) {
+								return "";
+							}
+							StringBuilder planets = new StringBuilder();
+							for (int p = 0; p < el.planetIndexes.length; p++) {
+								if (p > 0) {
+									planets.append(' ');
+								}
+								if (el.planetIndexes[p] < planetNames.size()) {
+									planets.append(planetNames.get(el.planetIndexes[p]));
+								} else {
+									planets.append("Planet "+(el.planetIndexes[p]+1));
+								}
+							}
+							return planets.toString();
+						}, col -> col.withWidths(50, 200, 2000))//
+						.withColumn("Time", Duration.class, el -> Duration.ofSeconds(el.time),
+							col -> col.formatText(d -> d == null ? "" : QommonsUtils.printDuration(d, true)))//
+			)).getWindow();
+		dialog.setSize(500, 700);
+		dialog.setLocationRelativeTo(this);
+		dialog.setVisible(true);
 	}
 }

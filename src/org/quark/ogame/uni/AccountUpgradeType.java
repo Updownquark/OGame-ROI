@@ -86,10 +86,16 @@ public enum AccountUpgradeType {
 	public int getLevel(Account account, RockyBody planetOrMoon) {
 		switch (type) {
 		case Building:
+			if (planetOrMoon == null) {
+				throw new NullPointerException(); //Good place to stick a breakpoint
+			}
 			return planetOrMoon.getBuildingLevel(building);
 		case Research:
 			return account.getResearch().getResearchLevel(research);
 		case ShipyardItem:
+			if (planetOrMoon == null) {
+				throw new NullPointerException(); //Good place to stick a breakpoint
+			}
 			return planetOrMoon.getStationedShips(shipyardItem);
 		}
 		throw new IllegalStateException();
