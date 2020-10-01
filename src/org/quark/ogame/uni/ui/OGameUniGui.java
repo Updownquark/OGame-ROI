@@ -85,6 +85,7 @@ public class OGameUniGui extends JPanel {
 	private final SettableValue<Account> theSelectedAccount;
 
 	private final SimpleObservable<Void> thePlanetRefresh;
+	private final SimpleObservable<Void> theUpgradeRefresh;
 	private final ObservableCollection<PlanetWithProduction> thePlanets;
 	private final SettableValue<PlanetWithProduction> theSelectedPlanet;
 	private final ObservableValue<UpgradeAccount> theUpgradeAccount;
@@ -102,6 +103,8 @@ public class OGameUniGui extends JPanel {
 	private final UpgradePanel theUpgradePanel;
 	private final HoldingsPanel theHoldingsPanel;
 	private final FlightPanel theFlightPanel;
+
+	private boolean isRefreshingUpgrades;
 
 	public OGameUniGui(ObservableConfig config, List<OGameRuleSet> ruleSets, SyncValueSet<Account> accounts) {
 		theConfig = config;
@@ -126,11 +129,13 @@ public class OGameUniGui extends JPanel {
 		}, opts -> opts.cache(true).reEvalOnUpdate(false).fireIfUnchanged(true));
 
 		thePlanetRefresh = new SimpleObservable<>();
+		theUpgradeRefresh = new SimpleObservable<>();
 		thePlanets = ObservableCollection
 			.flattenValue(theUpgradeAccount.map(
 				account -> account == null ? ObservableCollection.of(TypeTokens.get().of(Planet.class)) : account.getPlanets().getValues()))
 			.flow().refresh(thePlanetRefresh)//
 			.transform(TypeTokens.get().of(PlanetWithProduction.class), tx -> tx.cache(true).reEvalOnUpdate(false).map(this::productionFor))//
+			.refresh(theUpgradeRefresh)//
 			.collect();
 		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).build();
 
@@ -376,6 +381,9 @@ public class OGameUniGui extends JPanel {
 	}
 	
 	void doPlanningLater() {
+		if (isRefreshingUpgrades) {
+			return;
+		}
 		long now = System.currentTimeMillis();
 		isPlanningDirty = now;
 		EventQueue.invokeLater(() -> {
@@ -401,6 +409,12 @@ public class OGameUniGui extends JPanel {
 			upgrade.roi= getROI(rules, ua, upgrade, thePlanets, total);
 		}
 		theTotalProduction.mutableElement(theTotalProduction.getTerminalElement(true).getElementId()).set(total);
+		try {
+			isRefreshingUpgrades = true;
+			theUpgradeRefresh.onNext(null);
+		} finally {
+			isRefreshingUpgrades = false;
+		}
 	}
 
 	void initComponents() {
