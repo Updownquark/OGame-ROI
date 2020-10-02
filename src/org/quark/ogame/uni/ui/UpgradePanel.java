@@ -151,7 +151,7 @@ public class UpgradePanel extends JPanel {
 					if (upgrade.getCost() == null || upgrade.getCost().getUpgradeTime() == null) {
 						return "";
 					}
-					return OGameUniGui.printUpgradeTime(upgrade.getCost().getUpgradeTime());
+					return Format.DURATION.format(upgrade.getCost().getUpgradeTime());
 				}, timeCol -> timeCol.withWidths(40, 100, 120))//
 				.withColumn("Cargoes", Long.class, upgrade -> {
 					if (upgrade.getUpgrade() == null || upgrade.getCost() == null) {
@@ -163,7 +163,7 @@ public class UpgradePanel extends JPanel {
 					return (long) Math.ceil(cost * 1.0 / cargoSpace);
 				}, cargoCol -> cargoCol.formatText(i -> i == null ? "" : commaFormat.format(i * 1.0)).withWidths(40, 50, 80))//
 				.withColumn("ROI", Duration.class, upgrade -> upgrade.getROI(), //
-					roiCol -> roiCol.formatText(roi -> roi == null ? "" : QommonsUtils.printDuration(roi, true)).withWidths(50, 100, 150))//
+					roiCol -> roiCol.formatText(roi -> roi == null ? "" : Format.DURATION.format(roi)).withWidths(50, 100, 150))//
 		// .withMultiAction(upgrades -> sortUpgrades(upgrades), action -> action//
 		// .allowWhenMulti(items -> canSortUpgrades(items), null).modifyButton(button -> button.withText("Sort by ROI")))
 		);

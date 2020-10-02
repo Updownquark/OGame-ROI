@@ -485,7 +485,7 @@ public class HoldingsPanel {
 									h.setLevel(1);
 								}
 							}).editableIf((h, n) -> !(h instanceof SyntheticHolding))//
-								.asCombo(t -> t == null ? "None" : t.toString(), holdingTypes);
+									.asCombo(t -> t == null ? "" : t.toString(), holdingTypes);
 						}))//
 						.withColumn("#", Integer.class, Holding::getLevel, levelCol -> levelCol.formatText((h, lvl) -> {
 							if (h.getType() == null) {

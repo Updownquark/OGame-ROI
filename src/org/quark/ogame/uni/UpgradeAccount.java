@@ -59,9 +59,7 @@ public class UpgradeAccount implements Account {
 
 	public UpgradeAccount clearUpgrades() {
 		theResearch.clearUpgrades();
-		for (Planet planet : thePlanets.getValues()) {
-			((UpgradePlanet) planet).clearUpgrades();
-		}
+		thePlanets.clearUpgrades();
 		return this;
 	}
 
@@ -151,9 +149,17 @@ public class UpgradeAccount implements Account {
 			// }, opts -> opts.cache(false)).collectPassive();
 			thePlanetCollection = theWrapped.getPlanets().getValues().flow()//
 				.transform(TypeTokens.get().of(UpgradePlanet.class),
-					c -> c.cache(false).map(p -> theUpgradePlanets.computeIfAbsent(p.getId(), __ -> new UpgradePlanet(p)))//
-						.replaceSourceWith((p, cv) -> cv.getCurrentSource()))// Not even sure I need this since it'll just be updates
+					c -> c.cache(false).map(p -> {
+						long planetId = p.getId();
+						return theUpgradePlanets.computeIfAbsent(planetId, __ -> new UpgradePlanet(p));
+					}).replaceSourceWith((p, cv) -> cv.getCurrentSource()))// Not even sure I need this since it'll just be updates
 				.collectPassive();
+		}
+
+		void clearUpgrades() {
+			for (UpgradePlanet planet : thePlanetCollection) {
+				planet.clearUpgrades();
+			}
 		}
 
 		@Override

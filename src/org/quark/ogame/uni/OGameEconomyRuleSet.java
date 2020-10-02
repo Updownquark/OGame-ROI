@@ -50,6 +50,11 @@ public interface OGameEconomyRuleSet {
 			}
 			return new Production(newByType, production, consumption);
 		}
+
+		@Override
+		public String toString() {
+			return totalProduction + "-" + totalConsumption + "=" + totalNet;
+		}
 	}
 
 	public class FullProduction {
@@ -67,6 +72,11 @@ public interface OGameEconomyRuleSet {
 
 		public UpgradeCost asCost() {
 			return UpgradeCost.of(UpgradeType.Building, metal, crystal, deuterium, energy, Duration.ZERO, 1, 0, 0);
+		}
+
+		@Override
+		public String toString() {
+			return "M:" + metal + ", C:" + crystal + ", D:" + deuterium + ", E:" + energy;
 		}
 	}
 
@@ -99,6 +109,7 @@ public interface OGameEconomyRuleSet {
 	UpgradeCost getUpgradeCost(Account account, RockyBody planetOrMoon, AccountUpgradeType upgrade, int fromLevel, int toLevel);
 	List<Requirement> getRequirements(AccountUpgradeType target);
 
+	int getMaxPlanets(Account account);
 	int getFields(Planet planet);
 	int getFields(Moon moon);
 }

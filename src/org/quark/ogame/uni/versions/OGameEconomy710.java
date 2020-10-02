@@ -837,6 +837,12 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 	}
 
 	@Override
+	public int getMaxPlanets(Account account) {
+		int astro = account.getResearch().getAstrophysics();
+		return (astro + 1) / 2 + 1;
+	}
+
+	@Override
 	public int getFields(Planet planet) {
 		int fields = planet.getBaseFields();
 		int terraformer = planet.getTerraformer();

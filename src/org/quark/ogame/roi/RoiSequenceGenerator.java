@@ -190,7 +190,7 @@ public class RoiSequenceGenerator {
 
 			RoiAccount copy = new RoiAccount(this, theAccount);
 			{
-				int maxPlanets = getMaxPlanets(copy);
+				int maxPlanets = theRules.economy().getMaxPlanets(copy);
 				// First, if the new account has more planet slots than planets, catch it up
 				while (copy.roiPlanets().size() < maxPlanets) {
 					copy.getPlanets().create();
@@ -582,16 +582,11 @@ public class RoiSequenceGenerator {
 		}
 		cost = cost.plus(theRules.economy().getUpgradeCost(account, body, upgrade, currentLevel, targetLevel));
 		account.upgrade(upgrade, body, targetLevel - currentLevel);
-		if (upgrade == AccountUpgradeType.Astrophysics && account.roiPlanets().size() < getMaxPlanets(account)) {
+		if (upgrade == AccountUpgradeType.Astrophysics && account.roiPlanets().size() < theRules.economy().getMaxPlanets(account)) {
 			RoiPlanet newPlanet = (RoiPlanet) account.getPlanets().newValue();
 			cost = cost.plus(upgradeToLevel(account, newPlanet));
 		}
 		return cost;
-	}
-
-	private static int getMaxPlanets(Account account) {
-		int astro = account.getResearch().getAstrophysics();
-		return (astro + 1) / 2 + 1;
 	}
 
 	private UpgradeCost upgradeToLevel(RoiAccount account, RoiPlanet planet) {
@@ -777,12 +772,12 @@ public class RoiSequenceGenerator {
 				if (upgradeTime > 0) {
 					account.advance(upgradeTime);
 				}
-				if (account.roiPlanets().size() == getMaxPlanets(account)) {
+				if (account.roiPlanets().size() == theRules.economy().getMaxPlanets(account)) {
 					// This can happen as things get moved around, e.g. astro getting moved ahead of an upgrade on the new planet
 					return Long.MAX_VALUE;
 				}
 			}
-			if (account.roiPlanets().size() < getMaxPlanets(account)) {
+			if (account.roiPlanets().size() < theRules.economy().getMaxPlanets(account)) {
 				RoiPlanet newPlanet = (RoiPlanet) account.getPlanets().newValue();
 				UpgradeCost newPlanetCost = upgradeToLevel(account, newPlanet);
 				account.spend(Math.round(newPlanetCost.getMetalValue(account.getUniverse().getTradeRatios())));
@@ -832,11 +827,11 @@ public class RoiSequenceGenerator {
 			if (upgradeTime > 0) {
 				account.advance(upgradeTime);
 			}
-			if (account.roiPlanets().size() == getMaxPlanets(account)) {
+			if (account.roiPlanets().size() == theRules.economy().getMaxPlanets(account)) {
 				throw new IllegalStateException();
 			}
 		}
-		if (account.roiPlanets().size() < getMaxPlanets(account)) {
+		if (account.roiPlanets().size() < theRules.economy().getMaxPlanets(account)) {
 			RoiPlanet newPlanet = (RoiPlanet) account.getPlanets().newValue();
 			UpgradeCost newPlanetCost = upgradeToLevel(account, newPlanet);
 			account.spend(Math.round(newPlanetCost.getMetalValue(account.getUniverse().getTradeRatios())));
