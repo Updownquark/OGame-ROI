@@ -983,7 +983,10 @@ public class OGameUniGui extends JPanel {
 			new OGameRuleSet710(), new OGameRuleSet711(), new OGameRuleSet750()));
 		ObservableSwingUtils.buildUI()//
 			.withConfig("ogame-config").withConfigAt("OGameUI.xml")//
-			.withTitle("OGame Account Helper").systemLandF().build(config -> {
+			.withTitle("OCcountant")//
+			.withIcon(OGameUniGui.class, "/icons/HeldPlanet.png")//
+			.systemLandF()//
+			.build(config -> {
 				return new OGameUniGui(config, ruleSets, getAccounts(config, "accounts/account"));
 			});
 	}
