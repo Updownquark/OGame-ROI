@@ -982,7 +982,8 @@ public class OGameUniGui extends JPanel {
 		ruleSets.addAll(Arrays.asList(//
 			new OGameRuleSet710(), new OGameRuleSet711(), new OGameRuleSet750()));
 		ObservableSwingUtils.buildUI()//
-			.withConfig("ogame-config").withConfigAt("OGameUI.xml")//
+			.withOldConfig("ogame-config").withOldConfigAt("OGameUI.xml")//
+			.withConfig("occountant").withConfigAt("OCcountant.xml")//
 			.withTitle("OCcountant")//
 			.withIcon(OGameUniGui.class, "/icons/HeldPlanet.png")//
 			.systemLandF()//
