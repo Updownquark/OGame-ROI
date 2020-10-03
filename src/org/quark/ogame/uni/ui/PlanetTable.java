@@ -481,12 +481,12 @@ public class PlanetTable {
 		ObservableCollection<Research> researchColl = ObservableCollection
 			.flattenValue(theUniGui.getSelectedAccount().<ObservableCollection<Research>> map(
 				TypeTokens.get().keyFor(ObservableCollection.class).parameterized(Research.class), account -> {
-					ObservableCollection<Research> rsrch = ObservableCollection.build(Research.class).safe(false).build();
-					if (account != null) {
-						rsrch.with(account.getResearch());
+					if (account == null) {
+						return ObservableCollection.of(Research.class);
+					} else {
+						return ObservableCollection.of(Research.class, account.getResearch());
 					}
-					return rsrch;
-				}, opts -> opts.cache(true).reEvalOnUpdate(false)));
+				}));
 		researchColl.simpleChanges().act(__ -> theUniGui.refreshProduction());
 		panel.fill().fillV()//
 			.addTable(researchColl,

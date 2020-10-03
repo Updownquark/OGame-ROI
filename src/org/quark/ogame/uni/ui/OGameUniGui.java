@@ -117,20 +117,24 @@ public class OGameUniGui extends JPanel {
 			}
 			return theRuleSets.get(theRuleSets.size() - 1);
 		}, OGameRuleSet::getName, null);
-		theSelectedAccount = config.asValue(Account.class).at("selected-account")
+
+		SettableValue<Account> selectedAccount = config.asValue(Account.class).at("selected-account")
 			.withFormat(
 				ObservableConfigFormat.<Account> buildReferenceFormat(fv -> accounts.getValues(), () -> accounts.getValues().peekFirst())//
 					.withField("id", Account::getId, ObservableConfigFormat.INT)//
 					.build())
 			.buildValue(null);
-		theUpgradeAccount = theSelectedAccount.map(TypeTokens.get().of(UpgradeAccount.class), a -> {
+		ObservableValue<UpgradeAccount> upgradeAccount = selectedAccount.map(TypeTokens.get().of(UpgradeAccount.class), a -> {
 			return a == null ? null : new UpgradeAccount(a);
 		}, opts -> opts.cache(true).reEvalOnUpdate(false).fireIfUnchanged(true));
 
 		thePlanetRefresh = new SimpleObservable<>();
 		theUpgradeRefresh = new SimpleObservable<>();
+		theSelectedAccount = selectedAccount.refresh(theUpgradeRefresh);
+		theUpgradeAccount = upgradeAccount.refresh(theUpgradeRefresh);
+
 		ObservableCollection<PlanetWithProduction> planets = ObservableCollection
-			.flattenValue(theUpgradeAccount.map(
+			.flattenValue(upgradeAccount.map(
 				account -> account == null ? ObservableCollection.of(TypeTokens.get().of(Planet.class)) : account.getPlanets().getValues()))
 			.flow().refresh(thePlanetRefresh)//
 			.transform(TypeTokens.get().of(PlanetWithProduction.class), tx -> tx.cache(true).reEvalOnUpdate(false).map(this::productionFor))//
@@ -148,7 +152,7 @@ public class OGameUniGui extends JPanel {
 			.parameterized(PlannedUpgrade.class);
 		ObservableCollection<PlannedAccountUpgrade> upgrades = ObservableCollection
 			.flattenValue(
-				theSelectedAccount.map(upgradeCollType, account -> account.getPlannedUpgrades().getValues(), opts -> opts.nullToNull(true)))//
+				selectedAccount.map(upgradeCollType, account -> account.getPlannedUpgrades().getValues(), opts -> opts.nullToNull(true)))//
 			.flow().transform(TypeTokens.get().of(PlannedAccountUpgrade.class),
 				tx -> tx.cache(true).reEvalOnUpdate(false).map(pu -> new PlannedAccountUpgrade(pu)))
 			.collect();
@@ -161,7 +165,7 @@ public class OGameUniGui extends JPanel {
 				}
 				break;
 			case remove:
-				Account current = theSelectedAccount.get();
+				Account current = selectedAccount.get();
 				for (PlanetWithProduction p : evt.getOldValues()) {
 					if (p.planet.getAccount() == current) {
 						// Remove planet-specific upgrades to avoid orphaning them
@@ -183,7 +187,7 @@ public class OGameUniGui extends JPanel {
 		upgrades.simpleChanges().act(__ -> doPlanningLater());
 		// When the user changes the current research upgrade or building upgrade on a planet,
 		// That upgrade's cost should clear out, and the old upgrade (if any) should then show a cost
-		ObservableValue<ResearchType> currentResearch = ObservableValue.flatten(theSelectedAccount.map(a -> {
+		ObservableValue<ResearchType> currentResearch = ObservableValue.flatten(selectedAccount.map(a -> {
 			ObservableValue<ResearchType> rsrch;
 			if (a == null) {
 				rsrch = null;
@@ -197,7 +201,7 @@ public class OGameUniGui extends JPanel {
 		});
 		ObservableCollection<BuildingType> upgradeBuildings = ObservableCollection
 			.flattenValue(//
-				theSelectedAccount.map(a -> a == null ? null : a.getPlanets().getValues()))//
+				selectedAccount.map(a -> a == null ? null : a.getPlanets().getValues()))//
 			.flow().flattenValues(BuildingType.class, p -> EntityReflector.observeField(p, Planet::getCurrentUpgrade))//
 			.collect();
 		upgradeBuildings.onChange(evt -> {
