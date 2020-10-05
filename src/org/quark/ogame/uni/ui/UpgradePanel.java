@@ -16,12 +16,17 @@ import javax.swing.SwingUtilities;
 
 import org.observe.Observable;
 import org.observe.ObservableValue;
+import org.observe.SettableValue;
 import org.observe.collect.ObservableCollection;
 import org.observe.util.TypeTokens;
+import org.observe.util.swing.ObservableTableModel;
 import org.observe.util.swing.PanelPopulation.PanelPopulator;
+import org.observe.util.swing.PanelPopulation.TableBuilder;
+import org.observe.util.swing.TableContentControl;
 import org.observe.util.swing.WindowPopulation;
 import org.qommons.ArrayUtils;
 import org.qommons.QommonsUtils;
+import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementId;
 import org.qommons.io.Format;
@@ -33,6 +38,7 @@ import org.quark.ogame.roi.RoiSequenceElement;
 import org.quark.ogame.roi.RoiSequenceGenerator;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountUpgradeType;
+import org.quark.ogame.uni.BuildingType;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.UpgradeCost;
@@ -41,28 +47,11 @@ import org.quark.ogame.uni.ui.OGameUniGui.PlannedAccountUpgrade;
 public class UpgradePanel extends JPanel {
 	private final OGameUniGui theUniGui;
 
-	private final ObservableCollection<PlannedAccountUpgrade> theUpgrades;
-	private final PlannedAccountUpgrade thePlanetTotalUpgrade;
 	private final PlannedAccountUpgrade theTotalUpgrade;
 
 	public UpgradePanel(OGameUniGui uniGui) {
 		theUniGui = uniGui;
 
-		thePlanetTotalUpgrade = theUniGui.new PlannedAccountUpgrade(null) {
-			@Override
-			public UpgradeCost getCost() {
-				UpgradeCost cost = UpgradeCost.ZERO;
-				PlanetWithProduction selectedPlanet = theUniGui.getSelectedPlanet().get();
-				if (selectedPlanet != null) {
-					for (PlannedAccountUpgrade upgrade : theUniGui.getUpgrades()) {
-						if (upgrade.getPlanet() == selectedPlanet.planet) {
-							cost = cost.plus(upgrade.getCost());
-						}
-					}
-				}
-				return cost;
-			}
-		};
 		theTotalUpgrade = theUniGui.new PlannedAccountUpgrade(null) {
 			@Override
 			public UpgradeCost getCost() {
@@ -73,20 +62,6 @@ public class UpgradePanel extends JPanel {
 				return cost;
 			}
 		};
-
-		ObservableCollection<PlannedAccountUpgrade> totalUpgrades = ObservableCollection.build(PlannedAccountUpgrade.class).safe(false)
-			.build();
-		totalUpgrades.add(theTotalUpgrade);
-		theUniGui.getSelectedPlanet().changes().act(p -> {
-			if (p != null && totalUpgrades.size() == 1) {
-				totalUpgrades.add(0, thePlanetTotalUpgrade);
-			} else if (p == null && totalUpgrades.size() == 2) {
-				totalUpgrades.remove(0);
-			}
-		});
-		theUpgrades = ObservableCollection.flattenCollections(TypeTokens.get().of(PlannedAccountUpgrade.class), //
-			theUniGui.getUpgrades().flow().refresh(theUniGui.getSelectedPlanet().noInitChanges()).collect(), //
-			totalUpgrades).collect();
 	}
 
 	public PlannedAccountUpgrade getTotalUpgrades() {
@@ -94,16 +69,97 @@ public class UpgradePanel extends JPanel {
 	}
 
 	public void addPanel(PanelPopulator<?, ?> panel) {
+		SettableValue<TableContentControl> uiFilter = SettableValue.build(TableContentControl.class).safe(false)
+			.withValue(TableContentControl.DEFAULT).build();
+		ObservableValue<TableContentControl> tableFilter = uiFilter.map(filter -> {
+			if (filter == null || filter == TableContentControl.DEFAULT) {
+				return filter;
+			} else {
+				return filter.or(TableContentControl.of("Type", v -> "Total".equals(v.toString())));
+			}
+		});
+
+		UpgradeCost[] planetTotalCost = new UpgradeCost[] { UpgradeCost.ZERO };
+		UpgradeCost[] totalCost = new UpgradeCost[] { UpgradeCost.ZERO };
+		ObservableCollection<PlannedAccountUpgrade> upgrades;
+		PlannedAccountUpgrade planetTotalUpgrade = theUniGui.new PlannedAccountUpgrade(null) {
+			@Override
+			public UpgradeCost getCost() {
+				return planetTotalCost[0];
+			}
+		};
+		PlannedAccountUpgrade filteredTotalUpgrade = theUniGui.new PlannedAccountUpgrade(null) {
+			@Override
+			public UpgradeCost getCost() {
+				return totalCost[0];
+			}
+		};
+
+		ObservableCollection<PlannedAccountUpgrade> totalUpgrades = ObservableCollection.build(PlannedAccountUpgrade.class).safe(false)
+			.build();
+		totalUpgrades.add(filteredTotalUpgrade);
+		Runnable[] calcCosts = new Runnable[1];
+		boolean[] planetCallbackLock = new boolean[1];
+		theUniGui.getSelectedPlanet().changes().act(evt -> {
+			if (evt.getNewValue() != null && totalUpgrades.size() == 1) {
+				if (calcCosts[0] != null) {
+					calcCosts[0].run();
+				}
+				totalUpgrades.add(0, planetTotalUpgrade);
+			} else if (evt.getNewValue() == null && totalUpgrades.size() == 2) {
+				totalUpgrades.remove(0);
+			} else if (evt.getNewValue() != null) {
+				if (calcCosts[0] != null) {
+					calcCosts[0].run();
+				}
+				planetCallbackLock[0] = true;
+				try {
+					totalUpgrades.set(0, planetTotalUpgrade);
+				} finally {
+					planetCallbackLock[0] = false;
+				}
+			}
+		});
+		upgrades = ObservableCollection.flattenCollections(TypeTokens.get().of(PlannedAccountUpgrade.class), //
+			theUniGui.getUpgrades().flow().refresh(theUniGui.getSelectedPlanet().noInitChanges()).collect(), //
+			totalUpgrades).collect();
+
+		SettableValue<PlannedAccountUpgrade> selection = SettableValue.build(PlannedAccountUpgrade.class).safe(false).build();
+		selection.changes().act(evt -> {
+			if (planetCallbackLock[0] || evt.getOldValue() == evt.getNewValue()) {
+				return;
+			}
+			if (evt.getNewValue() != null && evt.getNewValue().getPlanet() != null && theUniGui.getSelectedAccount().get() != null) {
+				int index = theUniGui.getSelectedAccount().get().getPlanets().getValues().indexOf(evt.getNewValue().getPlanet());
+				if (index >= 0) {
+					if (calcCosts[0] != null) {
+						calcCosts[0].run();
+					}
+					planetCallbackLock[0] = true;
+					try {
+						theUniGui.getSelectedPlanet().set(theUniGui.getPlanets().get(index), evt);
+					} finally {
+						planetCallbackLock[0] = false;
+					}
+				}
+			}
+		});
 		Format<Double> commaFormat = Format.doubleFormat("#,##0");
-		panel.addButton("Generate ROI Sequence", __ -> showRoiSequenceConfigPanel(), null);
-		panel.addTable(theUpgrades,
-			upgradeTable -> upgradeTable.fill()//
+		TableBuilder<PlannedAccountUpgrade, ?>[] table = new TableBuilder[1];
+		panel.addTextField("Filter:", uiFilter, TableContentControl.FORMAT,
+			f -> f.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP).modifyEditor(tf -> tf.setCommitOnType(true)));
+		panel.addTable(upgrades, upgradeTable -> {
+			table[0] = upgradeTable;
+			upgradeTable.fill()//
 				.dragSourceRow(null).dragAcceptRow(null)// Make the rows draggable
+				.withFiltering(tableFilter)//
+				.withSelection(selection, false)//
 				.withColumn("Planet", String.class, upgrade -> {
-					if (upgrade == theTotalUpgrade) {
+					if (upgrade == filteredTotalUpgrade) {
 						return "Total";
-					} else if (upgrade == thePlanetTotalUpgrade) {
-						return "Planet Total";
+					} else if (upgrade == planetTotalUpgrade) {
+						PlanetWithProduction selectedPlanet = theUniGui.getSelectedPlanet().get();
+						return (selectedPlanet == null ? "Planet" : selectedPlanet.planet.getName()) + " Total";
 					} else if (upgrade.getPlanet() != null) {
 						return upgrade.getPlanet().getName() + (upgrade.getUpgrade().isMoon() ? " Moon" : "");
 					} else {
@@ -112,10 +168,10 @@ public class UpgradePanel extends JPanel {
 				}, planetCol -> {
 					planetCol.decorate((cell, d) -> {
 						PlanetWithProduction p = theUniGui.getSelectedPlanet().get();
-						if (p != null && cell.getModelValue().getPlanet() == p.planet) {
+						if (p != null && (cell.getModelValue().getPlanet() == p.planet || cell.getModelValue() == planetTotalUpgrade)) {
 							d.bold();
 						}
-					});
+					}).withWidths(80, 150, 300);
 				})//
 				.withColumn("Upgrade", AccountUpgradeType.class,
 					upgrade -> upgrade.getUpgrade() == null ? null : upgrade.getUpgrade().getType(),
@@ -164,25 +220,130 @@ public class UpgradePanel extends JPanel {
 				}, cargoCol -> cargoCol.formatText(i -> i == null ? "" : commaFormat.format(i * 1.0)).withWidths(40, 50, 80))//
 				.withColumn("ROI", Duration.class, upgrade -> upgrade.getROI(), //
 					roiCol -> roiCol.formatText(roi -> roi == null ? "" : Format.DURATION.format(roi)).withWidths(50, 100, 150))//
-		// .withMultiAction(upgrades -> sortUpgrades(upgrades), action -> action//
-		// .allowWhenMulti(items -> canSortUpgrades(items), null).modifyButton(button -> button.withText("Sort by ROI")))
-		);
+				.withColumn("Type", String.class, this::getType, col -> col.withWidths(50, 80, 150))//
+				.withColumn("Sub-Type", String.class, this::getSubType, col -> col.withWidths(50, 80, 150))//
+			// .withMultiAction(upgrades -> sortUpgrades(upgrades), action -> action//
+			// .allowWhenMulti(items -> canSortUpgrades(items), null).modifyButton(button -> button.withText("Sort by ROI")))
+			;
+		});
+		ObservableCollection<PlannedAccountUpgrade> rows = ((ObservableTableModel<PlannedAccountUpgrade>) table[0].getEditor().getModel())
+			.getRows();
+		calcCosts[0] = () -> {
+			totalCost[0] = planetTotalCost[0] = UpgradeCost.ZERO;
+			PlanetWithProduction selectedPlanet = theUniGui.getSelectedPlanet().get();
+			for (PlannedAccountUpgrade row : rows) {
+				if (row == planetTotalUpgrade || row == filteredTotalUpgrade) {
+					continue;
+				}
+				UpgradeCost cost = row.getCost();
+				if (cost != null) {
+					totalCost[0] = totalCost[0].plus(cost);
+					if (selectedPlanet != null && row.getPlanet() == selectedPlanet.planet) {
+						planetTotalCost[0] = planetTotalCost[0].plus(cost);
+					}
+				}
+			}
+		};
+		rows.simpleChanges().act(__ -> {
+			calcCosts[0].run();
+		});
+		calcCosts[0].run();
+		panel.addButton("Generate ROI Sequence", __ -> showRoiSequenceConfigPanel(), null);
 	}
 
-	private void sortUpgrades(List<? extends PlannedAccountUpgrade> upgrades) {
-		if (upgrades.size() <= 1) {
+	private String getType(PlannedAccountUpgrade upgrade) {
+		if (upgrade.getUpgrade() == null) {
+			return "Total";
+		}
+		switch (upgrade.getUpgrade().getType().type) {
+		case Building:
+			return "Building";
+		case Research:
+			return "Research";
+		case ShipyardItem:
+			return "Ship/Defense";
+		}
+		throw new IllegalStateException(upgrade.getUpgrade().getType().name());
+	}
+
+	private String getSubType(PlannedAccountUpgrade upgrade) {
+		if (upgrade.getUpgrade() == null) {
+			return "";
+		}
+		switch (upgrade.getUpgrade().getType().type) {
+		case Building:
+			BuildingType building = upgrade.getUpgrade().getType().building;
+			if (building.isMine() != null) {
+				return "Mine";
+			} else if (building.isStorage() != null) {
+				return "Storage";
+			}
+			switch (upgrade.getUpgrade().getType().building) {
+			case SolarPlant:
+			case FusionReactor:
+				return "Energy";
+			default:
+				return "Facility";
+			}
+		case Research:
+			switch (upgrade.getUpgrade().getType().research) {
+			case Armor:
+			case Shielding:
+			case Weapons:
+				return "Military";
+			case Combustion:
+			case Impulse:
+			case Hyperdrive:
+				return "Drive";
+			case Graviton:
+			case Ion:
+			case Laser:
+			case Hyperspace:
+				return "Requirement";
+			default:
+				return "Other";
+			}
+		case ShipyardItem:
+			ShipyardItemType ship = upgrade.getUpgrade().getType().shipyardItem;
+			if (ship.name().endsWith("Missile")) {
+				return "Missile";
+			}
+			if (ship.defense) {
+				return "Defense";
+			}
+			switch (ship) {
+			case BattleCruiser:
+			case BattleShip:
+			case Bomber:
+			case Cruiser:
+			case DeathStar:
+			case Destroyer:
+			case HeavyFighter:
+			case LightFighter:
+			case Reaper:
+			case PathFinder:
+				return "Combat";
+			default:
+				return "Civil";
+			}
+		}
+		throw new IllegalStateException(upgrade.getUpgrade().getType().name());
+	}
+
+	private void sortUpgrades(BetterList<PlannedAccountUpgrade> allUpgrades, List<? extends PlannedAccountUpgrade> toSort) {
+		if (toSort.size() <= 1) {
 			return;
 		}
 		// The selected upgrades should be in model order, and contiguous
-		CollectionElement<PlannedAccountUpgrade> target = theUpgrades.getElement(upgrades.get(0), true);
-		List<PlannedAccountUpgrade> sorted = new ArrayList<>(upgrades);
-		ElementId[] movedIds = new ElementId[upgrades.size()];
+		CollectionElement<PlannedAccountUpgrade> target = allUpgrades.getElement(toSort.get(0), true);
+		List<PlannedAccountUpgrade> sorted = new ArrayList<>(toSort);
+		ElementId[] movedIds = new ElementId[toSort.size()];
 		ElementId tempId = target.getElementId();
-		for (int i = 0; i < upgrades.size(); i++) {
+		for (int i = 0; i < toSort.size(); i++) {
 			movedIds[i] = tempId;
-			tempId = theUpgrades.getAdjacentElement(tempId, true).getElementId();
+			tempId = allUpgrades.getAdjacentElement(tempId, true).getElementId();
 		}
-		ArrayUtils.sort(upgrades.toArray(new PlannedAccountUpgrade[upgrades.size()]), new ArrayUtils.SortListener<PlannedAccountUpgrade>() {
+		ArrayUtils.sort(toSort.toArray(new PlannedAccountUpgrade[toSort.size()]), new ArrayUtils.SortListener<PlannedAccountUpgrade>() {
 			@Override
 			public int compare(PlannedAccountUpgrade u1, PlannedAccountUpgrade u2) {
 				if (u1.getROI() == null) {
@@ -205,13 +366,13 @@ public class UpgradePanel extends JPanel {
 				movedIds[idx2] = temp;
 			}
 		});
-		CollectionElement<PlannedAccountUpgrade> after = theUpgrades.getAdjacentElement(target.getElementId(), false);
+		CollectionElement<PlannedAccountUpgrade> after = allUpgrades.getAdjacentElement(target.getElementId(), false);
 		for (int i = 0; i < sorted.size(); i++) {
-			after = theUpgrades.move(movedIds[i], after.getElementId(), null, true, null);
+			after = allUpgrades.move(movedIds[i], after.getElementId(), null, true, null);
 		}
 	}
 
-	private String canSortUpgrades(List<? extends PlannedAccountUpgrade> upgrades) {
+	private String canSortUpgrades(BetterList<PlannedAccountUpgrade> allUpgrades, List<? extends PlannedAccountUpgrade> upgrades) {
 		switch (upgrades.size()) {
 		case 0:
 			return "Select a contiguous sequence of upgrades to sort";
@@ -219,7 +380,7 @@ public class UpgradePanel extends JPanel {
 			return "A single upgrade cannot be sorted";
 		}
 		boolean found = false, done = false;
-		for (PlannedAccountUpgrade upgrade : theUpgrades) {
+		for (PlannedAccountUpgrade upgrade : allUpgrades) {
 			if (upgrades.contains(upgrade)) {
 				if (!found) {
 					found = true;

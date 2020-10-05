@@ -48,4 +48,17 @@ public enum BuildingType {
 			return null;
 		}
 	}
+
+	public ResourceType isStorage() {
+		switch (this) {
+		case MetalStorage:
+			return ResourceType.Metal;
+		case CrystalStorage:
+			return ResourceType.Crystal;
+		case DeuteriumStorage:
+			return ResourceType.Deuterium;
+		default:
+			return null;
+		}
+	}
 }
