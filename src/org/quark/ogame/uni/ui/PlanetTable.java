@@ -821,7 +821,7 @@ public class PlanetTable {
 					goalDiff += upgrade.getQuantity();
 					upgradeIter.remove();
 				} else {
-					upgrade.setQuantity(upgrade.getQuantity() - goalDiff);
+					upgrade.setQuantity(upgrade.getQuantity() + goalDiff);
 					goalDiff = 0;
 					upgradeIter.set(upgrade);
 					break;
@@ -901,9 +901,9 @@ public class PlanetTable {
 
 	CategoryRenderStrategy<PlanetWithProduction, Levels> shipColumn(ShipyardItemType type, boolean moon, int width) {
 		if (moon) {
-			return intMoonColumn(OGameUtils.abbreviate(type), type.getUpgrade(), width);
+			return intMoonColumn(OGameUtils.abbreviate(type), type.getUpgrade(), width).withWidths(width, width, width + 100);
 		} else {
-			return intPlanetColumn(OGameUtils.abbreviate(type), type.getUpgrade(), width);
+			return intPlanetColumn(OGameUtils.abbreviate(type), type.getUpgrade(), width).withWidths(width, width, width + 100);
 		}
 	}
 
