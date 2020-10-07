@@ -21,8 +21,6 @@
             <fileset dir="${dir.workspace}/Qommons/classes"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/jdom-2.0.1.jar"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/ObServe/lib/swingx-1.6.jar"/>
-            <zipfileset excludes="META-INF/*.SF" src="${dir.jarfile}/lib/miglayout-core-4.2.jar"/>
-            <zipfileset excludes="META-INF/*.SF" src="${dir.jarfile}/lib/miglayout-swing-4.2.jar"/>
         </jar>
     </target>
 </project>
