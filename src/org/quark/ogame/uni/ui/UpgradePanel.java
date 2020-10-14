@@ -101,14 +101,15 @@ public class UpgradePanel extends JPanel {
 		Runnable[] calcCosts = new Runnable[1];
 		boolean[] planetCallbackLock = new boolean[1];
 		theUniGui.getSelectedPlanet().changes().act(evt -> {
-			if (evt.getNewValue() != null && totalUpgrades.size() == 1) {
+			boolean hasPlanetTotal = evt.getNewValue() != null && evt.getNewValue().planet != null;
+			if (hasPlanetTotal && totalUpgrades.size() == 1) {
 				if (calcCosts[0] != null) {
 					calcCosts[0].run();
 				}
 				totalUpgrades.add(0, planetTotalUpgrade);
-			} else if (evt.getNewValue() == null && totalUpgrades.size() == 2) {
+			} else if (!hasPlanetTotal && totalUpgrades.size() == 2) {
 				totalUpgrades.remove(0);
-			} else if (evt.getNewValue() != null) {
+			} else if (hasPlanetTotal) {
 				if (calcCosts[0] != null) {
 					calcCosts[0].run();
 				}
@@ -159,7 +160,8 @@ public class UpgradePanel extends JPanel {
 						return "Total";
 					} else if (upgrade == planetTotalUpgrade) {
 						PlanetWithProduction selectedPlanet = theUniGui.getSelectedPlanet().get();
-						return (selectedPlanet == null ? "Planet" : selectedPlanet.planet.getName()) + " Total";
+						return ((selectedPlanet == null || selectedPlanet.planet == null) ? "Planet" : selectedPlanet.planet.getName())
+							+ " Total";
 					} else if (upgrade.getPlanet() != null) {
 						return upgrade.getPlanet().getName() + (upgrade.getUpgrade().isMoon() ? " Moon" : "");
 					} else {
