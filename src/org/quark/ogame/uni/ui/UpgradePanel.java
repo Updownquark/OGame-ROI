@@ -25,6 +25,8 @@ import org.observe.util.swing.PanelPopulation.TableBuilder;
 import org.observe.util.swing.TableContentControl;
 import org.observe.util.swing.WindowPopulation;
 import org.qommons.ArrayUtils;
+import org.qommons.Causable;
+import org.qommons.Causable.CausableKey;
 import org.qommons.QommonsUtils;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
@@ -113,12 +115,14 @@ public class UpgradePanel extends JPanel {
 				if (calcCosts[0] != null) {
 					calcCosts[0].run();
 				}
-				planetCallbackLock[0] = true;
-				try {
-					totalUpgrades.set(0, planetTotalUpgrade);
-				} finally {
-					planetCallbackLock[0] = false;
-				}
+				EventQueue.invokeLater(() -> {
+					planetCallbackLock[0] = true;
+					try {
+						totalUpgrades.set(0, planetTotalUpgrade);
+					} finally {
+						planetCallbackLock[0] = false;
+					}
+				});
 			}
 		});
 		upgrades = ObservableCollection.flattenCollections(TypeTokens.get().of(PlannedAccountUpgrade.class), //
@@ -126,32 +130,45 @@ public class UpgradePanel extends JPanel {
 			totalUpgrades).collect();
 
 		SettableValue<PlannedAccountUpgrade> selection = SettableValue.build(PlannedAccountUpgrade.class).safe(false).build();
-		selection.changes().act(evt -> {
-			if (planetCallbackLock[0] || evt.getOldValue() == evt.getNewValue()) {
+		CausableKey key = Causable.key((cause, values) -> {
+			PlannedAccountUpgrade upgrade = selection.get();
+			if (planetCallbackLock[0] || upgrade == null || upgrade.getPlanet() == null) {
 				return;
 			}
-			if (evt.getNewValue() != null && evt.getNewValue().getPlanet() != null && theUniGui.getSelectedAccount().get() != null) {
-				int index = theUniGui.getSelectedAccount().get().getPlanets().getValues().indexOf(evt.getNewValue().getPlanet());
-				if (index >= 0) {
+			PlanetWithProduction planet = theUniGui.getSelectedPlanet().get();
+			if (planet == null || planet.planet == null || planet.planet != upgrade.getPlanet()) {
+				EventQueue.invokeLater(() -> {
+					if (planetCallbackLock[0]) {
+						return;
+					}
+					Account account = theUniGui.getSelectedAccount().get();
+					if (account == null) {
+						return;
+					}
+					int index = account.getPlanets().getValues().indexOf(upgrade.getPlanet());
+					if (index < 0) {
+						return;
+					}
 					if (calcCosts[0] != null) {
 						calcCosts[0].run();
 					}
 					planetCallbackLock[0] = true;
 					try {
-						theUniGui.getSelectedPlanet().set(theUniGui.getPlanets().get(index), evt);
+						theUniGui.getSelectedPlanet().set(theUniGui.getPlanets().get(index), null);
 					} finally {
 						planetCallbackLock[0] = false;
 					}
-				}
+				});
 			}
 		});
+		selection.changes().act(evt -> evt.getRootCausable().onFinish(key));
 		Format<Double> commaFormat = Format.doubleFormat("#,##0");
 		TableBuilder<PlannedAccountUpgrade, ?>[] table = new TableBuilder[1];
 		panel.addTextField("Filter:", uiFilter, TableContentControl.FORMAT,
 			f -> f.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP).modifyEditor(tf -> tf.setCommitOnType(true)));
 		panel.addTable(upgrades, upgradeTable -> {
 			table[0] = upgradeTable;
-			upgradeTable.fill()//
+			upgradeTable.fill().fillV()//
 				.dragSourceRow(null).dragAcceptRow(null)// Make the rows draggable
 				.withFiltering(tableFilter)//
 				.withSelection(selection, false)//

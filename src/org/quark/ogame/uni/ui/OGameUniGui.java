@@ -42,10 +42,12 @@ import org.observe.util.swing.ModelCell;
 import org.observe.util.swing.ObservableCellRenderer;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.PanelPopulation;
+import org.qommons.LambdaUtils;
 import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
 import org.qommons.ValueHolder;
 import org.qommons.collect.CollectionElement;
+import org.qommons.debug.Debug;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
 import org.quark.ogame.OGameUtils;
@@ -120,39 +122,42 @@ public class OGameUniGui extends JPanel {
 
 		SettableValue<Account> selectedAccount = config.asValue(Account.class).at("selected-account")
 			.withFormat(
-				ObservableConfigFormat.<Account> buildReferenceFormat(fv -> accounts.getValues(), () -> accounts.getValues().peekFirst())//
+				ObservableConfigFormat.<Account> buildReferenceFormat(accounts.getValues(), () -> accounts.getValues().peekFirst())//
 					.withField("id", Account::getId, ObservableConfigFormat.INT)//
 					.build())
 			.buildValue(null);
-		ObservableValue<UpgradeAccount> upgradeAccount = selectedAccount.map(TypeTokens.get().of(UpgradeAccount.class), a -> {
-			return a == null ? null : new UpgradeAccount(a);
-		}, opts -> opts.cache(true).reEvalOnUpdate(false).fireIfUnchanged(true));
+		ObservableValue<UpgradeAccount> upgradeAccount = selectedAccount.map(TypeTokens.get().of(UpgradeAccount.class),
+			LambdaUtils.printableFn(a -> {
+				return a == null ? null : new UpgradeAccount(a);
+			}, "UpgradeAccount::new", null), opts -> opts.cache(true).reEvalOnUpdate(false).fireIfUnchanged(true));
 
-		thePlanetRefresh = new SimpleObservable<>();
-		theUpgradeRefresh = new SimpleObservable<>();
+		thePlanetRefresh = SimpleObservable.build().safe(false).withDescription("planet-refresh").build();
+		theUpgradeRefresh = SimpleObservable.build().safe(false).withDescription("upgrade-refresh").build();
 		theSelectedAccount = selectedAccount.refresh(theUpgradeRefresh);
 		theUpgradeAccount = upgradeAccount.refresh(theUpgradeRefresh);
 
 		ObservableCollection<PlanetWithProduction> planets = ObservableCollection
-			.flattenValue(upgradeAccount.map(
-				account -> account == null ? ObservableCollection.of(TypeTokens.get().of(Planet.class)) : account.getPlanets().getValues()))
+			.flattenValue(upgradeAccount.map(LambdaUtils.printableFn(
+				account -> account == null ? ObservableCollection.of(TypeTokens.get().of(Planet.class)) : account.getPlanets().getValues(),
+				"planets", null)))
 			.flow().refresh(thePlanetRefresh)//
-			.transform(TypeTokens.get().of(PlanetWithProduction.class), tx -> tx.cache(true).reEvalOnUpdate(false).map(this::productionFor))//
+			.transform(TypeTokens.get().of(PlanetWithProduction.class),
+				tx -> tx.cache(true).reEvalOnUpdate(false).map(LambdaUtils.printableFn(this::productionFor, "production", null)))//
 			.collect();
 		thePlanets = planets.flow().refresh(theUpgradeRefresh).collect();
-		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).build();
+		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).withDescription("selected-planet").build();
 
 		PlanetWithProduction total = new PlanetWithProduction(null, null)//
 			.setProduction(ZERO, ZERO, ZERO, ZERO).setUpgradeProduction(ZERO, ZERO, ZERO, ZERO);
-		theTotalProduction = ObservableCollection.build(PlanetWithProduction.class).safe(false).build().with(total);
+		theTotalProduction = ObservableCollection.build(PlanetWithProduction.class).safe(false).withDescription("total-planet-production")
+			.build().with(total);
 		thePlanetsWithTotal = ObservableCollection.flattenCollections(TypeTokens.get().of(PlanetWithProduction.class), //
 			getPlanets(), theTotalProduction).collect();
 
 		TypeToken<ObservableCollection<PlannedUpgrade>> upgradeCollType = TypeTokens.get().keyFor(ObservableCollection.class)
 			.parameterized(PlannedUpgrade.class);
-		ObservableCollection<PlannedAccountUpgrade> upgrades = ObservableCollection
-			.flattenValue(
-				selectedAccount.map(upgradeCollType, account -> account.getPlannedUpgrades().getValues(), opts -> opts.nullToNull(true)))//
+		ObservableCollection<PlannedAccountUpgrade> upgrades = ObservableCollection.flattenValue(selectedAccount.map(upgradeCollType,
+			LambdaUtils.printableFn(account -> account.getPlannedUpgrades().getValues(), "upgrades", null), opts -> opts.nullToNull(true)))//
 			.flow().transform(TypeTokens.get().of(PlannedAccountUpgrade.class),
 				tx -> tx.cache(true).reEvalOnUpdate(false).map(pu -> new PlannedAccountUpgrade(pu)))
 			.collect();
