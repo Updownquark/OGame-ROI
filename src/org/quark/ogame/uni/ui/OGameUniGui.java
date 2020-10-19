@@ -47,7 +47,6 @@ import org.qommons.QommonsUtils;
 import org.qommons.StringUtils;
 import org.qommons.ValueHolder;
 import org.qommons.collect.CollectionElement;
-import org.qommons.debug.Debug;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
 import org.quark.ogame.OGameUtils;
@@ -995,6 +994,19 @@ public class OGameUniGui extends JPanel {
 			.withConfig("occountant").withConfigAt("OCcountant.xml")//
 			.withTitle("OCcountant")//
 			.withIcon(OGameUniGui.class, "/icons/HeldPlanet.png")//
+			.enableCloseWithoutSave()//
+			.withErrorReporting("https://github.com/Updownquark/OGame-ROI/issues/new", (str, error) -> {
+				if (error) {
+					str.append("<ol><li>Describe your issue, what you did to produce it, what effects it had, etc.</li>");
+				} else {
+					str.append("<ol><li>Describe your issue or feature idea");
+				}
+				str.append("</li><li>Click the gear next to \"Labels\" and select \"Bug\"");
+				if(!error) {
+					str.append(" or \"Feature\"");
+				}
+				str.append("</li><li>Click \"Submit new issue\"</li></ol>");
+			})//
 			.systemLandF()//
 			.build(config -> {
 				return new OGameUniGui(config, ruleSets, getAccounts(config, "accounts/account"));
