@@ -1001,10 +1001,6 @@ public class OGameUniGui extends JPanel {
 				} else {
 					str.append("<ol><li>Describe your issue or feature idea");
 				}
-				str.append("</li><li>Click the gear next to \"Labels\" and select \"Bug\"");
-				if(!error) {
-					str.append(" or \"Feature\"");
-				}
 				str.append("</li><li>Click \"Submit new issue\"</li></ol>");
 			})//
 			.systemLandF()//
