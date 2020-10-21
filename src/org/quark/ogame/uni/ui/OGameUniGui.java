@@ -34,6 +34,8 @@ import org.observe.collect.ObservableCollection;
 import org.observe.config.ObservableConfig;
 import org.observe.config.ObservableConfigFormat;
 import org.observe.config.SyncValueSet;
+import org.observe.ext.util.GitHubApiHelper;
+import org.observe.ext.util.GitHubApiHelper.Release;
 import org.observe.util.EntityReflector;
 import org.observe.util.TypeTokens;
 import org.observe.util.swing.CategoryRenderStrategy;
@@ -41,6 +43,7 @@ import org.observe.util.swing.JustifiedBoxLayout;
 import org.observe.util.swing.ModelCell;
 import org.observe.util.swing.ObservableCellRenderer;
 import org.observe.util.swing.ObservableSwingUtils;
+import org.observe.util.swing.ObservableSwingUtils.ObservableUiBuilder;
 import org.observe.util.swing.PanelPopulation;
 import org.qommons.LambdaUtils;
 import org.qommons.QommonsUtils;
@@ -989,7 +992,7 @@ public class OGameUniGui extends JPanel {
 		List<OGameRuleSet> ruleSets = new ArrayList<>();
 		ruleSets.addAll(Arrays.asList(//
 			new OGameRuleSet710(), new OGameRuleSet711(), new OGameRuleSet750()));
-		ObservableSwingUtils.buildUI()//
+		ObservableUiBuilder builder = ObservableSwingUtils.buildUI()//
 			.withOldConfig("ogame-config").withOldConfigAt("OGameUI.xml")//
 			.withConfig("occountant").withConfigAt("OCcountant.xml")//
 			.withTitle("OCcountant")//
@@ -1002,10 +1005,37 @@ public class OGameUniGui extends JPanel {
 					str.append("<ol><li>Describe your issue or feature idea");
 				}
 				str.append("</li><li>Click \"Submit new issue\"</li></ol>");
-			})//
-			.systemLandF()//
-			.build(config -> {
-				return new OGameUniGui(config, ruleSets, getAccounts(config, "accounts/account"));
+			});
+		builder.withAbout(OGameUniGui.class, () -> {
+			Release r;
+			try {
+				r = new GitHubApiHelper("Updownquark", "OGame-ROI").getLatestRelease(OGameUniGui.class);
+			} catch (IOException e) {
+				e.printStackTrace(System.out);
+				return null;
+			}
+			return r == null ? null : r.getTagName();
+		}, () -> {
+			try {
+				new GitHubApiHelper("Updownquark", "OGame-ROI").upgradeToLatest(OGameUniGui.class, builder.getTitle().get(),
+					builder.getIcon().get());
+			} catch (IllegalStateException | IOException e) {
+				e.printStackTrace(System.out);
+			}
+		}).systemLandF()//
+			.build((config, onBuilt) -> {
+				try {
+					new GitHubApiHelper("Updownquark", "OGame-ROI").checkForNewVersion(OGameUniGui.class, builder.getTitle().get(),
+						builder.getIcon().get(), release -> {
+							String declinedRelease = config.get("declined-release");
+							return !release.getTagName().equals(declinedRelease);
+						}, release -> config.set("declined-release", release.getTagName()), () -> {
+							onBuilt.accept(new OGameUniGui(config, ruleSets, getAccounts(config, "accounts/account")));
+						});
+				} catch (IOException e) {
+					// Put this on System.out so we don't trigger the bug warning
+					e.printStackTrace(System.out);
+				}
 			});
 	}
 
