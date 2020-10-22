@@ -1022,7 +1022,9 @@ public class OGameUniGui extends JPanel {
 			} catch (IllegalStateException | IOException e) {
 				e.printStackTrace(System.out);
 			}
-		}).systemLandF()//
+		}).withBackups(backups -> backups.withBackupSize(1_000_000, 100_000_000).withDuration(Duration.ofDays(1), Duration.ofDays(30))
+			.withBackupCount(10, 100))//
+			.systemLandF()//
 			.build((config, onBuilt) -> {
 				try {
 					new GitHubApiHelper("Updownquark", "OGame-ROI").checkForNewVersion(OGameUniGui.class, builder.getTitle().get(),
