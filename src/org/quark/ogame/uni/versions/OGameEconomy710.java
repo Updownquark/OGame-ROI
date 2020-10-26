@@ -133,7 +133,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 				costs.put(upgrade, new CostDescrip(1000, 500, 0, 2));
 				break;
 			case DeuteriumStorage:
-				costs.put(upgrade, new CostDescrip(1000, 10000, 0, 2));
+				costs.put(upgrade, new CostDescrip(1000, 1000, 0, 2));
 				break;
 			// Facilities
 			case RoboticsFactory:
