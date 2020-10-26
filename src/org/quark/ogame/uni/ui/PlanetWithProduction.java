@@ -2,6 +2,7 @@ package org.quark.ogame.uni.ui;
 
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.Planet;
+import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.UpgradeAccount.UpgradePlanet;
 
 public class PlanetWithProduction {
@@ -85,6 +86,20 @@ public class PlanetWithProduction {
 
 	public Production getDeuterium(boolean upgrade) {
 		return upgrade ? theUpgradeDeuterium : theDeuterium;
+	}
+
+	public Production getProduction(ResourceType resource, boolean upgrade) {
+		switch (resource) {
+		case Energy:
+			return getEnergy(upgrade);
+		case Metal:
+			return getMetal(upgrade);
+		case Crystal:
+			return getCrystal(upgrade);
+		case Deuterium:
+			return getDeuterium(upgrade);
+		}
+		throw new IllegalStateException(resource.name());
 	}
 
 	@Override

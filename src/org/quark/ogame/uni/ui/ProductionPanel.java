@@ -1,6 +1,8 @@
 package org.quark.ogame.uni.ui;
 
 import java.awt.Color;
+import java.time.Duration;
+import java.util.function.Function;
 
 import javax.swing.JPanel;
 
@@ -11,10 +13,12 @@ import org.observe.config.ObservableConfig;
 import org.observe.config.ObservableConfigFormat;
 import org.observe.util.swing.CategoryRenderStrategy;
 import org.observe.util.swing.PanelPopulation.PanelPopulator;
+import org.qommons.QommonsUtils;
 import org.qommons.TimeUtils;
 import org.quark.ogame.OGameUtils;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountUpgradeType;
+import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.TradeRatios;
 
@@ -47,6 +51,22 @@ public class ProductionPanel extends JPanel {
 				PlanetTable.planetColumn("D Prod", String.class,
 					planet -> printProduction(planet.getDeuterium(showGoalProduction.get()).totalNet, theProductionType.get()), null, 80) //
 			).flow().refresh(theProductionType.noInitChanges()).collect();
+		Function<Duration, String> durationFormat = d -> d == null ? "" : QommonsUtils.printDuration(d, true);
+		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> storageFillTimes = ObservableCollection
+			.of(PlanetTable.PLANET_COLUMN_TYPE,
+				PlanetTable
+					.planetColumn("M Fill Time", Duration.class,
+						planet -> getStorageFillTime(planet, ResourceType.Metal, showGoalProduction.get()), null, 100)
+					.formatText(durationFormat), //
+				PlanetTable
+					.planetColumn("C Fill Time", Duration.class,
+						planet -> getStorageFillTime(planet, ResourceType.Crystal, showGoalProduction.get()), null, 100)
+					.formatText(durationFormat), //
+				PlanetTable
+					.planetColumn("D Fill Time", Duration.class,
+						planet -> getStorageFillTime(planet, ResourceType.Deuterium, showGoalProduction.get()), null, 100)
+					.formatText(durationFormat)//
+			).flow().refresh(theProductionType.noInitChanges()).collect();
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> productionCargoColumns = ObservableCollection
 			.of(PlanetTable.PLANET_COLUMN_TYPE,
 				PlanetTable.planetColumn("Cargoes", int.class, planet -> getCargoes(planet, false, theProductionType.get()), null, 80)
@@ -77,7 +97,7 @@ public class ProductionPanel extends JPanel {
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> planetColumns = ObservableCollection
 			.flattenCollections(PlanetTable.PLANET_COLUMN_TYPE, //
 				initPlanetColumns, //
-				productionColumns, productionTotalColumns, productionCargoColumns)
+				productionColumns, productionTotalColumns, productionCargoColumns, storageFillTimes)
 			.collect();
 		ObservableCollection<PlanetWithProduction> planets = theUniGui.getPlanetsWithTotal().flow()//
 			.refresh(Observable.or(theProductionType.noInitChanges(), showGoalProduction.noInitChanges())).collect();
@@ -154,5 +174,15 @@ public class ProductionPanel extends JPanel {
 				.getUpgradeCost(account, goal ? planet.upgradePlanet : planet.planet, AccountUpgradeType.LargeCargo, 0, 1).getTotal();
 		}
 		return (int) Math.ceil(production / capacity);
+	}
+
+	Duration getStorageFillTime(PlanetWithProduction planet, ResourceType resource, boolean goals) {
+		if (planet == null || planet.planet == null) {
+			return null;
+		}
+		long storage = theUniGui.getRules().get().economy().getStorage(//
+			goals ? planet.upgradePlanet : planet.planet, resource);
+		int production = planet.getProduction(resource, goals).totalNet;
+		return Duration.ofSeconds(Math.round(storage * 3600.0 / production));
 	}
 }
