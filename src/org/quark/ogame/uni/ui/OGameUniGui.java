@@ -38,12 +38,12 @@ import org.observe.ext.util.GitHubApiHelper;
 import org.observe.ext.util.GitHubApiHelper.Release;
 import org.observe.util.EntityReflector;
 import org.observe.util.TypeTokens;
+import org.observe.util.swing.AppPopulation.ObservableUiBuilder;
 import org.observe.util.swing.CategoryRenderStrategy;
 import org.observe.util.swing.JustifiedBoxLayout;
 import org.observe.util.swing.ModelCell;
 import org.observe.util.swing.ObservableCellRenderer;
 import org.observe.util.swing.ObservableSwingUtils;
-import org.observe.util.swing.ObservableSwingUtils.ObservableUiBuilder;
 import org.observe.util.swing.PanelPopulation;
 import org.qommons.LambdaUtils;
 import org.qommons.QommonsUtils;
@@ -1006,7 +1006,7 @@ public class OGameUniGui extends JPanel {
 				}
 				str.append("</li><li>Click \"Submit new issue\"</li></ol>");
 			});
-		builder.withAbout(OGameUniGui.class, () -> {
+		builder.withAbout(OGameUniGui.class, about -> about.withLatestVersion(() -> {
 			Release r;
 			try {
 				r = new GitHubApiHelper("Updownquark", "OGame-ROI").getLatestRelease(OGameUniGui.class);
@@ -1015,14 +1015,14 @@ public class OGameUniGui extends JPanel {
 				return null;
 			}
 			return r == null ? null : r.getTagName();
-		}, () -> {
+		}).withUpgrade(version -> {
 			try {
 				new GitHubApiHelper("Updownquark", "OGame-ROI").upgradeToLatest(OGameUniGui.class, builder.getTitle().get(),
 					builder.getIcon().get());
 			} catch (IllegalStateException | IOException e) {
 				e.printStackTrace(System.out);
 			}
-		}).withBackups(backups -> backups.withBackupSize(1_000_000, 100_000_000).withDuration(Duration.ofDays(1), Duration.ofDays(30))
+		})).withBackups(backups -> backups.withBackupSize(1_000_000, 100_000_000).withDuration(Duration.ofDays(1), Duration.ofDays(30))
 			.withBackupCount(10, 100))//
 			.systemLandF()//
 			.build((config, onBuilt) -> {
