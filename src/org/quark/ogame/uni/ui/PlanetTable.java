@@ -510,8 +510,7 @@ public class PlanetTable {
 									r.setCurrentUpgrade(null);
 									if (UPGRADE_DONE.equals(rsrch)) {
 										upgrade(null, upgrade.getUpgrade());
-										researchColl.mutableElement(researchColl.getTerminalElement(true).getElementId())//
-											.set(theUniGui.getSelectedAccount().get().getResearch());
+										theUniGui.refreshProduction();
 									}
 								}
 							})))//
