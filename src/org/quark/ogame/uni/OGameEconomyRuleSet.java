@@ -88,6 +88,11 @@ public interface OGameEconomyRuleSet {
 			this.type = type;
 			this.level = level;
 		}
+
+		@Override
+		public String toString() {
+			return type + " " + level;
+		}
 	}
 
 	Production getProduction(Account account, Planet planet, ResourceType resourceType, double energyFactor);

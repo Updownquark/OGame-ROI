@@ -1,7 +1,5 @@
 package org.quark.ogame.roi;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
@@ -12,6 +10,7 @@ import org.observe.config.SyncValueSet;
 import org.observe.util.TypeTokens;
 import org.qommons.BreakpointHere;
 import org.qommons.Nameable;
+import org.qommons.Transaction;
 import org.qommons.collect.QuickSet.QuickMap;
 import org.quark.ogame.OGameUtils;
 import org.quark.ogame.uni.Account;
@@ -25,9 +24,9 @@ import org.quark.ogame.uni.CondensedResearch;
 import org.quark.ogame.uni.CondensedRockyBody;
 import org.quark.ogame.uni.CondensedStationaryStructures;
 import org.quark.ogame.uni.Coordinate;
-import org.quark.ogame.uni.Fleet;
 import org.quark.ogame.uni.Holding;
 import org.quark.ogame.uni.Moon;
+import org.quark.ogame.uni.OGameEconomyRuleSet.FullProduction;
 import org.quark.ogame.uni.Officers;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.PlannedFlight;
@@ -37,24 +36,35 @@ import org.quark.ogame.uni.ResearchType;
 import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.RockyBody;
 import org.quark.ogame.uni.ShipyardItemType;
-import org.quark.ogame.uni.StationaryStructures;
 import org.quark.ogame.uni.Trade;
 import org.quark.ogame.uni.Universe;
 
 import com.google.common.reflect.TypeToken;
 
 public class RoiAccount implements Account {
+	static class AccountStatus {
+		long theTime;
+		long theHoldings;
+		long theNextUpgradeCompletion;
+		int planetCount;
+
+		AccountStatus() {}
+
+		AccountStatus(AccountStatus copy) {
+			theTime = copy.theTime;
+			theHoldings = copy.theHoldings;
+			theNextUpgradeCompletion = copy.theNextUpgradeCompletion;
+			planetCount = copy.planetCount;
+		}
+	}
+
 	private final RoiSequenceGenerator theSequence;
 	private final Account theTarget;
 	private final RoiResearch theResearch;
 	private final RoiValueSet<RoiPlanet> thePlanets;
 
-	private long theTotalBaseProduction;
-	private long theTotalUpgradedProduction;
-	private long theFlushTime;
-	private long theTime;
-	private long theHoldings;
-	private long theNextUpgradeCompletion;
+	private BranchStack<AccountStatus> theStatus;
+	private long theBranch;
 
 	public RoiAccount(RoiSequenceGenerator sequence, Account target) {
 		theSequence = sequence;
@@ -64,22 +74,52 @@ public class RoiAccount implements Account {
 		for (Planet targetPlanet : target.getPlanets().getValues()) {
 			thePlanets.getValues().add(new RoiPlanet(targetPlanet, 0));
 		}
+		theStatus = new BranchStack<AccountStatus>(new AccountStatus()) {
+			@Override
+			AccountStatus createValue() {
+				return new AccountStatus();
+			}
+
+			@Override
+			void copyValue(AccountStatus source, AccountStatus dest) {
+				dest.theTime = source.theTime;
+				dest.theHoldings = source.theHoldings;
+				dest.theNextUpgradeCompletion = source.theNextUpgradeCompletion;
+				dest.planetCount = source.planetCount;
+			}
+		};
 		reset();
 	}
 
+	public Transaction branch() {
+		theBranch++;
+		return () -> {
+			theBranch--;
+			theStatus.pop(theBranch);
+			while (thePlanets.getValues().size() > theStatus.get().planetCount) {
+				thePlanets.getValues().removeLast();
+			}
+			theResearch.popBranch(theBranch);
+			for (RoiPlanet planet : thePlanets.getValues()) {
+				planet.popBranch(theBranch);
+			}
+		};
+	}
+
 	public long getTime() {
-		return theTime;
+		return theStatus.get().theTime;
 	}
 
 	public long getHolding() {
-		return theHoldings;
+		return theStatus.get().theHoldings;
 	}
 
 	public long getProduction() {
+		long production = 0;
 		for (RoiPlanet planet : roiPlanets()) {
-			planet.getProduction(); // Flush production
+			production += planet.getProductionValue();
 		}
-		return theTotalUpgradedProduction;
+		return production;
 	}
 
 	/**
@@ -97,32 +137,29 @@ public class RoiAccount implements Account {
 		}
 	}
 
-	/** Removes all temporary upgrades from this account */
-	public void clear() {
-		theTotalUpgradedProduction = theTotalBaseProduction;
-		theResearch.clear();
-		theTime = theFlushTime;
-		while (!thePlanets.getValues().isEmpty() && !thePlanets.getValues().getLast().isFlushed) {
-			thePlanets.getValues().removeLast();
+	public RoiAccount completeUpgrades() {
+		AccountStatus status = theStatus.getForUpdate(theBranch);
+		long nextUpgradeTime = getNextUpgradeCompletion();
+		while (nextUpgradeTime > theStatus.get().theTime) {
+			advance(nextUpgradeTime);
+			nextUpgradeTime = getNextUpgradeCompletion();
 		}
-		for (RoiPlanet planet : thePlanets.getValues()) {
-			planet.clear();
-		}
+		return this;
 	}
 
 	/**
 	 * Applies all temporary upgrades in this account such that they are not removed with {@link #clear()}
 	 * 
-	 * @param sequence
+	 * @return This account
 	 */
-	public void flush() {
-		getProduction(); // Flush production
-		theTotalBaseProduction = theTotalUpgradedProduction;
+	public RoiAccount flush() {
+		theStatus.flush(theBranch);
 		theResearch.flush();
 		for (RoiPlanet planet : thePlanets.getValues()) {
 			planet.flush();
 		}
-		theFlushTime = theTime;
+		debugCheckUpgradeCompletion();
+		return this;
 	}
 
 	/**
@@ -134,84 +171,127 @@ public class RoiAccount implements Account {
 	 * @param duration
 	 */
 	public void start(AccountUpgradeType type, RoiRockyBody body, int amount, long duration) {
-		long finishTime = theTime + duration;
+		if (duration < 0) {
+			throw new IllegalArgumentException("" + duration);
+		} else if (duration == 0) {
+			upgrade(type, body, amount);
+			return;
+		}
+		long finishTime = theStatus.get().theTime + duration;
 		if (type.research != null) {
 			theResearch.start(type.research, amount, finishTime);
 		} else {
 			body.start(type, amount, finishTime);
 		}
-		if (theNextUpgradeCompletion < 0 || finishTime < theNextUpgradeCompletion) {
-			theNextUpgradeCompletion = finishTime;
+		if (theStatus.get().theNextUpgradeCompletion == 0 || finishTime < theStatus.get().theNextUpgradeCompletion) {
+			theStatus.getForUpdate(theBranch).theNextUpgradeCompletion = finishTime;
 		}
+		debugCheckUpgradeCompletion();
 	}
 
 	/** Resets all upgrades done to this account, including {@link #flush() flushed} ones */
 	public void reset() {
+		theStatus.reset();
 		theResearch.reset();
-		while (thePlanets.getValues().size() > 0 && thePlanets.getValues().getLast().getTargetBody() == null) {
+		int maxPlanets = theSequence.getRules().economy().getMaxPlanets(this);
+		theStatus.get().planetCount = maxPlanets;
+		while (thePlanets.getValues().size() > theStatus.get().planetCount) {
 			thePlanets.getValues().removeLast();
 		}
 		for (RoiPlanet planet : thePlanets.getValues()) {
 			planet.reset();
 		}
-		theHoldings = 0;
-		theTime = theFlushTime = 0;
-		theNextUpgradeCompletion = -1;
-		theTotalBaseProduction = 0;
-		for (RoiPlanet p : roiPlanets()) {
-			theTotalBaseProduction += p.getProduction();
+		while (thePlanets.getValues().size() < maxPlanets) {
+			thePlanets.newValue();
 		}
-		theTotalUpgradedProduction = theTotalBaseProduction;
+		debugCheckUpgradeCompletion();
 	}
 
 	public long getNextUpgradeCompletion() {
-		return theNextUpgradeCompletion;
+		return theStatus.get().theNextUpgradeCompletion;
 	}
 
 	public void advance(long time) {
-		if (time < theTime) {
+		if (time < theStatus.get().theTime) {
 			BreakpointHere.breakpoint();
+		} else if (time == theStatus.get().theTime) {
+			return;
 		}
-		while (theNextUpgradeCompletion >= 0 && time >= theNextUpgradeCompletion) {
-			long next = theNextUpgradeCompletion;
-			theHoldings += theTotalUpgradedProduction * (next - theTime) / 3_600;
-			finishNextUpgrades();
-			theTime = next;
+		AccountStatus status = theStatus.getForUpdate(theBranch);
+		while (status.theNextUpgradeCompletion > 0 && time >= status.theNextUpgradeCompletion) {
+			long next = status.theNextUpgradeCompletion;
+			status.theHoldings += getProduction() * (next - status.theTime) / 3_600;
+			status.theNextUpgradeCompletion = 0;
+			theResearch.finishUpgradeTo(next);
+			for (RoiPlanet planet : thePlanets.getValues()) {
+				planet.finishUpgradeTo(next);
+			}
+			status.theTime = next;
 		}
-		theHoldings += theTotalUpgradedProduction * (time - theTime) / 3_600;
-		theTime = time;
+		if (time > status.theTime) {
+			status.theHoldings += getProduction() * (time - status.theTime) / 3_600;
+			status.theTime = time;
+		}
+		debugCheckUpgradeCompletion();
+	}
+
+	private void debugCheckUpgradeCompletion() {
+		AccountStatus status = theStatus.get();
+		if (status.theNextUpgradeCompletion > 0 && status.theTime >= status.theNextUpgradeCompletion) {
+			BreakpointHere.breakpoint(); // DEBUG
+		}
+		if (status.theNextUpgradeCompletion < 0) {
+			if (theResearch.getUpgradeCompletion() > 0) {
+				BreakpointHere.breakpoint();
+			}
+			for (RoiPlanet planet : roiPlanets()) {
+				if (planet.getUpgradeCompletion() > 0) {
+					BreakpointHere.breakpoint();
+				} else if (planet.getStationaryStructures().getUpgradeCompletion() > 0) {
+					BreakpointHere.breakpoint();
+				} else if (planet.getMoon().getUpgradeCompletion() > 0) {
+					BreakpointHere.breakpoint();
+				} else if (planet.getMoon().getStationaryStructures().getUpgradeCompletion() > 0) {
+					BreakpointHere.breakpoint();
+				}
+			}
+		} else {
+			if (theResearch.getUpgradeCompletion() > 0 && theResearch.getUpgradeCompletion() < status.theNextUpgradeCompletion) {
+				BreakpointHere.breakpoint();
+			}
+			for (RoiPlanet planet : roiPlanets()) {
+				if (planet.getUpgradeCompletion() > 0 && planet.getUpgradeCompletion() < status.theNextUpgradeCompletion) {
+					BreakpointHere.breakpoint();
+				} else if (planet.getStationaryStructures().getUpgradeCompletion() > 0
+					&& planet.getStationaryStructures().getUpgradeCompletion() < status.theNextUpgradeCompletion) {
+					BreakpointHere.breakpoint();
+				} else if (planet.getMoon().getUpgradeCompletion() > 0
+					&& planet.getMoon().getUpgradeCompletion() < status.theNextUpgradeCompletion) {
+					BreakpointHere.breakpoint();
+				} else if (planet.getMoon().getStationaryStructures().getUpgradeCompletion() > 0
+					&& planet.getMoon().getStationaryStructures().getUpgradeCompletion() < status.theNextUpgradeCompletion) {
+					BreakpointHere.breakpoint();
+				}
+			}
+		}
 	}
 
 	public void spend(long amount) {
-		if (theHoldings > amount) {
-			theHoldings -= amount;
+		if (amount == 0) {
 			return;
 		}
-		long waitTime = theTime + Math.round(amount * 3_600.0 / theTotalUpgradedProduction);
-		while (theNextUpgradeCompletion >= 0 && waitTime >= theNextUpgradeCompletion) {
-			long next = theNextUpgradeCompletion;
-			theHoldings += theTotalUpgradedProduction * (next - theTime) / 3_600;
-			finishNextUpgrades();
-			theTime = next;
-			waitTime = theTime + Math.round(amount * 3_600.0 / theTotalUpgradedProduction);
-		}
-		theHoldings = 0; // Spend the amount
-		if (waitTime < theTime) {
-			BreakpointHere.breakpoint();
-		}
-		theTime = waitTime;
-	}
-
-	private void finishNextUpgrades() {
-		long nextUpgrade = theNextUpgradeCompletion;
-		if (nextUpgrade < 0) {
+		AccountStatus status = theStatus.getForUpdate(theBranch);
+		if (amount <= status.theHoldings) {
+			status.theHoldings -= amount;
 			return;
 		}
-		theNextUpgradeCompletion = -1;
-		theResearch.finishUpgradeTo(nextUpgrade);
-		for (RoiPlanet planet : thePlanets.getValues()) {
-			planet.finishUpgradesTo(nextUpgrade);
+		long waitTime = Math.round((amount - status.theHoldings) * 3_600.0 / getProduction());
+		while (status.theNextUpgradeCompletion > 0 && status.theTime + waitTime > status.theNextUpgradeCompletion) {
+			advance(status.theNextUpgradeCompletion);
+			waitTime = Math.round((amount - status.theHoldings) * 3_600.0 / getProduction());
 		}
+		advance(status.theTime + waitTime);
+		status.theHoldings = 0;
 	}
 
 	@Override
@@ -321,85 +401,220 @@ public class RoiAccount implements Account {
 		}
 	}
 
-	public class RoiResearch implements CondensedResearch {
-		private final int[] theResearchLevels;
-		private final Map<ResearchType, Integer> theUpgrades;
-		private ResearchType theCurrentUpgrade;
-		private int theUpgradeAmount;
-		private long theUpgradeCompletion;
-		private boolean isUpgradeFlushed;
+	static abstract class BranchStack<T> {
+		static class BranchStackElement<T> {
+			BranchStackElement<T> parent;
+			final long branch;
+			T value;
 
-		RoiResearch() {
-			theResearchLevels = new int[ResearchType.values().length];
-			theUpgrades = new LinkedHashMap<>();
-			reset();
+			BranchStackElement(BranchStackElement<T> parent, long branch, T value) {
+				this.parent = parent;
+				this.branch = branch;
+				this.value = value;
+			}
+		}
+
+		BranchStackElement<T> theTop;
+
+		BranchStack(T initValue) {
+			theTop = new BranchStackElement(null, 0, initValue);
+		}
+
+		abstract T createValue();
+
+		abstract void copyValue(T source, T dest);
+
+		T get() {
+			return theTop.value;
+		}
+
+		T getForUpdate(long branch) {
+			return push(branch).value;
+		}
+
+		void set(long branch, T value) {
+			push(branch).value = value;
+		}
+
+		private BranchStackElement<T> push(long branch) {
+			if (theTop.branch != branch) {
+				T newValue = createValue();
+				copyValue(theTop.value, newValue);
+				theTop = new BranchStackElement<>(theTop, branch, newValue);
+			}
+			return theTop;
+		}
+
+		void pop(long branch) {
+			if (theTop.branch > branch) {
+				theTop = theTop.parent;
+			}
+		}
+
+		void flush(long branch) {
+			if (branch > 0 && theTop.branch == branch) {
+				copyValue(theTop.value, theTop.parent.value);
+			}
 		}
 
 		void reset() {
-			for (ResearchType r : ResearchType.values()) {
-				theResearchLevels[r.ordinal()] = theTarget.getResearch().getResearchLevel(r);
+			while (theTop.parent != null) {
+				theTop = theTop.parent;
 			}
-			isUpgradeFlushed = false;
-			clear();
+		}
+	}
+
+	static class UpgradeItemStatus<T extends Enum<T>> {
+		private final int[] theLevels;
+		T upgrade;
+		int amount;
+		long completion;
+
+		UpgradeItemStatus(int count) {
+			theLevels = new int[count];
+		}
+	}
+
+	public abstract class UpgradableAccountItem<T extends Enum<T>> {
+		private final Class<T> theType;
+		protected final BranchStack<UpgradeItemStatus<T>> theItemStatus;
+
+		UpgradableAccountItem(Class<T> type) {
+			theType = type;
+			theItemStatus = new BranchStack<UpgradeItemStatus<T>>(createItemStatus()) {
+				@Override
+				UpgradeItemStatus<T> createValue() {
+					return createItemStatus();
+				}
+
+				@Override
+				void copyValue(UpgradeItemStatus<T> source, UpgradeItemStatus<T> dest) {
+					copyItemStatus(source, dest);
+				}
+			};
 		}
 
-		void clear() {
-			if (!isUpgradeFlushed) {
-				theUpgradeCompletion = 0;
-				theCurrentUpgrade = null;
-			}
-			theUpgrades.clear();
+		protected Class<T> getType() {
+			return theType;
 		}
+
+		protected UpgradeItemStatus<T> getItemStatus(boolean forUpgrade) {
+			return forUpgrade ? theItemStatus.getForUpdate(theBranch) : theItemStatus.get();
+		}
+
+		protected UpgradeItemStatus<T> createItemStatus() {
+			return new UpgradeItemStatus<T>(getType().getEnumConstants().length);
+		}
+
+		protected void copyItemStatus(UpgradeItemStatus<T> source, UpgradeItemStatus<T> dest) {
+			System.arraycopy(source.theLevels, 0, dest.theLevels, 0, source.theLevels.length);
+			dest.upgrade = source.upgrade;
+			dest.amount = source.amount;
+			dest.completion = source.completion;
+		}
+
+		void popBranch(long branch) {
+			theItemStatus.pop(branch);
+		}
+
+		void reset() {
+			theItemStatus.reset();
+			theItemStatus.get().upgrade = null;
+			theItemStatus.get().amount = 0;
+			theItemStatus.get().completion = 0;
+			for (int i = 0; i < theItemStatus.get().theLevels.length; i++) {
+				theItemStatus.get().theLevels[i]=getResetValue(theType.getEnumConstants()[i]);
+			}
+		}
+
+		protected abstract int getResetValue(T type);
 
 		void flush() {
-			for (Map.Entry<ResearchType, Integer> upgrade : theUpgrades.entrySet()) {
-				theResearchLevels[upgrade.getKey().ordinal()] += upgrade.getValue();
-			}
-			theUpgrades.clear();
-			isUpgradeFlushed = true;
+			theItemStatus.flush(theBranch);
 		}
 
-		void start(ResearchType type, int amount, long completionTime) {
-			isUpgradeFlushed = false;
-			theCurrentUpgrade = type;
-			theUpgradeAmount = amount;
-			theUpgradeCompletion = completionTime;
+		void start(T type, int amount, long completionTime) {
+			UpgradeItemStatus<T> status = theItemStatus.getForUpdate(theBranch);
+			status.upgrade = type;
+			status.amount = amount;
+			status.completion = completionTime;
 		}
 
 		void finishUpgradeTo(long time) {
-			if (theCurrentUpgrade != null && time <= theUpgradeCompletion) {
-				upgrade(theCurrentUpgrade, theUpgradeAmount);
-				theCurrentUpgrade = null;
-				theUpgradeCompletion = 0;
+			AccountStatus acctStatus = theStatus.getForUpdate(theBranch);
+			UpgradeItemStatus<T> status = theItemStatus.getForUpdate(theBranch);
+			if (status.upgrade != null && time >= status.completion) {
+				upgrade(status.upgrade, status.amount);
+				status.upgrade = null;
+				status.completion = 0;
+			} else if (status.completion > 0
+				&& (acctStatus.theNextUpgradeCompletion == 0 || status.completion < acctStatus.theNextUpgradeCompletion)) {
+				acctStatus.theNextUpgradeCompletion = status.completion;
 			}
 		}
 
-		public void upgrade(ResearchType type, int upgrade) {
+		public void upgrade(T type, int upgrade) {
+			if (upgrade == 0) {
+				return;
+			}
 			if (type == null) {
 				BreakpointHere.breakpoint();
 			}
-			theUpgrades.compute(type, (__, current) -> current == null ? upgrade : current + upgrade);
+			UpgradeItemStatus<T> status = theItemStatus.getForUpdate(theBranch);
+			status.theLevels[type.ordinal()] += upgrade;
+		}
+
+		public T getCurrentUpgrade() {
+			return theItemStatus.get().upgrade;
+		}
+
+		public long getUpgradeCompletion() {
+			return theItemStatus.get().completion;
+		}
+
+		public int getUpgradeAmount() {
+			return theItemStatus.get().amount;
+		}
+
+		protected int getLevel(T type) {
+			return theItemStatus.get().theLevels[type.ordinal()];
+		}
+
+		protected UpgradableAccountItem<T> setLevel(T type, int level) {
+			upgrade(type, level - getLevel(type));
+			return this;
+		}
+	}
+
+	public class RoiResearch extends UpgradableAccountItem<ResearchType> implements CondensedResearch {
+		RoiResearch() {
+			super(ResearchType.class);
+			reset();
+		}
+
+		@Override
+		protected int getResetValue(ResearchType type) {
+			return theTarget.getResearch().getResearchLevel(type);
+		}
+
+		@Override
+		public void upgrade(ResearchType type, int upgrade) {
+			super.upgrade(type, upgrade);
 			switch (type) {
 			case Plasma:
 				for (RoiPlanet planet : roiPlanets()) {
-					planet.isProductionDirty = true;
+					planet.getItemStatus(true).productionDirty = true;
+				}
+				break;
+			case Astrophysics:
+				int maxPlanets = theSequence.getRules().economy().getMaxPlanets(RoiAccount.this);
+				if (thePlanets.getValues().size() < maxPlanets) {
+					theStatus.getForUpdate(theBranch).planetCount = maxPlanets;
+					getPlanets().newValue();
 				}
 				break;
 			default:
 			}
-		}
-
-		@Override
-		public ResearchType getCurrentUpgrade() {
-			return theCurrentUpgrade;
-		}
-
-		public long getUpgradeCompletion() {
-			return theUpgradeCompletion;
-		}
-
-		public int getUpgradeAmount() {
-			return theUpgradeAmount;
 		}
 
 		@Override
@@ -409,71 +624,54 @@ public class RoiAccount implements Account {
 
 		@Override
 		public int getResearchLevel(ResearchType type) {
-			return theResearchLevels[type.ordinal()] + theUpgrades.getOrDefault(type, 0);
+			return getLevel(type);
 		}
 
 		@Override
 		public void setResearchLevel(ResearchType type, int level) {
-			theResearchLevels[type.ordinal()] = level;
+			setLevel(type, level);
 		}
 	}
 
-	public abstract class RoiRockyBody implements CondensedRockyBody {
+	public abstract class RoiRockyBody extends UpgradableAccountItem<BuildingType> implements CondensedRockyBody {
 		private final RockyBody theTargetBody;
-		private final int[] theBuildings;
-		private final Map<BuildingType, Integer> theUpgrades;
 		private final RoiShipSet theShips;
-		private BuildingType theCurrentUpgrade;
-		private int theUpgradeAmount;
-		private long theUpgradeCompletion;
-		private boolean isUpgradeFlushed;
 
 		RoiRockyBody(RockyBody target) {
+			super(BuildingType.class);
 			theTargetBody = target;
-			theBuildings = new int[BuildingType.values().length];
-			theUpgrades = new LinkedHashMap<>();
-			if (target != null) {
-				for (BuildingType building : BuildingType.values()) {
-					theBuildings[building.ordinal()] = target.getBuildingLevel(building);
-				}
-				theCurrentUpgrade = target.getCurrentUpgrade();
-			}
 			theShips = new RoiShipSet(this);
-			reset();
 		}
 
 		public RockyBody getTargetBody() {
 			return theTargetBody;
 		}
 
+		@Override
+		protected int getResetValue(BuildingType type) {
+			RockyBody body = getTargetBody();
+			if (body == null) {
+				return 0;
+			}
+			return body.getBuildingLevel(type);
+		}
+
+		@Override
 		void reset() {
-			if (theTargetBody != null) {
-				for (BuildingType building : BuildingType.values()) {
-					theBuildings[building.ordinal()] = theTargetBody.getBuildingLevel(building);
-				}
-			}
-			theShips.reset(theTargetBody == null ? null : theTargetBody.getStationaryStructures(),
-				theTargetBody == null ? null : theTargetBody.getStationedFleet());
-			isUpgradeFlushed = false;
-			clear();
+			super.reset();
+			theShips.reset();
 		}
 
+		@Override
 		void flush() {
-			for (Map.Entry<BuildingType, Integer> upgrade : theUpgrades.entrySet()) {
-				theBuildings[upgrade.getKey().ordinal()] += upgrade.getValue();
-			}
-			theUpgrades.clear();
+			super.flush();
 			theShips.flush();
-			isUpgradeFlushed = true;
 		}
 
-		void clear() {
-			if (!isUpgradeFlushed) {
-				theUpgradeCompletion = 0;
-				theCurrentUpgrade = null;
-			}
-			theUpgrades.clear();
-			theShips.clear();
+		@Override
+		void popBranch(long branch) {
+			super.popBranch(branch);
+			theShips.popBranch(branch);
 		}
 
 		public void upgrade(AccountUpgradeType type, int upgrade) {
@@ -484,39 +682,18 @@ public class RoiAccount implements Account {
 			}
 		}
 
-		void upgrade(BuildingType type, int upgrade) {
-			theUpgrades.compute(type, (__, current) -> current == null ? upgrade : current + upgrade);
-		}
-
-		void start(AccountUpgradeType type, int amount, long completionTime) {
-			isUpgradeFlushed = false;
-			if (type.building != null) {
-				theCurrentUpgrade = type.building;
-				theUpgradeAmount = amount;
-				theUpgradeCompletion = completionTime;
+		void start(AccountUpgradeType type, int amount, long completion) {
+			if (type.shipyardItem != null) {
+				theShips.start(type.shipyardItem, amount, completion);
 			} else {
-				theShips.start(type.shipyardItem, amount, completionTime);
+				start(type.building, amount, completion);
 			}
 		}
 
-		void finishUpgradesTo(long time) {
-			if (theCurrentUpgrade != null && time <= theUpgradeCompletion) {
-				upgrade(theCurrentUpgrade, theUpgradeAmount);
-				theCurrentUpgrade = null;
-				theUpgradeCompletion = 0;
-			}
+		@Override
+		void finishUpgradeTo(long time) {
+			super.finishUpgradeTo(time);
 			theShips.finishUpgradeTo(time);
-		}
-
-		@Override
-		public BuildingType getCurrentUpgrade() {
-			return theCurrentUpgrade;
-		}
-
-		@Override
-		public RockyBody setCurrentUpgrade(BuildingType building) {
-			theCurrentUpgrade = building;
-			return this;
 		}
 
 		@Override
@@ -535,18 +712,32 @@ public class RoiAccount implements Account {
 		}
 
 		@Override
-		public int getBuildingLevel(BuildingType type) {
-			return theBuildings[type.ordinal()] + theUpgrades.getOrDefault(type, 0);
+		public RockyBody setCurrentUpgrade(BuildingType building) {
+			throw new UnsupportedOperationException();
 		}
 
-		public long getUpgradeCompletion() {
-			return theUpgradeCompletion;
+		@Override
+		public int getBuildingLevel(BuildingType type) {
+			return getLevel(type);
 		}
 
 		@Override
 		public CondensedRockyBody setBuildingLevel(BuildingType type, int buildingLevel) {
-			theBuildings[type.ordinal()] = buildingLevel;
+			setLevel(type, buildingLevel);
 			return this;
+		}
+	}
+
+	static class PlanetStatus extends UpgradeItemStatus<BuildingType> {
+		FullProduction production;
+		long productionValue;
+		int fusionUtil;
+		int crawlerUtil;
+		boolean productionDirty;
+
+		PlanetStatus() {
+			super(BuildingType.values().length);
+			productionDirty = true;
 		}
 	}
 
@@ -554,19 +745,11 @@ public class RoiAccount implements Account {
 		private final int thePlanetIndex;
 		private final RoiMoon theMoon;
 
-		private long theBaseProduction;
-		private long theUpgradedProduction;
-		private boolean isProductionDirty;
-		private int theFusionUtil;
-		private int theCrawlerUtil;
-		private boolean isFlushed;
-
 		RoiPlanet(Planet target, int planetIndex) {
 			super(target);
 			thePlanetIndex = planetIndex;
 			theMoon = new RoiMoon(target == null ? null : target.getMoon(), this);
-			isProductionDirty = true;
-			isFlushed = target != null;
+			reset();
 		}
 
 		@Override
@@ -575,28 +758,37 @@ public class RoiAccount implements Account {
 		}
 
 		@Override
-		void clear() {
-			theUpgradedProduction = theBaseProduction;
-			super.clear();
-			if (theMoon != null) {
-				theMoon.clear();
-			}
-			resetProduction();
+		protected PlanetStatus getItemStatus(boolean forUpgrade) {
+			return (PlanetStatus) super.getItemStatus(forUpgrade);
 		}
 
 		@Override
-		void upgrade(BuildingType type, int upgrade) {
+		protected PlanetStatus createItemStatus() {
+			return new PlanetStatus();
+		}
+
+		@Override
+		protected void copyItemStatus(UpgradeItemStatus<BuildingType> source, UpgradeItemStatus<BuildingType> dest) {
+			super.copyItemStatus(source, dest);
+			PlanetStatus pSrc = (PlanetStatus) source;
+			PlanetStatus pDst = (PlanetStatus) dest;
+			pDst.production = pSrc.production;
+			pDst.productionValue = pSrc.productionValue;
+			pDst.fusionUtil = pSrc.fusionUtil;
+			pDst.crawlerUtil = pSrc.crawlerUtil;
+			pDst.productionDirty = pSrc.productionDirty;
+		}
+
+		@Override
+		public void upgrade(BuildingType type, int upgrade) {
 			super.upgrade(type, upgrade);
-			if (type == null) {
-				BreakpointHere.breakpoint();
-			}
 			switch (type) {
 			case MetalMine:
 			case CrystalMine:
 			case DeuteriumSynthesizer:
 			case SolarPlant:
 			case FusionReactor:
-				isProductionDirty = true;
+				getItemStatus(true).productionDirty = true;
 				break;
 			default:
 			}
@@ -605,38 +797,55 @@ public class RoiAccount implements Account {
 		@Override
 		void reset() {
 			super.reset();
-			theFusionUtil = getTargetBody() != null ? getTargetBody().getFusionReactorUtilization() : 100;
-			if (theMoon != null) {
-				theMoon.reset();
-			}
-			resetProduction();
+			theMoon.reset();
 		}
 
 		@Override
 		void flush() {
-			theBaseProduction = theUpgradedProduction;
-			isFlushed = true;
 			super.flush();
 			theMoon.flush();
 		}
 
+		@Override
+		void popBranch(long branch) {
+			super.popBranch(branch);
+			theMoon.popBranch(branch);
+		}
+
+		@Override
+		void finishUpgradeTo(long time) {
+			super.finishUpgradeTo(time);
+			theMoon.finishUpgradeTo(time);
+		}
+
 		private void optimizeEnergy() {
-			long oldProduction = theUpgradedProduction;
-			theUpgradedProduction = Math.round(OGameUtils.optimizeEnergy(RoiAccount.this, this, theSequence.getRules().economy()));
-			theTotalUpgradedProduction += theUpgradedProduction - oldProduction;
+			PlanetStatus status = getItemStatus(true);
+			status.production = OGameUtils.optimizeEnergy(RoiAccount.this, this, //
+				theSequence.getRules().economy());
+			status.productionValue = Math.round(status.production.asCost().getMetalValue(getUniverse().getTradeRatios()));
+			status.productionDirty = false;
 		}
 
-		void resetProduction() {
-			theBaseProduction = theUpgradedProduction = Math.round(theSequence.getRules().economy()
-				.getFullProduction(RoiAccount.this, this).asCost().getMetalValue(theTarget.getUniverse().getTradeRatios()));
-		}
-
-		public long getProduction() {
-			if (isProductionDirty) {
+		public FullProduction getProduction() {
+			PlanetStatus status = getItemStatus(false);
+			if (status.productionDirty) {
 				optimizeEnergy();
-				isProductionDirty = false;
+				status = getItemStatus(false);
 			}
-			return theUpgradedProduction;
+			return status.production;
+		}
+
+		public long getProductionValue() {
+			PlanetStatus status = getItemStatus(false);
+			if (status.productionDirty) {
+				optimizeEnergy();
+				status = getItemStatus(false);
+			}
+			return status.productionValue;
+		}
+
+		void dirtyProduction() {
+			getItemStatus(true).productionDirty = true;
 		}
 
 		@Override
@@ -714,7 +923,7 @@ public class RoiAccount implements Account {
 		}
 
 		@Override
-		public Moon getMoon() {
+		public RoiMoon getMoon() {
 			return theMoon;
 		}
 
@@ -760,12 +969,14 @@ public class RoiAccount implements Account {
 
 		@Override
 		public int getFusionReactorUtilization() {
-			return theFusionUtil;
+			return getItemStatus(false).fusionUtil;
 		}
 
 		@Override
 		public Planet setFusionReactorUtilization(int utilization) {
-			theFusionUtil = utilization;
+			PlanetStatus status = getItemStatus(true);
+			status.fusionUtil = utilization;
+			status.productionDirty = true;
 			return this;
 		}
 
@@ -781,12 +992,14 @@ public class RoiAccount implements Account {
 
 		@Override
 		public int getCrawlerUtilization() {
-			return theCrawlerUtil;
+			return getItemStatus(false).crawlerUtil;
 		}
 
 		@Override
 		public Planet setCrawlerUtilization(int utilization) {
-			theCrawlerUtil = utilization;
+			PlanetStatus status = getItemStatus(true);
+			status.crawlerUtil = utilization;
+			status.productionDirty = true;
 			return this;
 		}
 
@@ -842,6 +1055,7 @@ public class RoiAccount implements Account {
 			super(target);
 			thePlanet = planet;
 			theTargetMoon = target;
+			reset();
 		}
 
 		@Override
@@ -888,102 +1102,46 @@ public class RoiAccount implements Account {
 		}
 	}
 
-	class RoiShipSet implements CondensedStationaryStructures, CondensedFleet {
+	class RoiShipSet extends UpgradableAccountItem<ShipyardItemType> implements CondensedStationaryStructures, CondensedFleet {
 		private final RoiRockyBody theOwner;
-		private final int[] theShips;
-		private final Map<ShipyardItemType, Integer> theUpgrades;
-		private ShipyardItemType theCurrentUpgrade;
-		private int theUpgradeAmount;
-		private long theUpgradeCompletion;
-		private boolean isUpgradeFlushed;
 
 		RoiShipSet(RoiRockyBody owner) {
+			super(ShipyardItemType.class);
 			theOwner = owner;
-			theShips = new int[ShipyardItemType.values().length];
-			theUpgrades = new LinkedHashMap<>();
+			reset();
 		}
 
-		void reset(StationaryStructures structures, Fleet fleet) {
-			if (structures != null || fleet != null) {
-				for (ShipyardItemType ship : ShipyardItemType.values()) {
-					if (ship.mobile && fleet != null) {
-						theShips[ship.ordinal()] = fleet.getItems(ship);
-					}
-					if (!ship.mobile && structures != null) {
-						theShips[ship.ordinal()] = structures.getItems(ship);
-					}
-				}
+		@Override
+		protected int getResetValue(ShipyardItemType type) {
+			RockyBody body = theOwner.getTargetBody();
+			if (body == null) {
+				return 0;
 			}
-			isUpgradeFlushed = false;
-			theCurrentUpgrade = null;
-			theUpgradeCompletion = 0;
-			clear();
+			return body.getStationedShips(type);
 		}
 
-		void clear() {
-			if (!isUpgradeFlushed) {
-				theCurrentUpgrade = null;
-				theUpgradeCompletion = 0;
-			}
-			theUpgrades.clear();
-		}
-
-		void flush() {
-			for (Map.Entry<ShipyardItemType, Integer> upgrade : theUpgrades.entrySet()) {
-				theShips[upgrade.getKey().ordinal()] += upgrade.getValue();
-			}
-			theUpgrades.clear();
-			isUpgradeFlushed = true;
-		}
-
-		void upgrade(ShipyardItemType type, int upgrade) {
-			theUpgrades.compute(type, (__, current) -> current == null ? upgrade : current + upgrade);
+		@Override
+		public void upgrade(ShipyardItemType type, int upgrade) {
+			super.upgrade(type, upgrade);
 			if (theOwner instanceof RoiPlanet) {
 				switch (type) {
 				case SolarSatellite:
 				case Crawler:
-					((RoiPlanet) theOwner).isProductionDirty = true;
+					((RoiPlanet) theOwner).dirtyProduction();
 					break;
 				default:
 				}
 			}
 		}
 
-		public ShipyardItemType getCurrentUpgrade() {
-			return theCurrentUpgrade;
-		}
-
-		public int getUpgradeAmount() {
-			return theUpgradeAmount;
-		}
-
-		public long getUpgradeCompletion() {
-			return theUpgradeCompletion;
-		}
-
-		void start(ShipyardItemType type, int amount, long completionTime) {
-			isUpgradeFlushed = false;
-			theCurrentUpgrade = type;
-			theUpgradeAmount = amount;
-			theUpgradeCompletion = completionTime;
-		}
-
-		void finishUpgradeTo(long time) {
-			if (theCurrentUpgrade != null && time <= theUpgradeCompletion) {
-				theUpgradeCompletion = 0;
-				upgrade(theCurrentUpgrade, theUpgradeAmount);
-				theCurrentUpgrade = null;
-			}
-		}
-
 		@Override
 		public int getItems(ShipyardItemType type) {
-			return theShips[type.ordinal()] + theUpgrades.getOrDefault(type, 0);
+			return getLevel(type);
 		}
 
 		@Override
 		public RoiShipSet setItems(ShipyardItemType type, int number) {
-			theShips[type.ordinal()] = number;
+			setLevel(type, number);
 			return this;
 		}
 	}

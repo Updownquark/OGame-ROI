@@ -4,9 +4,11 @@ import java.text.DecimalFormat;
 import java.util.Arrays;
 
 import org.qommons.ArrayUtils;
+import org.qommons.BiTuple;
 import org.qommons.io.Format;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.OGameEconomyRuleSet;
+import org.quark.ogame.uni.OGameEconomyRuleSet.FullProduction;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
 import org.quark.ogame.uni.Planet;
@@ -111,54 +113,65 @@ public class OGameUtils {
 				// Bonuses like for Collector or Officers can bump this up
 				int removeSats = (int) Math.floor(energyExcess * 1.0 / (energyExcess + energyNeeded) * newSats);
 				newSats -= removeSats;
+				planet.setSolarSatellites(newSats);
+				energyExcess = economy.getProduction(account, planet, ResourceType.Energy, 1).totalNet;
+				if (energyExcess < 0) {
+					newSats++;
+				}
 			}
 			planet.setSolarSatellites(preSats);
 		}
 		return newSats;
 	}
 
-	public static double optimizeEnergy(Account account, Planet planet, OGameEconomyRuleSet economy) {
+	public static FullProduction optimizeEnergy(Account account, Planet planet, OGameEconomyRuleSet economy) {
 		int maxFusion = economy.getMaxUtilization(Utilizable.FusionReactor, account, planet);
 		int maxCrawler = economy.getMaxUtilization(Utilizable.Crawler, account, planet);
 		planet.setFusionReactorUtilization(maxFusion);
 		planet.setCrawlerUtilization(maxCrawler);
 		// Find the fusion/crawler utilization combination with the best production
-		double bestProduction = optimizeCrawlerUtil(account, planet, economy);
+		BiTuple<FullProduction, Double> bestProduction = optimizeCrawlerUtil(account, planet, economy);
 		if (planet.getFusionReactor() > 0) {
 			for (int f = maxFusion - 10; f >= 0; f -= 10) {
 				int preCrawlerUtil = planet.getCrawlerUtilization();
 				planet.setFusionReactorUtilization(f);
-				double production = optimizeCrawlerUtil(account, planet, economy);
-				if (production < bestProduction) {
+				BiTuple<FullProduction, Double> production = optimizeCrawlerUtil(account, planet, economy);
+				if (production.getValue2() < bestProduction.getValue2()) {
 					planet.setFusionReactorUtilization(f + 10);
 					planet.setCrawlerUtilization(preCrawlerUtil);
 					break;
+				} else {
+					bestProduction=production;
 				}
 			}
 		}
-		return bestProduction;
+		return bestProduction.getValue1();
 	}
 
-	private static double optimizeCrawlerUtil(Account account, Planet planet, OGameEconomyRuleSet eco) {
+	private static BiTuple<FullProduction, Double> optimizeCrawlerUtil(Account account, Planet planet, OGameEconomyRuleSet eco) {
 		int maxCrawler = eco.getMaxUtilization(Utilizable.Crawler, account, planet);
 		double[] productions = new double[maxCrawler / 10 + 1];
+		FullProduction[] fullProductions = new FullProduction[productions.length];
 		Arrays.fill(productions, Double.NaN);
 		TradeRatios tr = account.getUniverse().getTradeRatios();
 		int best = ArrayUtils.binarySearch(0, productions.length, util -> {
 			if (Double.isNaN(productions[util])) {
 				planet.setCrawlerUtilization(util * 10);
-				productions[util] = eco.getFullProduction(account, planet).asCost().getMetalValue(tr);
+				fullProductions[util] = eco.getFullProduction(account, planet);
+				productions[util] = fullProductions[util].asCost().getMetalValue(tr);
 			}
 			if (util > 0 && Double.isNaN(productions[util - 1])) {
 				planet.setCrawlerUtilization((util - 1) * 10);
-				productions[util - 1] = eco.getFullProduction(account, planet).asCost().getMetalValue(tr);
+				fullProductions[util - 1] = eco.getFullProduction(account, planet);
+				productions[util - 1] = fullProductions[util - 1].asCost().getMetalValue(tr);
 				if (productions[util - 1] > productions[util]) {
 					return -1;
 				}
 			}
 			if (util < productions.length - 1 && Double.isNaN(productions[util + 1])) {
 				planet.setCrawlerUtilization((util + 1) * 10);
-				productions[util + 1] = eco.getFullProduction(account, planet).asCost().getMetalValue(tr);
+				fullProductions[util + 1] = eco.getFullProduction(account, planet);
+				productions[util + 1] = fullProductions[util + 1].asCost().getMetalValue(tr);
 				if (productions[util + 1] > productions[util]) {
 					return 1;
 				}
@@ -166,6 +179,6 @@ public class OGameUtils {
 			return 0;
 		});
 		planet.setCrawlerUtilization(best * 10);
-		return productions[best];
+		return new BiTuple<>(fullProductions[best], productions[best]);
 	}
 }

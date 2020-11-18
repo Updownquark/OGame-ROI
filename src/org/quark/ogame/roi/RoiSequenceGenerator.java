@@ -15,12 +15,17 @@ import java.util.Set;
 
 import org.observe.ObservableValue;
 import org.observe.SettableValue;
+import org.qommons.ArrayUtils;
 import org.qommons.IntList;
+import org.qommons.QommonsUtils;
+import org.qommons.Transaction;
 import org.qommons.collect.BetterList;
-import org.qommons.collect.CircularArrayList;
+import org.qommons.collect.CollectionUtils;
+import org.qommons.collect.ListenerList;
 import org.qommons.collect.StampedLockingStrategy;
 import org.qommons.threading.ElasticExecutor;
 import org.qommons.tree.BetterTreeList;
+import org.qommons.tree.BetterTreeSet;
 import org.quark.ogame.OGameUtils;
 import org.quark.ogame.roi.RoiAccount.RoiPlanet;
 import org.quark.ogame.roi.RoiAccount.RoiRockyBody;
@@ -28,6 +33,7 @@ import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
 import org.quark.ogame.uni.Moon;
+import org.quark.ogame.uni.OGameEconomyRuleSet.FullProduction;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Requirement;
@@ -38,6 +44,7 @@ import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.TradeRatios;
 import org.quark.ogame.uni.UpgradeCost;
+import org.quark.ogame.uni.Utilizable;
 
 public class RoiSequenceGenerator {
 	public static final int MIN_FUSION_PLANET = 5;
@@ -62,8 +69,9 @@ public class RoiSequenceGenerator {
 
 	private final SettableValue<Moon> theTemplateMoon;
 	private final SettableValue<Integer> theTargetPlanet;
-	private final SettableValue<Long> theStorageContainment;
-	private final SettableValue<Double> theDefense;
+	private final SettableValue<Duration> theStorageContainment;
+	private final SettableValue<Duration> theDefense;
+	private final DefenseRatios theDefenseRatio;
 	private final SettableValue<Boolean> isWithHoldingCargoes;
 	private final SettableValue<Boolean> isWithHarvestingCargoes;
 
@@ -72,6 +80,7 @@ public class RoiSequenceGenerator {
 	private final SettableValue<Duration> theLifetimeMetric;
 
 	private final SettableValue<Boolean> isActive;
+	private volatile boolean isCanceled;
 
 	public RoiSequenceGenerator(OGameRuleSet rules, Account account) {
 		theRules = rules;
@@ -89,8 +98,9 @@ public class RoiSequenceGenerator {
 		theEnergyType = SettableValue.build(ProductionSource.class).withValue(ProductionSource.Satellite).withLock(locker).build()
 			.disableWith(disabled);
 		theTemplateMoon = SettableValue.build(Moon.class).withLock(locker).build().disableWith(disabled);
-		theStorageContainment = SettableValue.build(long.class).withValue(0L).withLock(locker).build().disableWith(disabled);
-		theDefense = SettableValue.build(double.class).withValue(0.0).withLock(locker).build().disableWith(disabled);
+		theStorageContainment = SettableValue.build(Duration.class).withValue(Duration.ZERO).withLock(locker).build().disableWith(disabled);
+		theDefense = SettableValue.build(Duration.class).withValue(Duration.ZERO).withLock(locker).build().disableWith(disabled);
+		theDefenseRatio = new DefenseRatios();
 		isWithHoldingCargoes = SettableValue.build(boolean.class).withValue(false).withLock(locker).build().disableWith(disabled);
 		isWithHarvestingCargoes = SettableValue.build(boolean.class).withValue(false).withLock(locker).build().disableWith(disabled);
 
@@ -131,12 +141,16 @@ public class RoiSequenceGenerator {
 		return theTargetPlanet;
 	}
 
-	public SettableValue<Long> getStorageContainment() {
+	public SettableValue<Duration> getStorageContainment() {
 		return theStorageContainment;
 	}
 
-	public SettableValue<Double> getDefense() {
+	public SettableValue<Duration> getDefense() {
 		return theDefense;
+	}
+
+	public DefenseRatios getDefenseRatio() {
+		return theDefenseRatio;
 	}
 
 	public SettableValue<Boolean> isWithHoldingCargoes() {
@@ -163,7 +177,18 @@ public class RoiSequenceGenerator {
 		return theLifetimeMetric;
 	}
 
-	public void produceSequence(BetterList<RoiSequenceElement> sequence) {
+	public void cancel() {
+		isCanceled = true;
+	}
+
+	public void init(RoiAccount account) {
+		for (RoiPlanet planet : account.roiPlanets()) {
+			OGameUtils.optimizeEnergy(account, planet, theRules.economy());
+		}
+	}
+
+	public void produceSequence(BetterList<RoiSequenceCoreElement> sequence) {
+		isCanceled = false;
 		isActive.set(true, null);
 		try {
 			theStatus.set("Initializing Core Sequence", null);
@@ -189,14 +214,25 @@ public class RoiSequenceGenerator {
 			 */
 
 			RoiAccount copy = new RoiAccount(this, theAccount);
-			{
-				int maxPlanets = theRules.economy().getMaxPlanets(copy);
-				// First, if the new account has more planet slots than planets, catch it up
-				while (copy.roiPlanets().size() < maxPlanets) {
-					copy.getPlanets().create();
+			for (int i = theAccount.getPlanets().getValues().size(); i < copy.roiPlanets().size(); i++) {
+				RoiSequenceCoreElement el = new RoiSequenceCoreElement(new RoiSequenceElement(null, i, false)).setTargetLevel(0,
+					UpgradeCost.ZERO);
+				upgradeToLevel(copy, i, el);
+				satisfyEnergy(copy, el);
+				sequence.add(el);
+			}
+			copy.flush();
+			for (int i = 0; i < theAccount.getPlanets().getValues().size(); i++) {
+				RoiSequenceCoreElement el = new RoiSequenceCoreElement(new RoiSequenceElement(null, i, false)).setTargetLevel(0,
+					UpgradeCost.ZERO);
+				satisfyEnergy(copy, el);
+				if (el.getPostHelpers().isEmpty()) {
+					continue;
 				}
+				sequence.add(el);
 				copy.flush();
 			}
+			init(copy);
 
 			/*The basic way this works is:
 			 * * Lay out a scaffolding of core upgrades
@@ -206,58 +242,52 @@ public class RoiSequenceGenerator {
 
 			// First, lay out "core" production upgrades by ROI, assuming full energy supply and max crawlers
 			TradeRatios tr = theAccount.getUniverse().getTradeRatios();
-			while (copy.roiPlanets().size() < theTargetPlanet.get()) {
-				AccountUpgradeType bestUpgrade = null;
-				RoiPlanet bestPlanet = null;
-				long bestRoi = 0;
-				long preProduction = copy.getProduction();
-				for (AccountUpgradeType upgrade : CORE_UPGRADES) {
-					UpgradeCost cost;
-					if (upgrade.research != null) {
-						cost = coreUpgrade(copy, null, upgrade);
-						long postProduction = copy.getProduction();
-						long roi = Math.round(cost.getMetalValue(tr) / (postProduction - preProduction));
-						if (bestUpgrade == null || roi < bestRoi) {
-							bestUpgrade = upgrade;
-							bestPlanet = null;
-							bestRoi = roi;
+			try (Transaction branch = copy.branch()) {
+				while (copy.roiPlanets().size() < theTargetPlanet.get()) {
+					if (isCanceled) {
+						return;
+					}
+					RoiSequenceCoreElement bestUpgradeEl = null;
+					long preProduction = copy.getProduction();
+					for (AccountUpgradeType upgrade : CORE_UPGRADES) {
+						if (isCanceled) {
+							return;
 						}
-						copy.clear();
-					} else {
-						// Find the best planet to upgrade
-						cost = null;
-						for (RoiPlanet planet : copy.roiPlanets()) {
-							UpgradeCost planetCost = coreUpgrade(copy, planet, upgrade);
-							long postProduction = copy.getProduction();
-							long planetRoi = Math.round(planetCost.getMetalValue(tr) / (postProduction - preProduction));
-							if (bestUpgrade == null || planetRoi < bestRoi) {
-								bestUpgrade = upgrade;
-								bestPlanet = planet;
-								bestRoi = planetRoi;
-								cost = planetCost;
+						if (upgrade.research != null) {
+							try (Transaction branch2 = copy.branch()) {
+								RoiSequenceCoreElement upgradeEl = coreUpgrade(copy, -1, upgrade);
+								long postProduction = copy.getProduction();
+								if (postProduction > preProduction) {
+									double roi = upgradeEl.getTotalCost().getMetalValue(tr) / (postProduction - preProduction);
+									if (bestUpgradeEl == null || compareRoi(roi, bestUpgradeEl.getRoi()) > 0) {
+										bestUpgradeEl = upgradeEl.setRoi(roi);
+									}
+								}
 							}
-							// Now reset the account
-							copy.clear();
+						} else {
+							// Find the best planet to upgrade
+							for (int i = 0; i < copy.roiPlanets().size(); i++) {
+								if (isCanceled) {
+									return;
+								}
+								try (Transaction branch2 = copy.branch()) {
+									RoiSequenceCoreElement upgradeEl = coreUpgrade(copy, i, upgrade);
+									double planetRoi = upgradeEl.getRoi();
+									if (bestUpgradeEl == null || compareRoi(planetRoi, bestUpgradeEl.getRoi()) > 0) {
+										bestUpgradeEl = upgradeEl;
+									}
+								}
+							}
 						}
 					}
-				}
 
-				int currentLevel = bestUpgrade.getLevel(copy, bestPlanet);
-				int targetLevel;
-				if (bestUpgrade == AccountUpgradeType.Astrophysics && currentLevel % 2 == 1) {
-					targetLevel = currentLevel + 2;
-				} else {
-					targetLevel = currentLevel + 1;
+					upgrade(copy, bestUpgradeEl, false);
+					copy.flush();
+					sequence.add(bestUpgradeEl);
 				}
-				int planetIdx = bestPlanet == null ? -1 : copy.roiPlanets().indexOf(bestPlanet);
-				// AccountUpgradeType
-				coreUpgrade(copy, bestPlanet, bestUpgrade);
-				copy.flush();
-				sequence.add(new RoiSequenceElement(bestUpgrade, planetIdx, bestRoi).setTargetLevel(targetLevel));
 			}
 
-			copy.reset();
-			RoiSequenceElement[] seqArray = sequence.toArray(new RoiSequenceElement[sequence.size()]);
+			RoiSequenceCoreElement[] seqArray = sequence.toArray(new RoiSequenceCoreElement[sequence.size()]);
 			long lifetimeMetric = addHelperUpgrades(copy, sequence, true);
 			theLifetimeMetric.set(Duration.ofSeconds(lifetimeMetric), null);
 			if (!SUPER_OPTIMIZATION) {
@@ -272,44 +302,55 @@ public class RoiSequenceGenerator {
 			// * * Regular fleet saving costs
 			// * * Ancillary spending habits
 			// */
-			Mutation[] mutations = new Mutation[1000];
-			Mutation original = new Mutation(seqArray, sequence, lifetimeMetric);
-			mutations[0] = original;
-			int mutationCount = 100;
-			for (int i = 1; i < mutationCount; i++) {
-				mutations[i] = new Mutation(seqArray, 15);
-			}
+
+			ListenerList<Mutation> evaluatedMutations = ListenerList.build().build();
 			ElasticExecutor<Mutation> mutationExecutor = new ElasticExecutor<>("Mutation Optimizer",
 				() -> new ElasticExecutor.TaskExecutor<Mutation>() {
 					private final RoiAccount account = new RoiAccount(RoiSequenceGenerator.this, theAccount);
 
 					@Override
 					public void execute(Mutation task) {
-						if (task.lifetimeMetric >= 0) {
+						if (isCanceled) {
 							return;
 						}
-						task.lifetimeMetric = addHelperUpgrades(account, task.sequence, false);
+						task.evaluate(account);
+						evaluatedMutations.add(task, false);
 						account.reset();
 					}
 				});
+			Mutation original = new Mutation(seqArray, lifetimeMetric);
+			BetterTreeSet<Mutation> sortedMutations = BetterTreeSet
+				.<Mutation> buildTreeSet((m1, m2) -> Long.compare(m1.lifetimeMetric, m2.lifetimeMetric)).safe(false).build();
+			sortedMutations.add(original);
+			int mutationCount = 100;
+			for (int i = 1; i < mutationCount; i++) {
+				mutationExecutor.execute(new Mutation(seqArray));
+			}
+			Mutation bestMutation = original;
 			long bestMutatedLifetime = lifetimeMetric;
+			System.out.println("Optimizing from " + QommonsUtils.printTimeLength(bestMutatedLifetime));
 			for (int round = 0; round < 10; round++) {
 				theStatus.set("Optimizing Upgrade Order (Round " + (round + 1) + " of 10)", null);
-				for (int i = 0; i < mutationCount; i++) {
-					mutationExecutor.execute(mutations[i]);
-				}
 				mutationExecutor.waitWhileActive(0);
-				Arrays.sort(mutations, 0, mutationCount, Mutation::compareTo);
-				if (mutationCount > 100) {
-					mutationCount = 100;
+				if (isCanceled) {
+					return;
 				}
-				long bestRoundMetric = -1;
-				for (int i = 0, j = mutationCount; i < mutationCount && j < mutations.length; i++) {
-					if (bestRoundMetric < 0 || mutations[i].lifetimeMetric < bestRoundMetric) {
-						bestRoundMetric = mutations[i].lifetimeMetric;
-					}
+				evaluatedMutations.dumpInto(sortedMutations);
+				evaluatedMutations.clear();
+				while (sortedMutations.size() > mutationCount) {
+					sortedMutations.removeLast();
+				}
+				if (sortedMutations.first() != bestMutation) {
+					bestMutation = sortedMutations.first();
+					System.out.println("Improved to " + QommonsUtils.printTimeLength(bestMutation.lifetimeMetric));
+					CollectionUtils.synchronize(sequence, Arrays.asList(bestMutation.coreSequence), (m1, m2) -> m1 == m2)//
+						.simple(m -> m).rightOrder().adjust();
+				}
+				int i = 0;
+				int j = sortedMutations.size();
+				for (Mutation m : sortedMutations) {
 					int reproduction;
-					if (mutations[i].lifetimeMetric < bestMutatedLifetime) {
+					if (m.lifetimeMetric < bestMutatedLifetime) {
 						reproduction = 15;
 					} else if (i < 10) {
 						reproduction = 8;
@@ -322,16 +363,21 @@ public class RoiSequenceGenerator {
 					} else {
 						reproduction = 2;
 					}
-					for (int k = 0; k < reproduction && j < mutations.length; k++, j++) {
-						mutations[j] = mutations[i].copy(10 - round);
+					for (int k = 0; k < reproduction && j < mutationCount * 10; k++, j++) {
+						mutationExecutor.execute(m.copy());
 					}
-					mutationCount = j;
+					i++;
 				}
+				bestMutatedLifetime = bestMutation.lifetimeMetric;
 			}
 			theStatus.set("ROI Sequence Complete", null);
 			theProgress.set(sequence.size(), null);
 			theLifetimeMetric.set(Duration.ofSeconds(lifetimeMetric), null);
 		} finally {
+			if (isCanceled) {
+				theStatus.set("Canceled", null);
+				isCanceled = false;
+			}
 			isActive.set(false, null);
 		}
 	}
@@ -411,21 +457,20 @@ public class RoiSequenceGenerator {
 			new RoiCompoundSequenceElement(el.upgrade, el.getTargetLevel(), planets.isEmpty() ? null : planets.toArray(), el.getTime()));
 	}
 
-	static class Mutation implements Comparable<Mutation> {
-		final RoiSequenceElement[] coreSequence;
-		final CircularArrayList<RoiSequenceElement> sequence;
+	class Mutation implements Comparable<Mutation> {
+		final RoiSequenceCoreElement[] coreSequence;
 		long lifetimeMetric;
+		int mutatedIndex;
 
-		Mutation(RoiSequenceElement[] seq, int mutationDegree) {
+		Mutation(RoiSequenceCoreElement[] seq) {
 			coreSequence = seq.clone();
-			sequence = CircularArrayList.build().withInitCapacity(seq.length * 4).build();
-			mutate(mutationDegree);
 			lifetimeMetric = -1;
+			mutatedIndex = -1;
+			mutate();
 		}
 
-		Mutation(RoiSequenceElement[] coreSeq, List<RoiSequenceElement> sequence, long lifetimeMetric) {
+		Mutation(RoiSequenceCoreElement[] coreSeq, long lifetimeMetric) {
 			coreSequence = coreSeq.clone();
-			this.sequence = CircularArrayList.build().withInitCapacity(sequence.size()).<RoiSequenceElement> build().withAll(sequence);
 			this.lifetimeMetric = lifetimeMetric;
 		}
 
@@ -434,29 +479,67 @@ public class RoiSequenceGenerator {
 			return Long.compare(lifetimeMetric, other.lifetimeMetric);
 		}
 
-		void mutate(int degree) {
-			sequence.clear();
+		void mutate() {
 			Random r = new Random();
-			int randomBits = r.nextInt();
-			int bitsLeft = 32;
-			int mask = 0x80000000;
-			for (int i = 0; i < coreSequence.length - degree; i++) {
-				if (bitsLeft == 0) {
-					randomBits = r.nextInt();
-					bitsLeft = 32;
-				}
-				if ((randomBits & mask) != 0) {
-					int index = i + degree;
-					RoiSequenceElement el = coreSequence[i];
-					coreSequence[i] = coreSequence[index];
-					coreSequence[index] = el;
-				}
-			}
-			sequence.with(coreSequence);
+			mutatedIndex = r.nextInt(coreSequence.length - 1);
+			RoiSequenceCoreElement el = coreSequence[mutatedIndex];
+			coreSequence[mutatedIndex] = coreSequence[mutatedIndex + 1];
+			coreSequence[mutatedIndex + 1] = el;
 		}
 
-		Mutation copy(int mutationDegree) {
-			return new Mutation(coreSequence, mutationDegree);
+		void evaluate(RoiAccount account) {
+			// Clear out and all the accessories that might be different now and re-evaluate them after
+			for (int i = mutatedIndex; i < coreSequence.length; i++) {
+				coreSequence[i].clearAccessories();
+			}
+			List<RoiSequenceCoreElement> seq = Arrays.asList(coreSequence);
+			lifetimeMetric = getLifetimeMetric(account, seq);
+			// It might be the case that the helpers on the sequence element that has been advanced
+			// would better do their work on the previous element for which they help at all
+			for (int h = 0; h < seq.get(mutatedIndex + 1).getPreHelpers().size(); h++) {
+				for (int j = mutatedIndex - 1; j >= 0; j--) {
+					if (isCanceled) {
+						return;
+					}
+					if (getHelperTypes(seq.get(j).upgrade).contains(seq.get(mutatedIndex + 1).getPreHelpers().get(h))) {
+						seq.get(j).withPreHelper(seq.get(mutatedIndex + 1).removePreHelper(h));
+						long newLifetime = getLifetimeMetric(account, seq);
+						if (newLifetime < lifetimeMetric) {
+							lifetimeMetric = newLifetime;
+							h--;
+						} else {
+							seq.get(mutatedIndex + 1).withPreHelper(h, seq.get(j).removePreHelper(seq.get(j).getPreHelpers().size() - 1));
+						}
+						break;
+					}
+				}
+			}
+			for (int h = 0; h < coreSequence[mutatedIndex + 1].getPostHelpers().size(); h++) {
+				for (int j = mutatedIndex - 1; j >= 0; j--) {
+					if (isCanceled) {
+						return;
+					}
+					if (getHelperTypes(seq.get(j).upgrade).contains(seq.get(mutatedIndex + 1).getPostHelpers().get(h))) {
+						seq.get(j).withPostHelper(seq.get(mutatedIndex + 1).removePostHelper(h));
+						long newLifetime = getLifetimeMetric(account, seq);
+						if (newLifetime < lifetimeMetric) {
+							lifetimeMetric = newLifetime;
+							h--;
+						} else {
+							seq.get(mutatedIndex + 1).withPostHelper(h,
+								seq.get(j).removePostHelper(seq.get(j).getPostHelpers().size() - 1));
+						}
+						break;
+					}
+				}
+			}
+			for (int i = mutatedIndex; i < coreSequence.length; i++) {
+				addAccessories(account, coreSequence[i]);
+			}
+		}
+
+		Mutation copy() {
+			return new Mutation(coreSequence);
 		}
 	}
 
@@ -488,42 +571,340 @@ public class RoiSequenceGenerator {
 		return HELPERS.get(upgrade);
 	}
 
-	private UpgradeCost coreUpgrade(RoiAccount account, RoiPlanet planet, AccountUpgradeType upgrade) {
+	public RoiSequenceCoreElement coreUpgrade(RoiAccount account, int planetIndex, AccountUpgradeType upgrade) {
+		long preProduction;
+		RoiPlanet planet = planetIndex < 0 ? null : account.roiPlanets().get(planetIndex);
+		RoiSequenceCoreElement el;
 		switch (upgrade) {
 		case MetalMine:
 		case CrystalMine:
 		case DeuteriumSynthesizer:
-			// Find the best planet to upgrade
+			preProduction = planet.getProductionValue();
 			int currentLevel = planet.getBuildingLevel(upgrade.building);
-			UpgradeCost cost = upgrade(account, planet, upgrade, //
-				currentLevel + 1);
-			int currentCrawlers = planet.getStationaryStructures().getCrawlers();
-			int maxCrawlers = theRules.economy().getMaxCrawlers(account, planet);
-			if (maxCrawlers > currentCrawlers) {
-				cost = cost.plus(upgrade(account, planet, AccountUpgradeType.Crawler, maxCrawlers));
-				planet.setCrawlers(maxCrawlers);
-			}
-			planet.setSolarSatellites(OGameUtils.getRequiredSatellites(account, planet, theRules.economy()));
-			return cost;
+			el = new RoiSequenceCoreElement(upgrade(account, planetIndex, false, upgrade, currentLevel + 1));
+			// int currentCrawlers = planet.getStationaryStructures().getCrawlers();
+			// int maxCrawlers = theRules.economy().getMaxCrawlers(account, planet);
+			// if (maxCrawlers > currentCrawlers) {
+			// el.withHelper(false, upgrade(account, planetIndex, false, AccountUpgradeType.Crawler, maxCrawlers));
+			// }
+			// planet.setCrawlerUtilization(theRules.economy().getMaxUtilization(Utilizable.Crawler, account, planet));
+			// int sats = OGameUtils.getRequiredSatellites(account, planet, theRules.economy());
+			// if (sats > planet.getSolarSatellites()) {
+			// el.withHelper(false, upgrade(account, planetIndex, false, AccountUpgradeType.SolarSatellite, sats));
+			// }
+			break;
 		case Astrophysics:
+			preProduction = account.getProduction();
 			currentLevel = account.getResearch().getAstrophysics();
 			int targetLevel = currentLevel + ((currentLevel % 2 == 0) ? 1 : 2);
-			cost = upgrade(account, null, upgrade, targetLevel);
-			return cost;
+			el = new RoiSequenceCoreElement(upgrade(account, -1, false, upgrade, targetLevel));
+			break;
 		case Plasma:
+			preProduction = account.getProduction();
 			currentLevel = account.getResearch().getPlasma();
-			cost = upgrade(account, null, upgrade, currentLevel + 1);
-			return cost;
+			el = new RoiSequenceCoreElement(upgrade(account, -1, false, upgrade, currentLevel + 1));
+			break;
 		default:
 			throw new IllegalStateException("Unrecognized core upgrade: " + upgrade);
 		}
+		optimizePostHelpers(account, el, preProduction);
+		long newProduction = planet == null ? account.getProduction() : planet.getProductionValue();
+		el.setRoi(el.getTotalCost().getMetalValue(account.getUniverse().getTradeRatios()) / (newProduction - preProduction));
+		return el;
 	}
 
-	private UpgradeCost upgrade(RoiAccount account, RoiRockyBody body, AccountUpgradeType upgrade) {
-		return upgrade(account, body, upgrade, getTargetLevel(account, body, upgrade));
+	private void optimizePostHelpers(RoiAccount account, RoiSequenceCoreElement upgrade, long preProduction) {
+		if (isCanceled) {
+			return;
+		}
+		if (upgrade.upgrade.research == ResearchType.Astrophysics) {
+			if (account.getPlanets().getValues().get(0).getStationedFleet().getColonyShips() == 0) {
+				upgrade.withPostHelper(upgrade(account, 0, false, AccountUpgradeType.ColonyShip, 1));//
+				account.roiPlanets().get(0).upgrade(AccountUpgradeType.ColonyShip, -1);
+			}
+			if (account.roiPlanets().size() < theRules.economy().getMaxPlanets(account)) {
+				account.getPlanets().newValue();
+			}
+			upgradeToLevel(account, account.roiPlanets().size() - 1, upgrade);
+			return;
+		} else if (upgrade.upgrade.research != null) {
+			return;
+		}
+		Transaction branch = account.branch();
+		try {
+			RoiPlanet planet = upgrade.planetIndex < 0 ? null : account.roiPlanets().get(upgrade.planetIndex);
+			int currentCrawlers = planet.getStationaryStructures().getCrawlers();
+			int maxCrawlers = theRules.economy().getMaxCrawlers(account, planet);
+			// planet.setCrawlerUtilization(theRules.economy().getMaxUtilization(Utilizable.Crawler, account, planet));
+			satisfyEnergy(account, upgrade);
+			if (currentCrawlers >= maxCrawlers) {
+				return;
+			}
+
+			// Check the ROI for no crawler upgrades
+			double baseCost = upgrade.getTotalCost().getMetalValue(account.getUniverse().getTradeRatios());
+			long production = planet.getProductionValue();
+			double baseRoi = baseCost / (production - preProduction);
+			upgrade.setRoi(baseRoi); // Need an ROI here to optimize fusion
+
+			// Check the ROI for a single crawler upgrade
+			upgrade.withPostHelper(upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.Crawler, currentCrawlers + 1));
+			satisfyEnergy(account, upgrade);
+			long newProduction = planet.getProductionValue();
+			double newCost = upgrade.getTotalCost().getMetalValue(account.getUniverse().getTradeRatios());
+			double singleCRoi = newCost / (newProduction - preProduction);
+
+			double maxCRoi;
+			if (maxCrawlers > currentCrawlers + 1) {
+				branch.close();
+				branch = account.branch();
+				upgrade.clearPostHelpers();
+				upgrade(account, upgrade, false);
+				upgrade.withPostHelper(upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.Crawler, maxCrawlers));
+				satisfyEnergy(account, upgrade);
+				newProduction = planet.getProductionValue();
+				newCost = upgrade.getTotalCost().getMetalValue(account.getUniverse().getTradeRatios());
+				maxCRoi = newCost / (newProduction - preProduction);
+			} else {
+				maxCRoi = singleCRoi;
+			}
+			if (compareRoi(maxCRoi, baseRoi) > 0) { // Done
+			} else if (compareRoi(singleCRoi, baseRoi) > 0) {
+				// binary search
+				int bestCrawlerCount = ArrayUtils.optimize(currentCrawlers, maxCrawlers, crawlers -> {
+					if (isCanceled) {
+						return 0;
+					}
+					try (Transaction branch2 = account.branch()) {
+						upgrade.clearPostHelpers();
+						upgrade(account, upgrade, false);
+						upgrade.withPostHelper(upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.Crawler, crawlers));
+						satisfyEnergy(account, upgrade);
+						long prod2 = planet.getProductionValue();
+						double cost2 = upgrade.getTotalCost().getMetalValue(account.getUniverse().getTradeRatios());
+						return cost2 / (prod2 - preProduction);
+					}
+				}, RoiSequenceGenerator::compareRoi);
+				if (isCanceled) {
+					return;
+				}
+				branch.close();
+				branch = account.branch();
+				upgrade.clearPostHelpers();
+				upgrade.withPostHelper(upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.Crawler, bestCrawlerCount));
+				satisfyEnergy(account, upgrade);
+				long prod2 = planet.getProductionValue();
+				double cost2 = upgrade.getTotalCost().getMetalValue(account.getUniverse().getTradeRatios());
+				upgrade.setRoi(cost2 / (prod2 - preProduction));
+			} else {
+				upgrade.clearPostHelpers();
+				upgrade(account, upgrade, false);
+				satisfyEnergy(account, upgrade);
+			}
+		} finally {
+			account.flush();
+			branch.close();
+		}
 	}
 
-	private int getTargetLevel(RoiAccount account, RoiRockyBody body, AccountUpgradeType upgrade) {
+	private static int compareRoi(double roi1, double roi2) {
+		if (roi1 < 0) {
+			if (roi2 < 0) {
+				return Double.compare(roi1, roi2);
+			} else {
+				return -1;
+			}
+		} else if (roi2 < 0) {
+			return 1;
+		} else {
+			return -Double.compare(roi1, roi2);
+		}
+	}
+
+	private void satisfyEnergy(RoiAccount account, RoiSequenceCoreElement upgrade) {
+		RoiPlanet planet = account.roiPlanets().get(upgrade.planetIndex);
+		planet.setCrawlerUtilization(theRules.economy().getMaxUtilization(Utilizable.Crawler, account, planet));
+		planet.setFusionReactorUtilization(theRules.economy().getMaxUtilization(Utilizable.FusionReactor, account, planet));
+
+		if (theEnergyType.get() == ProductionSource.Fusion && account.roiPlanets().size() >= MIN_FUSION_PLANET) {
+			if (planet.getFusionReactor() == 0) {
+				upgrade.withPostHelper(upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.SolarSatellite, 0));
+				upgrade.withPostHelper(
+					upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.FusionReactor, planet.getFusionReactor() + 1));
+			}
+			Production energy = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0);
+			while (energy.totalNet < 0) {
+				if (isCanceled) {
+					return;
+				}
+				// Can't really control well for deut usage here, so just go by best energy value
+				// We'll account for absolutely everything in the final step
+				UpgradeCost fusionCost;
+				int fusionEnergyBump;
+				try (Transaction branch = account.branch()) {
+					int preDeutUsage = theRules.economy().getProduction(account, planet, ResourceType.Deuterium,
+						energy.totalProduction / energy.totalConsumption).byType.getOrDefault(ProductionSource.Fusion, 0);
+					fusionCost = upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.FusionReactor).getTotalCost();
+					account.getProduction(); // Update the energy and production value
+					Production fusionEnergy = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0);
+					int fusionDeutUsage = theRules.economy().getProduction(account, planet, ResourceType.Deuterium,
+						fusionEnergy.totalProduction / fusionEnergy.totalConsumption).byType.getOrDefault(ProductionSource.Fusion, 0);
+					fusionCost = fusionCost.plus(UpgradeCost.of('b', 0, 0, Math.round((fusionDeutUsage - preDeutUsage) * upgrade.getRoi()),
+						0, Duration.ZERO, 1, 0, 0));
+					fusionEnergyBump = fusionEnergy.byType.get(ProductionSource.Fusion) - energy.byType.get(ProductionSource.Fusion);
+				}
+				UpgradeCost energyCost;
+				int researchEnergyBump;
+				try (Transaction branch = account.branch()) {
+					energyCost = upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.Energy,
+						account.getResearch().getEnergy() + 1).getTotalCost();
+					researchEnergyBump = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0).byType
+						.get(ProductionSource.Fusion) - energy.byType.get(ProductionSource.Fusion);
+					researchEnergyBump *= account.roiPlanets().size();
+				}
+				double fusionEfficiency = fusionEnergyBump / fusionCost.getMetalValue(account.getUniverse().getTradeRatios());
+				double researchEfficiency = researchEnergyBump / energyCost.getMetalValue(account.getUniverse().getTradeRatios());
+				if (researchEfficiency > fusionEfficiency) {
+					upgrade.withPostHelper(
+						upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.Energy, account.getResearch().getEnergy() + 1));
+					upgrade(account, upgrade, false);
+				} else {
+					upgrade.withPostHelper(upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.FusionReactor));
+					upgrade(account, upgrade, false);
+				}
+				energy = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0);
+			}
+		} else if (theEnergyType.get() == ProductionSource.Solar) {
+			Production energy = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0);
+			while (energy.totalNet < 0) {
+				if (isCanceled) {
+					return;
+				}
+				upgrade.withPostHelper(
+					upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.SolarPlant, planet.getSolarPlant() + 1));
+				energy = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0);
+			}
+		} else {
+			int sats = OGameUtils.getRequiredSatellites(account, planet, theRules.economy());
+			if (planet.getSolarSatellites() < sats) {
+				upgrade.withPostHelper(upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.SolarSatellite, sats));
+			}
+		}
+		OGameUtils.optimizeEnergy(account, planet, theRules.economy());
+		addAccessories(account, upgrade);
+	}
+
+	private void addAccessories(RoiAccount account, RoiSequenceCoreElement el) {
+		// Storage
+		Duration storage = theStorageContainment.get();
+		if (!storage.isZero()) {
+			if (el.planetIndex >= 0) {
+				checkStorage(account, el, el.planetIndex);
+			} else {
+				for (int i = 0; i < account.roiPlanets().size(); i++) {
+					checkStorage(account, el, i);
+				}
+			}
+		}
+		Duration def = theDefense.get();
+		UpgradeCost defCost = theDefenseRatio.getTotalCost(account, account.roiPlanets().getFirst(), theRules.economy());
+		double defUnitCost = defCost.getMetalValue(account.getUniverse().getTradeRatios());
+		if (!def.isZero() && defUnitCost > 0) {
+			if (el.planetIndex >= 0) {
+				checkDefense(account, el, el.planetIndex, defUnitCost);
+			} else {
+				for (int i = 0; i < account.roiPlanets().size(); i++) {
+					checkDefense(account, el, i, defUnitCost);
+				}
+			}
+		}
+		int todo; // TODO cargoes
+	}
+
+	private void checkStorage(RoiAccount account, RoiSequenceCoreElement el, int planetIndex) {
+		if (isCanceled) {
+			return;
+		}
+		Duration storage = theStorageContainment.get();
+		RoiPlanet planet = account.roiPlanets().get(el.planetIndex);
+		FullProduction production = planet.getProduction();
+
+		long storageReq = production.metal * storage.getSeconds() / 3600;
+		long storageCap = theRules.economy().getStorage(planet, ResourceType.Metal);
+		while (storageCap < storageReq) {
+			el.withAccessory(upgrade(account, planetIndex, false, AccountUpgradeType.MetalStorage));
+			storageCap = theRules.economy().getStorage(planet, ResourceType.Metal);
+		}
+
+		storageReq = production.crystal * storage.getSeconds() / 3600;
+		storageCap = theRules.economy().getStorage(planet, ResourceType.Crystal);
+		while (storageCap < storageReq) {
+			el.withAccessory(upgrade(account, planetIndex, false, AccountUpgradeType.CrystalStorage));
+			storageCap = theRules.economy().getStorage(planet, ResourceType.Crystal);
+		}
+
+		storageReq = production.deuterium * storage.getSeconds() / 3600;
+		storageCap = theRules.economy().getStorage(planet, ResourceType.Crystal);
+		while (storageCap < storageReq) {
+			el.withAccessory(upgrade(account, planetIndex, false, AccountUpgradeType.DeuteriumStorage));
+			storageCap = theRules.economy().getStorage(planet, ResourceType.Crystal);
+		}
+	}
+
+	private void checkDefense(RoiAccount account, RoiSequenceCoreElement el, int planetIndex, double defUnitCost) {
+		if (isCanceled) {
+			return;
+		}
+		RoiPlanet planet = account.roiPlanets().get(planetIndex);
+		int defenseUnitCount = (int) Math.round(planet.getProductionValue() * 1.0 * theDefense.get().getSeconds() / 3600 / defUnitCost);
+		int amount = defenseUnitCount * theDefenseRatio.getRocketLaunchers().get();
+		if (planet.getStationaryStructures().getRocketLaunchers() < amount) {
+			el.withAccessory(upgrade(account, planetIndex, false, AccountUpgradeType.RocketLauncher, amount));
+		}
+		amount = defenseUnitCount * theDefenseRatio.getLightLasers().get();
+		if (planet.getStationaryStructures().getLightLasers() < amount) {
+			el.withAccessory(upgrade(account, planetIndex, false, AccountUpgradeType.LightLaser, amount));
+		}
+		amount = defenseUnitCount * theDefenseRatio.getLightLasers().get();
+		if (planet.getStationaryStructures().getHeavyLasers() < amount) {
+			el.withAccessory(upgrade(account, planetIndex, false, AccountUpgradeType.HeavyLaser, amount));
+		}
+		amount = defenseUnitCount * theDefenseRatio.getLightLasers().get();
+		if (planet.getStationaryStructures().getGaussCannons() < amount) {
+			el.withAccessory(upgrade(account, planetIndex, false, AccountUpgradeType.GaussCannon, amount));
+		}
+		amount = defenseUnitCount * theDefenseRatio.getLightLasers().get();
+		if (planet.getStationaryStructures().getIonCannons() < amount) {
+			el.withAccessory(upgrade(account, planetIndex, false, AccountUpgradeType.IonCannon, amount));
+		}
+		amount = defenseUnitCount * theDefenseRatio.getLightLasers().get();
+		if (planet.getStationaryStructures().getPlasmaTurrets() < amount) {
+			el.withAccessory(upgrade(account, planetIndex, false, AccountUpgradeType.PlasmaTurret, amount));
+		}
+	}
+
+	private RoiSequenceElement upgrade(RoiAccount account, int planetIndex, boolean moon, AccountUpgradeType upgrade) {
+		return upgrade(account, planetIndex, moon, upgrade, getTargetLevel(account, planetIndex, moon, upgrade));
+	}
+
+	private int getTargetLevel(RoiAccount account, int planetIndex, boolean moon, AccountUpgradeType upgrade) {
+		if (upgrade == null) {
+			return 0;
+		}
+		RoiRockyBody body;
+		if (planetIndex < 0) {
+			body = null;
+		} else if (moon) {
+			body=account.roiPlanets().get(planetIndex).getMoon();
+		} else if (planetIndex < account.roiPlanets().size()) {
+			body=account.roiPlanets().get(planetIndex);
+		} else {
+			if (upgrade.research != null) {
+				body=null;
+			} else {
+				return 1;
+			}
+		}
 		int currentLevel = upgrade.getLevel(account, body);
 		int targetLevel;
 		switch (upgrade.type) {
@@ -567,258 +948,206 @@ public class RoiSequenceGenerator {
 		return targetLevel;
 	}
 
-	private UpgradeCost upgrade(RoiAccount account, RoiRockyBody body, AccountUpgradeType upgrade, int targetLevel) {
+	private RoiSequenceElement upgrade(RoiAccount account, int planetIndex, boolean moon, AccountUpgradeType upgrade, int targetLevel) {
+		RoiSequenceElement el = new RoiSequenceElement(upgrade, planetIndex, moon);
+		RoiRockyBody body = el.getBody(account);
 		int currentLevel = upgrade.getLevel(account, body);
-		UpgradeCost cost = UpgradeCost.ZERO;
-		if (currentLevel == 0) {
+		if (targetLevel < 0) {
+			targetLevel = currentLevel + 1;
+		}
+		RoiRockyBody rBody = body != null ? body : account.roiPlanets().getFirst();
+		int baseLevel;
+		if (rBody.getTargetBody() != null) {
+			baseLevel = upgrade.getLevel(account, rBody.getTargetBody());
+		} else {
+			baseLevel = 0;
+		}
+		if (currentLevel == baseLevel) {
+			// May need an actual planet for requirements
+			int pi=planetIndex>=0 ? planetIndex : 0;
 			// For all upgrades, calculate ROI based on the cost of not only the building itself,
 			// but of all required buildings and researches needed to be able to build it
 			for (Requirement req : theRules.economy().getRequirements(upgrade)) {
-				int currentReqLevel = req.type.getLevel(account, body);
+				int currentReqLevel = req.type.getLevel(account, rBody);
 				if (currentReqLevel < req.level) {
-					cost = cost.plus(upgrade(account, body, req.type, req.level));
+					el.withDependency(upgrade(account, pi, moon, req.type, req.level));
 				}
 			}
 		}
-		cost = cost.plus(theRules.economy().getUpgradeCost(account, body, upgrade, currentLevel, targetLevel));
+
+		el.setTargetLevel(targetLevel, theRules.economy().getUpgradeCost(account, body, upgrade, currentLevel, targetLevel));
 		account.upgrade(upgrade, body, targetLevel - currentLevel);
-		if (upgrade == AccountUpgradeType.Astrophysics && account.roiPlanets().size() < theRules.economy().getMaxPlanets(account)) {
-			RoiPlanet newPlanet = (RoiPlanet) account.getPlanets().newValue();
-			cost = cost.plus(upgradeToLevel(account, newPlanet));
+		while (body instanceof Planet && body.getUsedFields() >= theRules.economy().getFields((Planet) body)) {
+			// See if we can tear down solar first
+			if (theEnergyType.get() != ProductionSource.Solar && ((Planet) body).getSolarPlant() > 0) {
+				el.withDependency(upgrade(account, planetIndex, moon, AccountUpgradeType.SolarPlant, ((Planet) body).getSolarPlant() - 1));
+			} else {
+				el.withDependency(
+					upgrade(account, planetIndex, moon, AccountUpgradeType.Terraformer, ((Planet) body).getTerraformer() + 1));
+			}
 		}
-		return cost;
+		while (body instanceof Moon && body.getUsedFields() >= theRules.economy().getFields((Moon) body)) {
+			el.withDependency(upgrade(account, planetIndex, moon, AccountUpgradeType.LunarBase, ((Moon) body).getLunarBase() + 1));
+		}
+		return el;
 	}
 
-	private UpgradeCost upgradeToLevel(RoiAccount account, RoiPlanet planet) {
+	private void upgradeToLevel(RoiAccount account, int planetIndex, RoiSequenceCoreElement upgrade) {
+		RoiPlanet planet = account.roiPlanets().get(planetIndex);
 		// Build up the fresh new planet to the minimum level of its siblings
-		// TODO Don't forget the template moon
-		UpgradeCost cost = UpgradeCost.ZERO;
 		for (BuildingType building : BuildingType.values()) {
 			int min = -1;
-			for (RoiPlanet p : account.roiPlanets()) {
-				if (p == planet) {
-					continue;
+			for (int p = 0; p < account.roiPlanets().size(); p++) {
+				if (p == planetIndex) {
+					break;
 				}
-				int level = p.getBuildingLevel(building);
+				int level = account.roiPlanets().get(p).getBuildingLevel(building);
 				if (min < 0 || level < min) {
 					min = level;
 				}
 			}
-			cost = cost.plus(theRules.economy().getUpgradeCost(account, planet, building.getUpgrade(), 0, min));
-			planet.upgrade(building.getUpgrade(), min);
+			if (planet.getBuildingLevel(building) < min) {
+				upgrade.withPostHelper(upgrade(account, planetIndex, false, building.getUpgrade(), min));
+			}
 		}
 		for (ShipyardItemType ship : ShipyardItemType.values()) {
 			int min = -1;
-			for (RoiPlanet p : account.roiPlanets()) {
-				if (p == planet) {
-					continue;
+			for (int p = 0; p < account.roiPlanets().size(); p++) {
+				if (p == planetIndex) {
+					break;
 				}
-				int level = p.getStationedShips(ship);
+				int level = account.roiPlanets().get(p).getStationedShips(ship);
 				if (min < 0 || level < min) {
 					min = level;
 				}
 			}
-			cost = cost.plus(theRules.economy().getUpgradeCost(account, planet, ship.getUpgrade(), 0, min));
-			planet.upgrade(ship.getUpgrade(), min);
+			if (min > 0) {
+				upgrade.withPostHelper(upgrade(account, planetIndex, false, ship.getUpgrade(), min));
+			}
 		}
-		return cost;
+		Moon templateMoon = theTemplateMoon.get();
+		if (templateMoon != null) {
+			for (BuildingType building : BuildingType.values()) {
+				int level = templateMoon.getBuildingLevel(building);
+				if (planet.getMoon().getBuildingLevel(building) < level) {
+					upgrade.withPostHelper(upgrade(account, planetIndex, true, building.getUpgrade(), level));
+				}
+			}
+			for (ShipyardItemType ship : ShipyardItemType.values()) {
+				int level = templateMoon.getStationedShips(ship);
+				if (level > 0) {
+					upgrade.withPostHelper(upgrade(account, planetIndex, true, ship.getUpgrade(), level));
+				}
+			}
+		}
 	}
 
-	long addHelperUpgrades(RoiAccount account, List<RoiSequenceElement> sequence, boolean updates) {
-		account.reset();
-		// Now, insert actual energy production needed to supply full energy, plus crawlers
-		ListIterator<RoiSequenceElement> sequenceIter = sequence.listIterator();
-		TradeRatios tr = account.getUniverse().getTradeRatios();
-		while (sequenceIter.hasNext()) {
-			if (updates) {
-				theProgress.set(sequenceIter.nextIndex(), null);
-			}
-			RoiSequenceElement el = sequenceIter.next();
-			if (el.planetIndex < 0) {
-				coreUpgrade(account, null, el.upgrade);
-				account.flush();
-				continue;
-			}
-			RoiPlanet planet = account.roiPlanets().get(el.planetIndex);
-			coreUpgrade(account, planet, el.upgrade);
-			account.flush();
-			if (el.upgrade.building == null || el.upgrade.building.isMine() == null) {
-				continue;
-			}
-			Production energy = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0);
-			// sequenceIter.add(new RoiSequenceElement(AccountUpgradeType.Crawler, el.planetIndex, 0));
-			// upgrade(account, planet, AccountUpgradeType.Crawler);
-			account.flush();
-
-			if (theEnergyType.get() == ProductionSource.Fusion && account.roiPlanets().size() >= MIN_FUSION_PLANET) {
-				while (energy.totalNet >= 0) {
-					if (planet.getFusionReactor() == 0) {
-						planet.upgrade(AccountUpgradeType.SolarSatellite, -planet.getSolarSatellites());
-						upgrade(account, planet, AccountUpgradeType.FusionReactor, planet.getFusionReactor() + 1);
-						account.flush();
-						continue;
-					}
-					// Can't really control well for deut usage here, so just go by best energy value
-					// We'll account for absolutely everything in the final step
-					int preDeutUsage = theRules.economy().getProduction(account, planet, ResourceType.Deuterium,
-						energy.totalProduction / energy.totalConsumption).byType.getOrDefault(ProductionSource.Fusion, 0);
-					UpgradeCost fusionCost = upgrade(account, planet, AccountUpgradeType.FusionReactor);
-					account.getProduction(); // Update the energy and production value
-					Production fusionEnergy = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0);
-					int fusionDeutUsage = theRules.economy().getProduction(account, planet, ResourceType.Deuterium,
-						fusionEnergy.totalProduction / fusionEnergy.totalConsumption).byType.getOrDefault(ProductionSource.Fusion, 0);
-					fusionCost = fusionCost
-						.plus(UpgradeCost.of('b', 0, 0, Math.round((fusionDeutUsage - preDeutUsage) * el.roi), 0, Duration.ZERO, 1, 0, 0));
-					account.clear();
-					UpgradeCost energyCost = upgrade(account, planet, AccountUpgradeType.Energy, account.getResearch().getEnergy() + 1);
-					int fusionEnergyBump = fusionEnergy.byType.get(ProductionSource.Fusion) - energy.byType.get(ProductionSource.Fusion);
-					int researchEnergyBump = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0).byType
-						.get(ProductionSource.Fusion) - energy.byType.get(ProductionSource.Fusion);
-					researchEnergyBump *= account.roiPlanets().size();
-					double fusionEfficiency = fusionEnergyBump / fusionCost.getMetalValue(tr);
-					double researchEfficiency = researchEnergyBump / energyCost.getMetalValue(tr);
-					if (researchEfficiency > fusionEfficiency) {
-						sequenceIter.add(new RoiSequenceElement(AccountUpgradeType.Energy, el.planetIndex, 0));
-						account.flush();
-					} else {
-						sequenceIter.add(new RoiSequenceElement(AccountUpgradeType.FusionReactor, el.planetIndex, 0));
-						account.clear();
-						upgrade(account, planet, AccountUpgradeType.FusionReactor);
-						account.flush();
-					}
-				}
-			} else if (theEnergyType.get() == ProductionSource.Solar) {
-				while (energy.totalNet >= 0) {
-					sequenceIter.add(new RoiSequenceElement(AccountUpgradeType.SolarPlant, el.planetIndex, 0));
-					upgrade(account, planet, AccountUpgradeType.SolarPlant, planet.getSolarPlant() + 1);
-					account.flush();
-					energy = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0);
-				}
-			} else {
-				sequenceIter.add(new RoiSequenceElement(AccountUpgradeType.SolarSatellite, el.planetIndex, 0));
-				upgrade(account, planet, AccountUpgradeType.SolarSatellite);
-				account.flush();
-			}
-		}
-
+	long addHelperUpgrades(RoiAccount account, List<RoiSequenceCoreElement> sequence, boolean updates) {
 		account.reset();
 		long lifetimeMetric = getLifetimeMetric(account, sequence);
-		sequenceIter = sequence.listIterator();
+		account.reset();
+		int seqIndex = -1;
+		ListIterator<RoiSequenceCoreElement> sequenceIter = sequence.listIterator();
 		while (sequenceIter.hasNext()) {
-			RoiSequenceElement el = sequenceIter.next();
-			sequenceIter.previous();
+			if (isCanceled) {
+				return -1;
+			}
+			seqIndex++;
+			if (updates) {
+				theLifetimeMetric.set(Duration.ofSeconds(lifetimeMetric), null);
+				theProgress.set(seqIndex, null);
+			}
+			RoiSequenceCoreElement el = sequenceIter.next();
 			List<AccountUpgradeType> helperTypes = getHelperTypes(el.upgrade);
+			if (helperTypes == null) {
+				continue;
+			}
 			RoiSequenceElement bestHelper;
 			do {
 				if (updates) {
 					theLifetimeMetric.set(Duration.ofSeconds(lifetimeMetric), null);
-					theProgress.set(sequenceIter.nextIndex(), null);
+					theProgress.set(seqIndex, null); // Update the progress
 				}
 				bestHelper = null;
-				long bestLifetime = -1;
-				boolean first = true;
+				// TODO Find helpers for existing pre-helpers, dependencies, post helpers, accessories
+				long bestLifetime = lifetimeMetric;
 				for (AccountUpgradeType helper : helperTypes) {
 					if (el.planetIndex >= 0 || helper.research != null) {
-						RoiSequenceElement helperEl = new RoiSequenceElement(helper, el.planetIndex, 0);
-						if (first) {
-							sequenceIter.add(helperEl);
-							first = false;
-						} else {
-							sequenceIter.set(helperEl);
+						RoiSequenceElement helperEl;
+						try (Transaction branch = account.branch()) {
+							helperEl = upgrade(account, el.planetIndex, false, helper);
+							el.withPreHelper(helperEl);
 						}
-						long helpedLifetime = getLifetimeMetric(account, sequence);
-						if (lifetimeMetric <= helpedLifetime) {
-							continue;
-						} else if (bestLifetime < 0 || helpedLifetime < bestLifetime) {
+						long helpedLifetime;
+						try (Transaction branch = account.branch()) {
+							helpedLifetime = getLifetimeMetric(account, sequence.subList(seqIndex, sequence.size()));
+						}
+						el.removePreHelper(el.getPreHelpers().size() - 1);
+						if (compareLifetimes(helpedLifetime, bestLifetime) > 0) {
 							bestHelper = helperEl;
 							bestLifetime = helpedLifetime;
 						}
 					} else {
 						for (int p = 0; p < account.roiPlanets().size(); p++) {
-							RoiSequenceElement helperEl = new RoiSequenceElement(helper, p, 0);
-							if (first) {
-								sequenceIter.add(helperEl);
-								first = false;
-							} else {
-								sequenceIter.set(helperEl);
+							RoiSequenceElement helperEl;
+							try (Transaction branch = account.branch()) {
+								helperEl = upgrade(account, p, false, helper);
+								el.withPreHelper(helperEl);
 							}
-							long helpedLifetime = getLifetimeMetric(account, sequence);
-							if (lifetimeMetric <= helpedLifetime) {
-								continue;
-							} else if (bestLifetime < 0 || helpedLifetime < bestLifetime) {
+							long helpedLifetime;
+							try (Transaction branch = account.branch()) {
+								helpedLifetime = getLifetimeMetric(account, sequence.subList(seqIndex, sequence.size()));
+							}
+							el.removePreHelper(el.getPreHelpers().size() - 1);
+							if (compareLifetimes(helpedLifetime, bestLifetime) > 0) {
 								bestHelper = helperEl;
 								bestLifetime = helpedLifetime;
 							}
 						}
 					}
 				}
-				if (bestLifetime >= 0) {
-					sequenceIter.set(bestHelper);
+				if (bestHelper != null) {
+					el.withPreHelper(bestHelper);
 					lifetimeMetric = bestLifetime;
-				} else if (!first) {
-					sequenceIter.remove();
+					if (updates) {
+						sequenceIter.set(el);
+					}
 				}
 			} while (bestHelper != null);
-			sequenceIter.next();
+			upgrade(account, el, true);
+			account.flush();
+		}
+		if (updates) {
+			theLifetimeMetric.set(Duration.ofSeconds(lifetimeMetric), null);
+			theProgress.set(sequence.size(), null);
 		}
 		return lifetimeMetric;
 	}
 
-	long getLifetimeMetric(RoiAccount account, Iterable<RoiSequenceElement> sequence) {
-		for (RoiSequenceElement el : sequence) {
-			if (el.planetIndex >= 0 && el.planetIndex >= account.roiPlanets().size()) {
-				// Astro must be going. Gotta wait for it to finish.
-				long upgradeTime = getUpgradeCompletion(account, AccountUpgradeType.Astrophysics, null);
-				if (upgradeTime > 0) {
-					account.advance(upgradeTime);
-				}
-				if (account.roiPlanets().size() == theRules.economy().getMaxPlanets(account)) {
-					// This can happen as things get moved around, e.g. astro getting moved ahead of an upgrade on the new planet
-					return Long.MAX_VALUE;
-				}
-			}
-			if (account.roiPlanets().size() < theRules.economy().getMaxPlanets(account)) {
-				RoiPlanet newPlanet = (RoiPlanet) account.getPlanets().newValue();
-				UpgradeCost newPlanetCost = upgradeToLevel(account, newPlanet);
-				account.spend(Math.round(newPlanetCost.getMetalValue(account.getUniverse().getTradeRatios())));
-			}
-			el.setTime(account.getTime());
-			if (el.planetIndex >= 0) {
-				RoiPlanet planet = account.roiPlanets().get(el.planetIndex);
-				int targetLevel = getTargetLevel(account, planet, el.upgrade);
-				el.setTargetLevel(targetLevel);
-				upgrade(account, el.upgrade, planet, targetLevel);
+	private static int compareLifetimes(long lt1, long lt2) {
+		if (lt1 < 0) {
+			if (lt2 < 0) {
+				return Long.compare(-lt1, -lt2);
 			} else {
-				RoiPlanet bestPlanet = null;
-				long bestTime = -1;
-				long bestUpgradeTime = -1;
-				for (RoiPlanet planet : account.roiPlanets()) {
-					int targetLevel = getTargetLevel(account, planet, el.upgrade);
-					upgrade(account, el.upgrade, planet, targetLevel);
-
-					long time = account.getTime();
-					long upgradeTime = getUpgradeCompletion(account, el.upgrade, planet);
-					boolean best = false;
-					if (bestTime < 0) {
-						best = true;
-					} else if (account.getTime() < bestTime) {
-						best = true;
-					} else if (account.getTime() == bestTime && upgradeTime < bestUpgradeTime) {
-						best = true;
-					}
-					if (best) {
-						bestPlanet = planet;
-						bestTime = time;
-						bestUpgradeTime = upgradeTime;
-					}
-					account.clear();
-				}
-				int targetLevel = getTargetLevel(account, bestPlanet, el.upgrade);
-				el.setTargetLevel(targetLevel);
-				upgrade(account, el.upgrade, bestPlanet, targetLevel);
+				return -1;
 			}
+		} else if (lt2 < 0) {
+			return 1;
+		} else {
+			return -Long.compare(lt1, lt2);
+		}
+	}
 
-			account.flush();
+	long getLifetimeMetric(RoiAccount account, Iterable<RoiSequenceCoreElement> sequence) {
+		int index = -1;
+		for (RoiSequenceCoreElement el : sequence) {
+			index++;
+			if (isCanceled) {
+				return -1;
+			}
+			if (!upgrade(account, el, true)) {
+				return -index;
+			}
 		}
 		// Include the completion of the last astro and the leveling of the first planet in the lifetime metric
 		if (account.getResearch().getCurrentUpgrade() == ResearchType.Astrophysics) {
@@ -827,21 +1156,113 @@ public class RoiSequenceGenerator {
 			if (upgradeTime > 0) {
 				account.advance(upgradeTime);
 			}
-			if (account.roiPlanets().size() == theRules.economy().getMaxPlanets(account)) {
-				throw new IllegalStateException();
-			}
 		}
-		if (account.roiPlanets().size() < theRules.economy().getMaxPlanets(account)) {
-			RoiPlanet newPlanet = (RoiPlanet) account.getPlanets().newValue();
-			UpgradeCost newPlanetCost = upgradeToLevel(account, newPlanet);
-			account.spend(Math.round(newPlanetCost.getMetalValue(account.getUniverse().getTradeRatios())));
-		}
-		long time = account.getTime();
-		account.reset();
-		return time;
+		// if (account.roiPlanets().size() < theRules.economy().getMaxPlanets(account)) {
+		// RoiPlanet newPlanet = (RoiPlanet) account.getPlanets().newValue();
+		// UpgradeCost newPlanetCost = upgradeToLevel(account, newPlanet);
+		// account.spend(Math.round(newPlanetCost.getMetalValue(account.getUniverse().getTradeRatios())));
+		// }
+		return account.getTime();
 	}
 
-	private void upgrade(RoiAccount account, AccountUpgradeType upgrade, RoiPlanet planet, int targetLevel) {
+	public boolean upgrade(RoiAccount account, RoiSequenceElement el, boolean simulate) {
+		for (RoiSequenceElement helper : el.getPreHelpers()) {
+			if (!doUpgrade(account, helper, simulate)) {
+				return false;
+			}
+		}
+		if (!doUpgrade(account, el, simulate)) {
+			return false;
+		}
+		if (el instanceof RoiSequenceCoreElement) {
+			for (RoiSequenceElement helper : ((RoiSequenceCoreElement) el).getPostHelpers()) {
+				if (!doUpgrade(account, helper, simulate)) {
+					return false;
+				}
+			}
+			for (RoiSequenceElement helper : ((RoiSequenceCoreElement) el).getAccessories()) {
+				if (!doUpgrade(account, helper, simulate)) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	private boolean doUpgrade(RoiAccount account, RoiSequenceElement upgrade, boolean simulate) {
+		for (RoiSequenceElement dep : upgrade.getDependencies()) {
+			if (!doUpgrade(account, dep, simulate)) {
+				return false;
+			}
+		}
+		if (upgrade.planetIndex >= 0 && upgrade.planetIndex >= account.roiPlanets().size()) {
+			// Astro must be going. Gotta wait for it to finish.
+			long upgradeTime = getUpgradeCompletion(account, AccountUpgradeType.Astrophysics, null);
+			if (upgradeTime > 0) {
+				account.advance(upgradeTime);
+			}
+			if (upgrade.planetIndex >= account.roiPlanets().size()
+				&& account.roiPlanets().size() == theRules.economy().getMaxPlanets(account)) {
+				// This can happen as things get moved around, e.g. astro getting moved ahead of an upgrade on the new planet
+				return false;
+			}
+			account.getPlanets().newValue();
+		}
+		// if (account.roiPlanets().size() < theRules.economy().getMaxPlanets(account)) {
+		// RoiPlanet newPlanet = (RoiPlanet) account.getPlanets().newValue();
+		// UpgradeCost newPlanetCost = upgradeToLevel(account, newPlanet);
+		// account.spend(Math.round(newPlanetCost.getMetalValue(account.getUniverse().getTradeRatios())));
+		// }
+		if (simulate) {
+			upgrade.setTime(account.getTime());
+		}
+		if (upgrade.upgrade == null) {
+			return true;
+		}
+		if (upgrade.upgrade.research == null) {
+			RoiPlanet planet = account.roiPlanets().get(upgrade.planetIndex);
+			int targetLevel;
+			if (upgrade.getTargetLevel() >= 0) {
+				targetLevel = upgrade.getTargetLevel();
+			} else {
+				targetLevel= getTargetLevel(account, upgrade.planetIndex, upgrade.isMoon, upgrade.upgrade);
+			}
+			return doUpgrade(account, upgrade.upgrade, planet, targetLevel, simulate);
+		} else {
+			long upgradeTime = getUpgradeCompletion(account, upgrade.upgrade, null);
+			if (upgradeTime > 0) {
+				account.advance(upgradeTime);
+			}
+			int bestPlanet = -1;
+			int currentLevel = upgrade.getLevel(account);
+			int targetLevel;
+			if (upgrade.getTargetLevel() >= 0) {
+				targetLevel = upgrade.getTargetLevel();
+			} else {
+				targetLevel = getTargetLevel(account, -1, false, upgrade.upgrade);
+			}
+			if (simulate) {
+				Duration bestTime = null;
+				for (int p = 0; p < account.roiPlanets().size(); p++) {
+					RoiPlanet planet = account.roiPlanets().get(p);
+					Duration planetTime = theRules.economy().getUpgradeCost(account, planet, upgrade.upgrade, currentLevel, targetLevel)
+						.getUpgradeTime();
+					if (bestTime == null || planetTime.compareTo(bestTime) < 0) {
+						bestPlanet = p;
+						bestTime = planetTime;
+					}
+				}
+			} else {
+				bestPlanet = 0;
+			}
+			return doUpgrade(account, upgrade.upgrade, account.roiPlanets().get(bestPlanet), targetLevel, simulate);
+		}
+	}
+
+	private boolean doUpgrade(RoiAccount account, AccountUpgradeType upgrade, RoiPlanet planet, int targetLevel, boolean simulate) {
+		if (upgrade == null) {
+			return true;
+		}
 		// Pre-requisites first
 		int currentLevel = upgrade.getLevel(account, planet);
 		if (upgrade.research != null && account.getResearch().getCurrentUpgrade() == upgrade.research) {
@@ -852,35 +1273,66 @@ public class RoiSequenceGenerator {
 			currentLevel += planet.getStationaryStructures().getUpgradeAmount();
 		}
 		if (targetLevel < currentLevel && upgrade.building == null) {
-			return;
+			return true;
 		}
 		if (currentLevel == 0) {
 			for (Requirement req : theRules.economy().getRequirements(upgrade)) {
 				int currentReqLevel = req.type.getLevel(account, planet);
 				if (currentReqLevel < req.level) {
-					upgrade(account, req.type, planet, req.level - currentReqLevel);
+					if (!doUpgrade(account, req.type, planet, req.level, simulate)) {
+						return false;
+					}
 				}
 			}
 		}
 
-		// Wait for any current upgrade to finish
-		long upgradeTime = getUpgradeCompletion(account, upgrade, planet);
-		if (upgradeTime > 0) {
-			account.advance(upgradeTime);
+		if (simulate) {
+			// Wait for any current upgrade to finish
+			long upgradeTime = getUpgradeCompletion(account, upgrade, planet);
+			if (upgradeTime > 0) {
+				account.advance(upgradeTime);
+			}
+			UpgradeCost cost = theRules.economy().getUpgradeCost(account, planet, upgrade, currentLevel, targetLevel);
+			if (cost.getUpgradeTime().getSeconds() == Long.MAX_VALUE) {
+				return false;
+			}
+			long costAmount = Math.round(cost.getMetalValue(theAccount.getUniverse().getTradeRatios()));
+			account.spend(costAmount);
+			account.start(upgrade, planet, targetLevel - currentLevel, cost.getUpgradeTime().getSeconds());
+		} else {
+			account.upgrade(upgrade, planet, targetLevel-currentLevel);
 		}
-		UpgradeCost cost = theRules.economy().getUpgradeCost(account, planet, upgrade, currentLevel, targetLevel);
-		long costAmount = Math.round(cost.getMetalValue(theAccount.getUniverse().getTradeRatios()));
-		account.spend(costAmount);
-		account.start(upgrade, planet, targetLevel - currentLevel, cost.getUpgradeTime().getSeconds());
+		return true;
 	}
 
 	private static long getUpgradeCompletion(RoiAccount account, AccountUpgradeType type, RoiPlanet planet) {
-		if (planet == null) {
-			return account.getResearch().getUpgradeCompletion();
+		long completion;
+		if (type.research != null) {
+			completion = account.getResearch().getUpgradeCompletion();
+			for (RoiPlanet p : account.roiPlanets()) {
+				if (p.getCurrentUpgrade() == BuildingType.ResearchLab) {
+					completion = Math.max(completion, p.getUpgradeCompletion());
+				}
+			}
 		} else if (type.building != null) {
-			return planet.getUpgradeCompletion();
+			completion = planet.getUpgradeCompletion();
+			switch (type.building) {
+			case ResearchLab:
+				completion = Math.max(completion, account.getResearch().getUpgradeCompletion());
+				break;
+			case Shipyard:
+			case NaniteFactory:
+				completion = Math.max(completion, planet.getStationaryStructures().getUpgradeCompletion());
+				break;
+			default:
+				break;
+			}
 		} else {
-			return planet.getStationaryStructures().getUpgradeCompletion();
+			completion = planet.getStationaryStructures().getUpgradeCompletion();
+			if (planet.getCurrentUpgrade() == BuildingType.Shipyard || planet.getCurrentUpgrade() == BuildingType.NaniteFactory) {
+				completion=Math.max(completion, planet.getUpgradeCompletion());
+			}
 		}
+		return completion;
 	}
 }

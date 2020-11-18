@@ -19,6 +19,7 @@ import org.observe.ObservableValue;
 import org.observe.SettableValue;
 import org.observe.collect.ObservableCollection;
 import org.observe.util.TypeTokens;
+import org.observe.util.swing.JustifiedBoxLayout;
 import org.observe.util.swing.ObservableTableModel;
 import org.observe.util.swing.PanelPopulation.PanelPopulator;
 import org.observe.util.swing.PanelPopulation.TableBuilder;
@@ -28,6 +29,7 @@ import org.qommons.ArrayUtils;
 import org.qommons.Causable;
 import org.qommons.Causable.CausableKey;
 import org.qommons.QommonsUtils;
+import org.qommons.Transaction;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementId;
@@ -35,12 +37,16 @@ import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
 import org.qommons.threading.QommonsTimer;
 import org.quark.ogame.OGameUtils;
+import org.quark.ogame.roi.RoiAccount;
+import org.quark.ogame.roi.RoiAccount.RoiPlanet;
 import org.quark.ogame.roi.RoiCompoundSequenceElement;
+import org.quark.ogame.roi.RoiSequenceCoreElement;
 import org.quark.ogame.roi.RoiSequenceElement;
 import org.quark.ogame.roi.RoiSequenceGenerator;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
+import org.quark.ogame.uni.OGameEconomyRuleSet.FullProduction;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.UpgradeCost;
@@ -229,7 +235,7 @@ public class UpgradePanel extends JPanel {
 					return Format.DURATION.format(upgrade.getCost().getUpgradeTime());
 				}, timeCol -> timeCol.withWidths(40, 100, 120))//
 				.withColumn("Cargoes", Long.class, upgrade -> {
-					if (upgrade.getUpgrade() == null || upgrade.getCost() == null) {
+					if (upgrade.getCost() == null) {
 						return null;
 					}
 					long cost = upgrade.getCost().getTotal();
@@ -480,36 +486,38 @@ public class UpgradePanel extends JPanel {
 
 	private void genRoiSequence(Account account, RoiSequenceGenerator sequenceGenerator) {
 		Format<Double> dblFormat = Format.doubleFormat(3).build();
-		ObservableCollection<RoiSequenceElement> sequence = ObservableCollection.build(RoiSequenceElement.class).build(); // Safe
+		ObservableCollection<RoiSequenceCoreElement> sequence = ObservableCollection.build(RoiSequenceCoreElement.class).build(); // Safe
+		SettableValue<RoiSequenceCoreElement> selected = SettableValue.build(RoiSequenceCoreElement.class).safe(false).build();
 		JDialog dialog = WindowPopulation
 			.populateDialog(new JDialog(SwingUtilities.getWindowAncestor(this), "ROI Sequence", ModalityType.MODELESS), //
 				Observable.empty(), true)//
 			.withVContent(panel -> panel.fill().fillV()//
 				.addLabel("Status:", sequenceGenerator.getStatus(), Format.TEXT, null)//
-				.addLabel("Stage Progress:", sequenceGenerator.getProgress(), new Format<Integer>() {
-					@Override
-					public void append(StringBuilder text, Integer value) {
-						if (value == null) {
-							return;
+				.addLabel("Stage Progress:", sequenceGenerator.getProgress().refresh(sequence.observeSize().noInitChanges()),
+					new Format<Integer>() {
+						@Override
+						public void append(StringBuilder text, Integer value) {
+							if (value == null) {
+								return;
+							}
+							text.append(value).append(" of ").append(sequence.size()).append(" (");
+							if (sequence.isEmpty()) {
+								text.append('0');
+							} else {
+								double pc = value * 100.0 / sequence.size();
+								dblFormat.append(text, pc);
+							}
+							text.append("%)");
 						}
-						text.append(value).append(" of ").append(sequence.size()).append(" (");
-						if (sequence.isEmpty()) {
-							text.append('0');
-						} else {
-							double pc = value * 100.0 / sequence.size();
-							dblFormat.append(text, pc);
-						}
-						text.append("%)");
-					}
 
-					@Override
-					public Integer parse(CharSequence text) throws ParseException {
-						throw new IllegalStateException();
-					}
-				}, null)//
+						@Override
+						public Integer parse(CharSequence text) throws ParseException {
+							throw new IllegalStateException();
+						}
+					}, null)//
 				.addLabel("Sequence Time:", sequenceGenerator.getLifetimeMetric(), Format.DURATION, null)//
 				.addTable(sequence,
-					table -> table.fill().fillV()//
+					table -> table.fill().fillV().withAdaptiveHeight(10, 15, 100).withSelection(selected, false)//
 						.withIndexColumn("#", col -> col.withWidths(20, 30, 60))//
 						.withColumn("Upgrade", AccountUpgradeType.class, el -> el.upgrade, col -> {
 							col.decorate((cell, deco) -> {
@@ -529,20 +537,354 @@ public class UpgradePanel extends JPanel {
 							}
 						}, null)//
 						.withColumn("Level", Integer.class, el -> el.getTargetLevel(), null)//
-						.withColumn("ROI", Duration.class, el -> el.roi == 0 ? null : Duration.ofHours(el.roi),
+						.withColumn("ROI", Duration.class,
+							el -> el.getRoi() == 0 ? null : Duration.ofSeconds(Math.round(el.getRoi() * 3600)),
 							col -> col.formatText(d -> d == null ? "" : QommonsUtils.printDuration(d, true)))//
 						.withColumn("Time", Duration.class, el -> el.getTime() == 0 ? null : Duration.ofSeconds(el.getTime()),
 							col -> col.formatText(d -> d == null ? "" : QommonsUtils.printDuration(d, true)))//
-			)).getWindow();
-		dialog.setSize(500, 700);
+				)//
+				.addButton("Cancel", __ -> sequenceGenerator.cancel(),
+					btn -> btn.disableWith(sequenceGenerator.isActive().map(a -> a == null ? "Sequence is not generating" : null)))//
+				.addVPanel(editor -> editor.fill().fillV().addVPanel(//
+					p -> configureSequenceEditor(p.fill().fillV().visibleWhen(selected.map(s -> s != null)), account, sequenceGenerator,
+						sequence, selected))))
+			.getWindow();
+		dialog.setSize(1100, 1100);
 		dialog.setLocationRelativeTo(this);
 		dialog.setVisible(true);
 		QommonsTimer.getCommonInstance().offload(() -> {
 			sequenceGenerator.produceSequence(sequence);
-			List<RoiCompoundSequenceElement> condensed = RoiSequenceGenerator.condense(sequence);
-			EventQueue.invokeLater(() -> displayRoiSequence(condensed, account, sequenceGenerator));
+			// List<RoiCompoundSequenceElement> condensed = RoiSequenceGenerator.condense(sequence);
+			// EventQueue.invokeLater(() -> displayRoiSequence(condensed, account, sequenceGenerator));
 			// dialog.setVisible(false);
 		});
+	}
+
+	private void configureSequenceEditor(PanelPopulator<?, ?> editor, Account account, RoiSequenceGenerator generator,
+		ObservableCollection<RoiSequenceCoreElement> sequence, SettableValue<RoiSequenceCoreElement> selected) {
+		RoiAccount roiAccount = new RoiAccount(generator, account);
+		Map<AccountUpgradeType, Upgrade> upgrades = new HashMap<>();
+		ObservableCollection<UpgradeDependency> dependencies = ObservableCollection.build(UpgradeDependency.class).safe(false).build();
+		selected.changes().act(evt -> {
+			RoiAccount acct = roiAccount; // Just putting this in a variable so I can inspect it while debugging inside the lambda
+			dependencies.clear();
+			if (evt.getNewValue() != null) {
+				acct.reset();
+				generator.init(roiAccount);
+				for (RoiSequenceCoreElement el : sequence) {
+					if (el == evt.getNewValue()) {
+						acct.completeUpgrades().flush();
+						upgrades.put(AccountUpgradeType.Astrophysics, tempUpgrade(acct, generator, AccountUpgradeType.Astrophysics));
+						upgrades.put(AccountUpgradeType.Plasma, tempUpgrade(acct, generator, AccountUpgradeType.Plasma));
+						upgrades.put(AccountUpgradeType.MetalMine, tempUpgrade(acct, generator, AccountUpgradeType.MetalMine));
+						upgrades.put(AccountUpgradeType.CrystalMine, tempUpgrade(acct, generator, AccountUpgradeType.CrystalMine));
+						upgrades.put(AccountUpgradeType.DeuteriumSynthesizer,
+							tempUpgrade(acct, generator, AccountUpgradeType.DeuteriumSynthesizer));
+						break;
+					}
+					generator.upgrade(acct, el, false);
+				}
+				addDependencies(evt.getNewValue(), dependencies);
+			}
+		});
+		editor.addCollapsePanel(true, new JustifiedBoxLayout(true),
+			cp -> cp.fill()//
+				.withHeader(header -> header.addLabel(null, "Dependencies", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
+				.addTable(dependencies, table -> {
+					table.fill().withAdaptiveHeight(3, 7, 20)//
+						.withColumn("Type", String.class, dep -> dep.dependencyType, null)//
+						.withColumn("Upgrade", AccountUpgradeType.class, dep -> dep.upgrade.upgrade, null)//
+						.withColumn("From", int.class, dep -> dep.upgrade.getLevel(roiAccount), null)//
+						.withColumn("To", int.class, dep -> dep.upgrade.getTargetLevel(), null)//
+						.withColumn("Metal", long.class, dep -> dep.upgrade.getCost().getMetal(), null)//
+						.withColumn("Crystal", long.class, dep -> dep.upgrade.getCost().getCrystal(), null)//
+						.withColumn("Deuterium", long.class, dep -> dep.upgrade.getCost().getDeuterium(), null)//
+					;
+				}));
+		editor.addCollapsePanel(true, new JustifiedBoxLayout(true), cp -> cp.fill()//
+			.withHeader(header -> header.addLabel(null, "Account Status", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
+			.addTable(ObservableCollection.of(RoiAccount.class, roiAccount).flow().refresh(selected.noInitChanges()).collect(), acct -> {
+				acct.fill().withAdaptiveHeight(1, 1, 1)//
+					.withColumn("Planets", int.class, a -> a.getPlanets().getValues().size(), null)//
+					.withColumn("Astro", int.class, a -> a.getResearch().getAstrophysics(), null)//
+					.withColumn("Plasma", int.class, a -> a.getResearch().getPlasma(), null)//
+					// TODO Energy, etc.
+					.withColumn("Total Production", long.class, a -> a.getProduction(), null)//
+				;
+			}));
+		SettableValue<AccountUpgradeType> selectedHypoUpgrade = SettableValue.build(AccountUpgradeType.class).safe(false).build();
+		editor.addCollapsePanel(true, new JustifiedBoxLayout(true),
+			cp -> cp.fill()//
+				.withHeader(header -> header.addLabel(null, "Account Upgrades", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
+				.addTable(ObservableCollection.of(AccountUpgradeType.class, AccountUpgradeType.Astrophysics, AccountUpgradeType.Plasma)
+					.flow().refresh(selected.noInitChanges()).collect(), acct -> {
+						acct.fill().withAdaptiveHeight(2, 2, 2).withSelection(selectedHypoUpgrade, false)//
+							.withNameColumn(AccountUpgradeType::name, null, false, null)//
+							.withColumn("M Cost", String.class, u -> {
+								Upgrade ug = upgrades.get(u);
+								return ug.upgrade == null ? "" : ("" + ug.upgrade.getTotalCost().getMetal());
+							}, null)//
+							.withColumn("C Cost", String.class, u -> {
+								Upgrade ug = upgrades.get(u);
+								return ug.upgrade == null ? "" : ("" + ug.upgrade.getTotalCost().getCrystal());
+							}, null)//
+							.withColumn("D Cost", String.class, u -> {
+								Upgrade ug = upgrades.get(u);
+								return ug.upgrade == null ? "" : ("" + ug.upgrade.getTotalCost().getDeuterium());
+							}, null)//
+							.withColumn("T Cost", String.class, u -> {
+								Upgrade ug = upgrades.get(u);
+								return ug.upgrade == null ? ""
+									: ("" + ug.upgrade.getTotalCost().getMetalValue(account.getUniverse().getTradeRatios()));
+							}, null)//
+							.withColumn("New Prod", String.class, u -> {
+								long prod = upgrades.get(u).newProduction;
+								long delta = prod - roiAccount.getProduction();
+								return prod + " (" + (delta < 0 ? "" : "+") + delta + ")";
+							}, null)//
+							.withColumn("ROI", String.class, u -> {
+								Upgrade ug = upgrades.get(u);
+								if (ug.upgrade == null) {
+									return "";
+								}
+								return QommonsUtils.printDuration(Duration
+									.ofSeconds((long) (ug.upgrade.getTotalCost().getMetalValue(roiAccount.getUniverse().getTradeRatios())
+										/ (ug.newProduction - roiAccount.getProduction()) * 3600)),
+									true);
+							}, null)//
+						;
+					}));
+
+		SettableValue<RoiPlanet> selectedPlanet = SettableValue.build(RoiPlanet.class).safe(false).build();
+		selected.noInitChanges().act(evt -> {
+			if (evt.getNewValue() == null || evt.getOldValue() == evt.getNewValue()) {
+				return;
+			}
+			RoiPlanet planet = selectedPlanet.get();
+			if (planet == null) {
+				return;
+			}
+			for (RoiPlanet p : roiAccount.roiPlanets()) {
+				if (p.getName().equals(planet.getName())) {
+					selectedPlanet.set(p, evt);
+					break;
+				}
+			}
+		});
+		editor.addCollapsePanel(true, new JustifiedBoxLayout(true),
+			cp -> cp.fill()//
+				.withHeader(header -> header.addLabel(null, "Planet Status", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
+				.addTable(roiAccount.roiPlanets().flow().refresh(selected.noInitChanges()).collect(), planets -> {
+					planets.fill().withAdaptiveHeight(5, 10, 17).withSelection(selectedPlanet, false)//
+						.withNameColumn(Planet::getName, null, true, null)//
+						.withColumn("M", int.class, Planet::getMetalMine, null)//
+						.withColumn("C", int.class, Planet::getCrystalMine, null)//
+						.withColumn("D", int.class, Planet::getDeuteriumSynthesizer, null)//
+						.withColumn("M Prod", int.class, p -> p == null ? 0 : p.getProduction().metal, null)//
+						.withColumn("C Prod", int.class, p -> p == null ? 0 : p.getProduction().crystal, null)//
+						.withColumn("D Prod", int.class, p -> p == null ? 0 : p.getProduction().deuterium, null)//
+						.withColumn("Prod Value", long.class, p -> p == null ? 0 : p.getProductionValue(), null)//
+						.withColumn("Sats", int.class, Planet::getSolarSatellites, null)//
+						.withColumn("Solar", int.class, Planet::getSolarPlant, null)//
+						.withColumn("Fzn", int.class, Planet::getFusionReactor, null)//
+						.withColumn("Crawler", int.class, Planet::getCrawlers, null)//
+						.withColumn("Fzn Util", int.class, Planet::getFusionReactorUtilization, null)//
+						.withColumn("Crawler Util", int.class, Planet::getCrawlerUtilization, null)//
+					;
+				}));
+		selectedPlanet.noInitChanges().act(evt -> {
+			if (evt.getNewValue() != null) {
+				System.out.println(
+					evt.getNewValue() + ": " + theUniGui.getRules().get().economy().getFullProduction(roiAccount, evt.getNewValue()));
+			}
+		});
+		editor.addCollapsePanel(true, new JustifiedBoxLayout(true),
+			cp -> cp.fill().fillV()//
+				.withHeader(header -> header.addLabel(null, "Planet Upgrades", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
+				.addVPanel(planetEditor -> {
+					planetEditor.fill().fillV().visibleWhen(selectedPlanet.map(p -> p != null));
+					planetEditor.addTable(ObservableCollection
+						.of(AccountUpgradeType.class, AccountUpgradeType.MetalMine, AccountUpgradeType.CrystalMine,
+							AccountUpgradeType.DeuteriumSynthesizer, AccountUpgradeType.Astrophysics, AccountUpgradeType.Plasma)
+						.flow().refresh(selectedPlanet.noInitChanges()).collect(), planet -> {
+							planet.fill().fillV().withAdaptiveHeight(5, 5, 5).withSelection(selectedHypoUpgrade, false)//
+								.withNameColumn(AccountUpgradeType::name, null, false, null)//
+								.withColumn("M Cost", String.class, u -> {
+									PlanetUpgrade pu = upgrades.get(u).planetProductions
+										.get(roiAccount.roiPlanets().indexOf(selectedPlanet.get()));
+									return pu.upgrade == null ? "" : ("" + pu.upgrade.getTotalCost().getMetal());
+								}, null)//
+								.withColumn("C Cost", String.class, u -> {
+									PlanetUpgrade pu = upgrades.get(u).planetProductions
+										.get(roiAccount.roiPlanets().indexOf(selectedPlanet.get()));
+									return pu.upgrade == null ? "" : ("" + pu.upgrade.getTotalCost().getCrystal());
+								}, null)//
+								.withColumn("D Cost", String.class, u -> {
+									PlanetUpgrade pu = upgrades.get(u).planetProductions
+										.get(roiAccount.roiPlanets().indexOf(selectedPlanet.get()));
+									return pu.upgrade == null ? "" : ("" + pu.upgrade.getTotalCost().getDeuterium());
+								}, null)//
+								.withColumn("T Cost", String.class, u -> {
+									PlanetUpgrade pu = upgrades.get(u).planetProductions
+										.get(roiAccount.roiPlanets().indexOf(selectedPlanet.get()));
+									return pu.upgrade == null ? ""
+										: ("" + pu.upgrade.getTotalCost().getMetalValue(account.getUniverse().getTradeRatios()));
+								}, null)//
+								.withColumn("M Prod", String.class, u -> {
+									RoiPlanet p = selectedPlanet.get();
+									PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
+									long prod = pu.production.metal;
+									long delta = prod - p.getProduction().metal;
+									return prod + " (" + (delta < 0 ? "" : "+") + delta + ")";
+								}, null)//
+								.withColumn("C Prod", String.class, u -> {
+									RoiPlanet p = selectedPlanet.get();
+									PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
+									long prod = pu.production.crystal;
+									long delta = prod - p.getProduction().crystal;
+									return prod + " (" + (delta < 0 ? "" : "+") + delta + ")";
+								}, null)//
+								.withColumn("D Prod", String.class, u -> {
+									RoiPlanet p = selectedPlanet.get();
+									PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
+									long prod = pu.production.deuterium;
+									long delta = prod - p.getProduction().deuterium;
+									return prod + " (" + (delta < 0 ? "" : "+") + delta + ")";
+								}, null)//
+								.withColumn("Total Prod", String.class, u -> {
+									RoiPlanet p = selectedPlanet.get();
+									PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
+									long prod = pu.productonValue;
+									long delta = prod - p.getProductionValue();
+									return prod + " (" + (delta < 0 ? "" : "+") + delta + ")";
+								}, null)//
+								.withColumn("ROI", String.class, u -> {
+									RoiPlanet p = selectedPlanet.get();
+									PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
+									if (pu.upgrade == null) {
+										return "";
+									}
+									return QommonsUtils.printDuration(Duration.ofSeconds(
+										(long) (pu.upgrade.getTotalCost().getMetalValue(roiAccount.getUniverse().getTradeRatios())
+											/ (pu.productonValue - p.getProductionValue()) * 3600)),
+										true);
+								}, null)//
+							;
+						});
+				}));
+		ObservableCollection<UpgradeDependency> hypoDependencies = ObservableCollection.build(UpgradeDependency.class).safe(false).build();
+		selectedHypoUpgrade.refresh(selectedPlanet.noInitChanges()).changes().act(evt -> {
+			hypoDependencies.clear();
+			if (evt.getNewValue() == null) {
+				return;
+			}
+			RoiSequenceCoreElement upgrade;
+			if (evt.getNewValue().research != null) {
+				upgrade = upgrades.get(evt.getNewValue()).upgrade;
+			} else {
+				upgrade = upgrades.get(evt.getNewValue()).planetProductions
+					.get(roiAccount.roiPlanets().indexOf(selectedPlanet.get())).upgrade;
+			}
+			addDependencies(upgrade, hypoDependencies);
+		});
+		editor.addCollapsePanel(true, new JustifiedBoxLayout(true),
+			cp -> cp.fill()//
+				.withHeader(header -> header.addLabel(null, "Hypothetical Upgrade Dependencies",
+					lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
+				.addTable(hypoDependencies, table -> {
+					table.fill().withAdaptiveHeight(3, 7, 20)//
+						.withColumn("Type", String.class, dep -> dep.dependencyType, null)//
+						.withColumn("Upgrade", AccountUpgradeType.class, dep -> dep.upgrade.upgrade, null)//
+						.withColumn("From", int.class, dep -> dep.upgrade.getLevel(roiAccount), null)//
+						.withColumn("To", int.class, dep -> dep.upgrade.getTargetLevel(), null)//
+						.withColumn("Metal", long.class, dep -> dep.upgrade.getCost().getMetal(), null)//
+						.withColumn("Crystal", long.class, dep -> dep.upgrade.getCost().getCrystal(), null)//
+						.withColumn("Deuterium", long.class, dep -> dep.upgrade.getCost().getDeuterium(), null)//
+					;
+				}));
+	}
+
+	private void addDependencies(RoiSequenceCoreElement coreEl, ObservableCollection<UpgradeDependency> dependencies) {
+		for (RoiSequenceElement helper : coreEl.getPreHelpers()) {
+			addDependency(helper, "Pre Helper", dependencies);
+		}
+		if (coreEl.upgrade != null) {
+			addDependency(coreEl, "Core", dependencies);
+		}
+		for (RoiSequenceElement helper : coreEl.getPostHelpers()) {
+			addDependency(helper, "Post Helper", dependencies);
+		}
+		for (RoiSequenceElement helper : coreEl.getAccessories()) {
+			addDependency(helper, "Accessory", dependencies);
+		}
+	}
+
+	private void addDependency(RoiSequenceElement dependency, String type, ObservableCollection<UpgradeDependency> dependencies) {
+		for (RoiSequenceElement dep : dependency.getDependencies()) {
+			addDependency(dep, "Dependency", dependencies);
+		}
+		dependencies.add(new UpgradeDependency(type, dependency));
+	}
+
+	static class Upgrade {
+		final long newProduction;
+		final RoiSequenceCoreElement upgrade;
+		final List<PlanetUpgrade> planetProductions;
+
+		Upgrade(long newProduction, RoiSequenceCoreElement upgrade, List<PlanetUpgrade> planetProductions) {
+			this.newProduction = newProduction;
+			this.upgrade = upgrade;
+			this.planetProductions = planetProductions;
+		}
+	}
+
+	static class PlanetUpgrade {
+		final RoiSequenceCoreElement upgrade;
+		final FullProduction production;
+		final long productonValue;
+
+		PlanetUpgrade(RoiSequenceCoreElement upgrade, FullProduction production, long productionValue) {
+			this.upgrade = upgrade;
+			this.production = production;
+			this.productonValue = productionValue;
+		}
+	}
+
+	static class UpgradeDependency {
+		final String dependencyType;
+		final RoiSequenceElement upgrade;
+
+		UpgradeDependency(String dependencyType, RoiSequenceElement upgrade) {
+			this.dependencyType = dependencyType;
+			this.upgrade = upgrade;
+		}
+	}
+
+	private Upgrade tempUpgrade(RoiAccount roiAccount, RoiSequenceGenerator generator, AccountUpgradeType upgrade) {
+		long production;
+		List<PlanetUpgrade> planetProductions = new ArrayList<>(roiAccount.roiPlanets().size());
+		RoiSequenceCoreElement cost;
+		if (upgrade.research != null) {
+			try (Transaction branch = roiAccount.branch()) {
+				cost = generator.coreUpgrade(roiAccount, -1, upgrade);
+				for (RoiPlanet planet : roiAccount.roiPlanets()) {
+					planetProductions.add(new PlanetUpgrade(null, planet.getProduction(), planet.getProductionValue()));
+				}
+				production = roiAccount.getProduction();
+			}
+		} else {
+			production = 0;
+			cost = null;
+			for (int p = 0; p < roiAccount.roiPlanets().size(); p++) {
+				RoiPlanet planet = roiAccount.roiPlanets().get(p);
+				try (Transaction branch = roiAccount.branch()) {
+					planetProductions.add(new PlanetUpgrade(//
+						generator.coreUpgrade(roiAccount, p, upgrade), //
+						planet.getProduction(), planet.getProductionValue()));
+				}
+			}
+		}
+		return new Upgrade(production, cost, planetProductions);
 	}
 
 	private void displayRoiSequence(List<RoiCompoundSequenceElement> condensed, Account account, RoiSequenceGenerator sequenceGenerator) {
@@ -577,7 +919,7 @@ public class UpgradePanel extends JPanel {
 								if (el.planetIndexes[p] < planetNames.size()) {
 									planets.append(planetNames.get(el.planetIndexes[p]));
 								} else {
-									planets.append("Planet "+(el.planetIndexes[p]+1));
+									planets.append("Planet " + (el.planetIndexes[p] + 1));
 								}
 							}
 							return planets.toString();
