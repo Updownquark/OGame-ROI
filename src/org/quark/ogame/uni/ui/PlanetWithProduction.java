@@ -104,6 +104,12 @@ public class PlanetWithProduction {
 
 	@Override
 	public String toString() {
-		return planet == null ? "" : planet.getName();
+		if (upgradePlanet != null) {
+			return upgradePlanet.toString();
+		} else if (planet != null) {
+			return planet.toString();
+		} else {
+			return "";
+		}
 	}
 }

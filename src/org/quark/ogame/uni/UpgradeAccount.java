@@ -137,6 +137,11 @@ public class UpgradeAccount implements Account {
 		return theWrapped.getPlannedFlights();
 	}
 
+	@Override
+	public String toString() {
+		return theWrapped.toString();
+	}
+
 	public class UpgradePlanetSet implements SyncValueSet<Planet> {
 		private final Map<Long, UpgradePlanet> theUpgradePlanets;
 		private final ObservableCollection<UpgradePlanet> thePlanetCollection;
@@ -178,7 +183,8 @@ public class UpgradeAccount implements Account {
 			} else if (wrappedPlanet.getAccount() == theWrapped) {
 				return theUpgradePlanets.computeIfAbsent(wrappedPlanet.getId(), __ -> new UpgradePlanet(wrappedPlanet));
 			} else {
-				throw new IllegalArgumentException("Unrecognized planet: " + wrappedPlanet);
+				// throw new IllegalArgumentException("Unrecognized planet: " + wrappedPlanet);
+				return null;
 			}
 		}
 
@@ -448,6 +454,11 @@ public class UpgradeAccount implements Account {
 		@Override
 		public UpgradePlanet setBuildingLevel(BuildingType type, int buildingLevel) {
 			return this;
+		}
+
+		@Override
+		public String toString() {
+			return theWrapped.toString() + "." + getWrapped().toString();
 		}
 
 		public class UpgradeMoon extends UpgradeRockyBody implements CondensedMoon {

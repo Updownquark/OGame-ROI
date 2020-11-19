@@ -155,6 +155,21 @@ public class OGameUniGui extends JPanel {
 			.build().with(total);
 		thePlanetsWithTotal = ObservableCollection.flattenCollections(TypeTokens.get().of(PlanetWithProduction.class), //
 			getPlanets(), theTotalProduction).collect();
+		// theSelectedAccount.noInitChanges().act(evt -> { // DEBUG
+		// System.out.println("SA: " + evt);
+		// });
+		// theUpgradeAccount.noInitChanges().act(evt -> { // DEBUG
+		// System.out.println("UA: " + evt);
+		// });
+		// thePlanets.changes().act(evt -> { // DEBUG
+		// System.out.println("Planets: " + evt);
+		// });
+		// theSelectedPlanet.noInitChanges().act(evt -> { // DEBUG
+		// System.out.println("Selected Planet: " + evt);
+		// });
+		// thePlanetsWithTotal.changes().act(evt -> { // DEBUG
+		// System.out.println("PlanetsWT: " + evt);
+		// });
 
 		TypeToken<ObservableCollection<PlannedUpgrade>> upgradeCollType = TypeTokens.get().keyFor(ObservableCollection.class)
 			.parameterized(PlannedUpgrade.class);

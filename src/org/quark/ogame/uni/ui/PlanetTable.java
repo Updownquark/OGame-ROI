@@ -755,29 +755,34 @@ public class PlanetTable {
 				if (ua == null) {
 					return new Levels(0, 0);
 				}
+				UpgradePlanet planet = p.planet == null ? null : ua.getPlanets().getUpgradePlanet(p.planet);
+				if (p.planet != null && planet == null) {
+					return new Levels(0, 0);
+				}
 				if (moon) {
 					if (p.planet == null) {
 						int current = 0, goal = 0;
-						for (Planet planet : ua.getPlanets().getValues()) {
-							current += type.getLevel(theUniGui.getSelectedAccount().get(), ((UpgradePlanet) planet).getWrapped().getMoon());
-							goal += type.getLevel(ua, planet.getMoon());
+						for (Planet planet2 : ua.getPlanets().getValues()) {
+							current += type.getLevel(theUniGui.getSelectedAccount().get(),
+								((UpgradePlanet) planet2).getWrapped().getMoon());
+							goal += type.getLevel(ua, planet2.getMoon());
 						}
 						return new Levels(current, goal);
 					} else {
 						return new Levels(type.getLevel(p.planet.getAccount(), p.planet.getMoon()),
-							type.getLevel(ua, ua.getPlanets().getUpgradePlanet(p.planet).getMoon()));
+							type.getLevel(ua, planet.getMoon()));
 					}
 				} else {
 					if (p.planet == null) {
 						int current = 0, goal = 0;
-						for (Planet planet : ua.getPlanets().getValues()) {
-							current += type.getLevel(theUniGui.getSelectedAccount().get(), ((UpgradePlanet) planet).getWrapped());
-							goal += type.getLevel(ua, planet);
+						for (Planet planet2 : ua.getPlanets().getValues()) {
+							current += type.getLevel(theUniGui.getSelectedAccount().get(), ((UpgradePlanet) planet2).getWrapped());
+							goal += type.getLevel(ua, planet2);
 						}
 						return new Levels(current, goal);
 					} else {
 						return new Levels(type.getLevel(p.planet.getAccount(), p.planet),
-							type.getLevel(ua, ua.getPlanets().getUpgradePlanet(p.planet)));
+							type.getLevel(ua, planet));
 					}
 				}
 			}, (p, levels) -> {
