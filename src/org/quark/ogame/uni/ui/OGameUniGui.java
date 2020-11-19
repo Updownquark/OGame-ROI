@@ -38,6 +38,7 @@ import org.observe.ext.util.GitHubApiHelper;
 import org.observe.ext.util.GitHubApiHelper.Release;
 import org.observe.util.EntityReflector;
 import org.observe.util.TypeTokens;
+import org.observe.util.swing.AppPopulation;
 import org.observe.util.swing.AppPopulation.ObservableUiBuilder;
 import org.observe.util.swing.CategoryRenderStrategy;
 import org.observe.util.swing.JustifiedBoxLayout;
@@ -1029,7 +1030,7 @@ public class OGameUniGui extends JPanel {
 				e.printStackTrace(System.out);
 				return null;
 			}
-			return r == null ? null : r.getTagName();
+			return r == null ? null : new AppPopulation.Version(r.getTagName(), r.getName(), r.getDescription());
 		}).withUpgrade(version -> {
 			try {
 				new GitHubApiHelper("Updownquark", "OGame-ROI").upgradeToLatest(OGameUniGui.class, builder.getTitle().get(),
