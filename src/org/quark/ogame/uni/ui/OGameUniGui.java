@@ -1251,7 +1251,7 @@ public class OGameUniGui extends JPanel {
 				if (rules.economy().getMaxPlanets(account) != account.getWrapped().getPlanets().getValues().size()) {
 					return ProductionUpgradeType.Astro;
 				}
-				return null;
+				return ProductionUpgradeType.None;
 			case Energy:
 				return ProductionUpgradeType.Global;
 			default:
