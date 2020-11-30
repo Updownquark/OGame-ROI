@@ -52,6 +52,8 @@ import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.ui.OGameUniGui.PlannedAccountUpgrade;
 
+import com.google.common.reflect.TypeToken;
+
 public class UpgradePanel extends JPanel {
 	private final OGameUniGui theUniGui;
 
@@ -88,12 +90,19 @@ public class UpgradePanel extends JPanel {
 		});
 
 		UpgradeCost[] planetTotalCost = new UpgradeCost[] { UpgradeCost.ZERO };
+		UpgradeCost[] selectedTotalCost = new UpgradeCost[] { UpgradeCost.ZERO };
 		UpgradeCost[] totalCost = new UpgradeCost[] { UpgradeCost.ZERO };
 		ObservableCollection<PlannedAccountUpgrade> upgrades;
 		PlannedAccountUpgrade planetTotalUpgrade = theUniGui.new PlannedAccountUpgrade(null) {
 			@Override
 			public UpgradeCost getCost() {
 				return planetTotalCost[0];
+			}
+		};
+		PlannedAccountUpgrade selectedTotalUpgrade = theUniGui.new PlannedAccountUpgrade(null) {
+			@Override
+			public UpgradeCost getCost() {
+				return selectedTotalCost[0];
 			}
 		};
 		PlannedAccountUpgrade filteredTotalUpgrade = theUniGui.new PlannedAccountUpgrade(null) {
@@ -103,32 +112,26 @@ public class UpgradePanel extends JPanel {
 			}
 		};
 
-		ObservableCollection<PlannedAccountUpgrade> totalUpgrades = ObservableCollection.build(PlannedAccountUpgrade.class).safe(false)
+		ObservableCollection<PlannedAccountUpgrade> selectedUpgrades = ObservableCollection.build(PlannedAccountUpgrade.class).safe(false)
 			.build();
-		totalUpgrades.add(filteredTotalUpgrade);
-		Runnable[] calcCosts = new Runnable[1];
+		SettableValue<PlannedAccountUpgrade> selectedTotalUpgradeV = SettableValue.build(PlannedAccountUpgrade.class).safe(false).build();
+		TypeToken<PlannedAccountUpgrade> upgradeType = TypeTokens.get().of(PlannedAccountUpgrade.class);
 		boolean[] planetCallbackLock = new boolean[1];
+		ObservableCollection<PlannedAccountUpgrade> totalUpgrades = ObservableCollection.flattenCollections(upgradeType,
+			ObservableCollection.flattenValue(theUniGui.getSelectedPlanet()
+				.map(sp -> sp == null ? ObservableCollection.of(upgradeType) : ObservableCollection.of(upgradeType, planetTotalUpgrade)))
+				.flow().refresh(theUniGui.getSelectedPlanet().noInitChanges()).collect(), //
+			// TODO Can't get the selected upgrade total to not throw reentrant exceptions
+			ObservableCollection
+				.flattenValue(selectedTotalUpgradeV
+					.map(ug -> ug == null ? ObservableCollection.of(upgradeType) : ObservableCollection.of(upgradeType, ug)))
+				.flow().refresh(selectedTotalUpgradeV.noInitChanges().filter(__ -> !planetCallbackLock[0])).collect(), //
+			ObservableCollection.of(upgradeType, filteredTotalUpgrade)//
+		).collect();
+		Runnable[] calcCosts = new Runnable[1];
 		theUniGui.getSelectedPlanet().changes().act(evt -> {
-			boolean hasPlanetTotal = evt.getNewValue() != null && evt.getNewValue().planet != null;
-			if (hasPlanetTotal && totalUpgrades.size() == 1) {
-				if (calcCosts[0] != null) {
-					calcCosts[0].run();
-				}
-				totalUpgrades.add(0, planetTotalUpgrade);
-			} else if (!hasPlanetTotal && totalUpgrades.size() == 2) {
-				totalUpgrades.remove(0);
-			} else if (hasPlanetTotal) {
-				if (calcCosts[0] != null) {
-					calcCosts[0].run();
-				}
-				EventQueue.invokeLater(() -> {
-					planetCallbackLock[0] = true;
-					try {
-						totalUpgrades.set(0, planetTotalUpgrade);
-					} finally {
-						planetCallbackLock[0] = false;
-					}
-				});
+			if (calcCosts[0] != null) {
+				calcCosts[0].run();
 			}
 		});
 		upgrades = ObservableCollection.flattenCollections(TypeTokens.get().of(PlannedAccountUpgrade.class), //
@@ -178,6 +181,7 @@ public class UpgradePanel extends JPanel {
 				.dragSourceRow(null).dragAcceptRow(null)// Make the rows draggable
 				.withFiltering(tableFilter)//
 				.withSelection(selection, false)//
+				.withSelection(selectedUpgrades)//
 				.withColumn("Planet", String.class, upgrade -> {
 					if (upgrade == filteredTotalUpgrade) {
 						return "Total";
@@ -185,6 +189,8 @@ public class UpgradePanel extends JPanel {
 						PlanetWithProduction selectedPlanet = theUniGui.getSelectedPlanet().get();
 						return ((selectedPlanet == null || selectedPlanet.planet == null) ? "Planet" : selectedPlanet.planet.getName())
 							+ " Total";
+					} else if (upgrade == selectedTotalUpgrade) {
+						return "Selected Total";
 					} else if (upgrade.getPlanet() != null) {
 						return upgrade.getPlanet().getName() + (upgrade.getUpgrade().isMoon() ? " Moon" : "");
 					} else {
@@ -193,7 +199,8 @@ public class UpgradePanel extends JPanel {
 				}, planetCol -> {
 					planetCol.decorate((cell, d) -> {
 						PlanetWithProduction p = theUniGui.getSelectedPlanet().get();
-						if (p != null && (cell.getModelValue().getPlanet() == p.planet || cell.getModelValue() == planetTotalUpgrade)) {
+						if (p != null && (cell.getModelValue().getPlanet() == p.planet || cell.getModelValue() == selectedTotalUpgrade
+							|| cell.getModelValue() == planetTotalUpgrade || cell.getModelValue() == filteredTotalUpgrade)) {
 							d.bold();
 						}
 					}).withWidths(80, 150, 300);
@@ -254,10 +261,10 @@ public class UpgradePanel extends JPanel {
 		ObservableCollection<PlannedAccountUpgrade> rows = ((ObservableTableModel<PlannedAccountUpgrade>) table[0].getEditor().getModel())
 			.getRows();
 		calcCosts[0] = () -> {
-			totalCost[0] = planetTotalCost[0] = UpgradeCost.ZERO;
+			totalCost[0] = planetTotalCost[0] = selectedTotalCost[0] = UpgradeCost.ZERO;
 			PlanetWithProduction selectedPlanet = theUniGui.getSelectedPlanet().get();
 			for (PlannedAccountUpgrade row : rows) {
-				if (row == planetTotalUpgrade || row == filteredTotalUpgrade) {
+				if (row == planetTotalUpgrade || row == selectedTotalUpgrade || row == filteredTotalUpgrade) {
 					continue;
 				}
 				UpgradeCost cost = row.getCost();
@@ -271,6 +278,24 @@ public class UpgradePanel extends JPanel {
 		};
 		rows.simpleChanges().act(__ -> {
 			calcCosts[0].run();
+		});
+		selectedUpgrades.simpleChanges().act(__ -> {
+			EventQueue.invokeLater(() -> {
+				selectedTotalCost[0] = UpgradeCost.ZERO;
+				for (PlannedAccountUpgrade row : selectedUpgrades) {
+					if (row == planetTotalUpgrade || row == selectedTotalUpgrade || row == filteredTotalUpgrade) {
+						continue;
+					}
+					UpgradeCost cost = row.getCost();
+					if (cost != null) {
+						selectedTotalCost[0] = selectedTotalCost[0].plus(cost);
+					}
+				}
+				PlannedAccountUpgrade target = selectedUpgrades.isEmpty() ? null : selectedTotalUpgrade;
+				if (target != selectedTotalUpgradeV.get()) {
+					selectedTotalUpgradeV.set(target, null);
+				}
+			});
 		});
 		calcCosts[0].run();
 		panel.addButton("Generate ROI Sequence", __ -> showRoiSequenceConfigPanel(), null);
