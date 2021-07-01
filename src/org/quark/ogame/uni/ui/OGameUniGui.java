@@ -58,6 +58,7 @@ import org.quark.ogame.roi.OGameRoiSettings;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.AccountUpgradeType;
+import org.quark.ogame.uni.AllianceClass;
 import org.quark.ogame.uni.BuildingType;
 import org.quark.ogame.uni.OGameEconomyRuleSet;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
@@ -78,6 +79,7 @@ import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.versions.OGameRuleSet710;
 import org.quark.ogame.uni.versions.OGameRuleSet711;
 import org.quark.ogame.uni.versions.OGameRuleSet750;
+import org.quark.ogame.uni.versions.OGameRuleSet800pl7;
 
 import com.google.common.reflect.TypeToken;
 
@@ -542,11 +544,22 @@ public class OGameUniGui extends JPanel {
 														(account, circular) -> account.getUniverse().setCircularGalaxies(circular), null),
 													null)//
 										)//
-										.addComboField("Account Class:",
-											theSelectedAccount.asFieldEditor(TypeTokens.get().of(AccountClass.class), Account::getGameClass,
-												Account::setGameClass, null),
-											ObservableCollection.of(TypeTokens.get().of(AccountClass.class), AccountClass.values()), //
-											classEditor -> classEditor.fill().withValueTooltip(clazz -> describeClass(clazz))//
+										.addHPanel("Classes:",
+											new JustifiedBoxLayout(false).setMainAlignment(JustifiedBoxLayout.Alignment.LEADING),
+											classPanel -> classPanel//
+												.addComboField("Account:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().of(AccountClass.class),
+														Account::getGameClass, Account::setGameClass, null),
+													ObservableCollection.of(TypeTokens.get().of(AccountClass.class), AccountClass.values()), //
+													classEditor -> classEditor.fill().withValueTooltip(clazz -> describeClass(clazz))//
+												)//
+												.addComboField("Alliance:",
+													theSelectedAccount.asFieldEditor(TypeTokens.get().of(AllianceClass.class),
+														Account::getAllianceClass, Account::setAllianceClass, null),
+													ObservableCollection.of(TypeTokens.get().of(AllianceClass.class),
+														AllianceClass.values()), //
+													classEditor -> classEditor.fill().withValueTooltip(clazz -> describeClass(clazz))//
+												)//
 										)//
 										.addHPanel("Collector Bonus:", "box",
 											collectorBonusPanel -> collectorBonusPanel//
@@ -846,6 +859,26 @@ public class OGameUniGui extends JPanel {
 		return null;
 	}
 
+	static String describeClass(AllianceClass clazz) {
+		if (clazz == null) {
+			return "No class bonuses";
+		}
+		switch (clazz) {
+		case Trader:
+			return "<ul>" + "<li>+10% speed for cargo ships</li>" + "<li>+5% resource production</li>" + "<li>+5% energy production</li>"
+				+ "<li>+10% planet/moon storage</li>" + "</ul>";
+		case Researcher:
+			return "<ul>" + "<li>+5% new colony size</li>" + "<li>+10% speed on expedition</li>"
+				+ "<li>Ability to use System phalanx (like normal phalanx, but for an entire system)</li>"
+				+ "<li>+10% planet/moon storage</li>" + "</ul>";
+		case Warrior:
+			return "<ul>" + "<li>+10% speed for flights to alliance members</li>"
+				+ "<li>+1 effective weapons/shielding/armor/espionage tech</li>"
+				+ "<li>Ability to espionage an entire system at once in galaxy view</li>" + "</ul>";
+		}
+		return null;
+	}
+
 	static Account initAccount(Account account) {
 		account.getUniverse().setName("");
 		account.getUniverse().setCollectorProductionBonus(25);
@@ -865,6 +898,7 @@ public class OGameUniGui extends JPanel {
 
 	static Account copy(Account source, Account dest) {
 		dest.setGameClass(source.getGameClass());
+		dest.setAllianceClass(source.getAllianceClass());
 
 		dest.getUniverse().setName(source.getUniverse().getName());
 		dest.getUniverse().setCollectorProductionBonus(source.getUniverse().getCollectorProductionBonus());
@@ -1007,10 +1041,10 @@ public class OGameUniGui extends JPanel {
 	public static void main(String[] args) {
 		List<OGameRuleSet> ruleSets = new ArrayList<>();
 		ruleSets.addAll(Arrays.asList(//
-			new OGameRuleSet710(), new OGameRuleSet711(), new OGameRuleSet750()));
+			new OGameRuleSet710(), new OGameRuleSet711(), new OGameRuleSet750(), new OGameRuleSet800pl7()));
 		ObservableUiBuilder builder = ObservableSwingUtils.buildUI()//
-			.withOldConfig("ogame-config").withOldConfigAt("OGameUI.xml")//
-			.withConfig("occountant").withConfigAt("OCcountant.xml")//
+			.withOldConfig("ogame-config").withOldConfig("OGameUI")//
+			.withConfig("occountant")//
 			.withTitle("OCcountant")//
 			.withIcon(OGameUniGui.class, "/icons/HeldPlanet.png")//
 			.enableCloseWithoutSave()//
@@ -1038,9 +1072,7 @@ public class OGameUniGui extends JPanel {
 			} catch (IllegalStateException | IOException e) {
 				e.printStackTrace(System.out);
 			}
-		})).withBackups(backups -> backups.withBackupSize(1_000_000, 100_000_000).withDuration(Duration.ofDays(1), Duration.ofDays(30))
-			.withBackupCount(10, 100))//
-			.systemLandF()//
+		})).systemLandF()//
 			.build((config, onBuilt) -> {
 				try {
 					new GitHubApiHelper("Updownquark", "OGame-ROI").checkForNewVersion(OGameUniGui.class, builder.getTitle().get(),

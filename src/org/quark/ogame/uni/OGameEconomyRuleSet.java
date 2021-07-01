@@ -21,7 +21,12 @@ public interface OGameEconomyRuleSet {
 		Geologist,
 		Engineer,
 		CommandingStaff,
-		Collector;
+		Collector,
+		Trader;
+
+		public static ProductionSource getMine(ResourceType resource) {
+			return ProductionSource.values()[ProductionSource.MetalMine.ordinal() + resource.ordinal()];
+		}
 	}
 
 	public class Production {

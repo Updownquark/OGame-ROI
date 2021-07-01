@@ -16,6 +16,7 @@ import org.quark.ogame.OGameUtils;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.AccountUpgradeType;
+import org.quark.ogame.uni.AllianceClass;
 import org.quark.ogame.uni.BuildingType;
 import org.quark.ogame.uni.CondensedFleet;
 import org.quark.ogame.uni.CondensedMoon;
@@ -321,6 +322,16 @@ public class RoiAccount implements Account {
 
 	@Override
 	public Account setGameClass(AccountClass clazz) {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public AllianceClass getAllianceClass() {
+		return theTarget.getAllianceClass();
+	}
+
+	@Override
+	public Account setAllianceClass(AllianceClass clazz) {
 		throw new UnsupportedOperationException();
 	}
 

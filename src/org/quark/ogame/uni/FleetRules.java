@@ -9,7 +9,7 @@ public interface FleetRules {
 
 	int getFuelConsumption(ShipyardItemType type, Account account);
 
-	int getSpeed(ShipyardItemType type, Account account);
+	int getSpeed(ShipyardItemType type, Account account, boolean expedition, boolean allianceMember);
 
 	Duration getFlightTime(int maxSpeed, int distance, int speedPercent);
 

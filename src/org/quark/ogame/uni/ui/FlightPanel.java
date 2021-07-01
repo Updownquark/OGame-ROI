@@ -181,7 +181,7 @@ public class FlightPanel {
 				continue;
 			}
 			Duration shipFlightTime = fleet.getFlightTime(//
-				fleet.getSpeed(type, account), distance, flight.getSpeed());
+				fleet.getSpeed(type, account, flight.getDestSlot() == 16, flight.isDestAllianceMember()), distance, flight.getSpeed());
 			if (shipFlightTime.compareTo(maxFlightTime) > 0) {
 				maxFlightTime = shipFlightTime;
 			}
@@ -205,8 +205,9 @@ public class FlightPanel {
 		return (long) Math.ceil(fuel);
 	}
 
-	double getSpeed(ShipyardItemType type) {
-		return theUniGui.getRules().get().fleet().getSpeed(type, theUniGui.getSelectedAccount().get());
+	double getSpeed(ShipyardItemType type, PlannedFlight flight) {
+		return theUniGui.getRules().get().fleet().getSpeed(type, theUniGui.getSelectedAccount().get(), flight.getDestSlot() == 16,
+			flight.isDestAllianceMember());
 	}
 
 	double getCargo(ShipyardItemType type, int count) {
@@ -247,7 +248,10 @@ public class FlightPanel {
 					.addTextField(null,
 						theSelectedFlight.asFieldEditor(TypeTokens.get().of(Integer.class), PlannedFlight::getDestSlot,
 							PlannedFlight::setDestSlot, null),
-						SpinnerFormat.wrapAround(SpinnerFormat.INT, () -> 1, () -> 15), tf -> tf.modifyEditor(tf2 -> tf2.withColumns(2)));
+						SpinnerFormat.wrapAround(SpinnerFormat.INT, () -> 1, () -> 15), tf -> tf.modifyEditor(tf2 -> tf2.withColumns(2)))//
+					.addCheckField("Ally:", theSelectedFlight.asFieldEditor(boolean.class, PlannedFlight::isDestAllianceMember,
+						PlannedFlight::setDestAllianceMember, null), null)//
+				;
 			})
 			.addComboField("Speed:",
 				theSelectedFlight.asFieldEditor(TypeTokens.get().of(Integer.class), PlannedFlight::getSpeed, PlannedFlight::setSpeed, null),
@@ -260,7 +264,7 @@ public class FlightPanel {
 					.withColumn("Amount", Integer.class, amt -> amt.amount,
 						col -> col.formatText(i -> INT_FORMAT.format(i * 1.0)).withMutation(
 							mut -> mut.mutateAttribute((sa, amt) -> sa.amount = amt).asText(SpinnerFormat.INT).withRowUpdate(true)))//
-					.withColumn("Speed", Double.class, amt -> getSpeed(amt.type),
+					.withColumn("Speed", Double.class, amt -> getSpeed(amt.type, theSelectedFlight.get()),
 						col -> col.formatText((sa, speed) -> INT_FORMAT.format(speed)))//
 					.withColumn("Storage", Double.class, amt -> getCargo(amt.type, amt.amount),
 						col -> col.formatText((sa, speed) -> INT_FORMAT.format(speed)))//

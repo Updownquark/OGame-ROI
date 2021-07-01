@@ -12,9 +12,11 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountClass;
+import org.quark.ogame.uni.AllianceClass;
 import org.quark.ogame.uni.FleetRules;
 import org.quark.ogame.uni.Research;
 import org.quark.ogame.uni.ResearchType;
@@ -22,13 +24,13 @@ import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.Universe;
 
 public class OGameFleet710 implements FleetRules {
-	static class ClassBonus {
+	public static class AccountClassBonus {
 		final AccountClass clazz;
 		final int speedBonus;
 		final int fuelBonus;
 		final int storageBonus;
 
-		ClassBonus(AccountClass clazz, int speedBonus, int fuelBonus, int storageBonus) {
+		AccountClassBonus(AccountClass clazz, int speedBonus, int fuelBonus, int storageBonus) {
 			this.clazz = clazz;
 			this.speedBonus = speedBonus;
 			this.fuelBonus = fuelBonus;
@@ -36,14 +38,29 @@ public class OGameFleet710 implements FleetRules {
 		}
 	}
 
-	static class ShipInfo {
+	public static class AllianceClassBonus {
+		final AllianceClass clazz;
+		final int speedBonus;
+		final int fuelBonus;
+		final int storageBonus;
+
+		AllianceClassBonus(AllianceClass clazz, int speedBonus, int fuelBonus, int storageBonus) {
+			this.clazz = clazz;
+			this.speedBonus = speedBonus;
+			this.fuelBonus = fuelBonus;
+			this.storageBonus = storageBonus;
+		}
+	}
+
+	public static class ShipInfo {
 		final int baseSpeed;
 		final int baseFuelConsumption;
 		final int baseCargo;
 		final ResearchType driveType;
 		int theImpulseUpgrade;
 		int theHyperdriveUpgrade;
-		List<ClassBonus> classBonuses;
+		List<AccountClassBonus> accountClassBonuses;
+		List<AllianceClassBonus> allianceClassBonuses;
 
 		ShipInfo(int baseSpeed, int baseFuel, int baseCargo, ResearchType driveType) {
 			this.baseSpeed = baseSpeed;
@@ -66,11 +83,19 @@ public class OGameFleet710 implements FleetRules {
 			return this;
 		}
 
-		ShipInfo withClassBonus(AccountClass clazz, int speedBonus, int fuelBonus, int storageBonus) {
-			if (classBonuses == null) {
-				classBonuses = new LinkedList<>();
+		public ShipInfo withClassBonus(AccountClass clazz, int speedBonus, int fuelBonus, int storageBonus) {
+			if (accountClassBonuses == null) {
+				accountClassBonuses = new LinkedList<>();
 			}
-			classBonuses.add(new ClassBonus(clazz, speedBonus, fuelBonus, storageBonus));
+			accountClassBonuses.add(new AccountClassBonus(clazz, speedBonus, fuelBonus, storageBonus));
+			return this;
+		}
+
+		public ShipInfo withClassBonus(AllianceClass clazz, int speedBonus, int fuelBonus, int storageBonus) {
+			if (allianceClassBonuses == null) {
+				allianceClassBonuses = new LinkedList<>();
+			}
+			allianceClassBonuses.add(new AllianceClassBonus(clazz, speedBonus, fuelBonus, storageBonus));
 			return this;
 		}
 
@@ -85,33 +110,48 @@ public class OGameFleet710 implements FleetRules {
 		}
 
 		int getSpeedBonus(Account account) {
-			if (classBonuses == null) {
-				return 0;
-			}
-			for (ClassBonus bonus : classBonuses) {
-				if (bonus.clazz == account.getGameClass()) {
-					return bonus.speedBonus;
+			int speedBonus = 0;
+			if (accountClassBonuses != null) {
+				for (AccountClassBonus bonus : accountClassBonuses) {
+					if (bonus.clazz == account.getGameClass()) {
+						speedBonus += bonus.speedBonus;
+					}
 				}
 			}
-			return 0;
+			if (allianceClassBonuses != null) {
+				for (AllianceClassBonus bonus : allianceClassBonuses) {
+					if (bonus.clazz == account.getAllianceClass()) {
+						speedBonus += bonus.speedBonus;
+					}
+				}
+			}
+			return speedBonus;
 		}
 
 		int getFuelBonus(Account account) {
-			if (classBonuses == null) {
-				return 0;
-			}
-			for (ClassBonus bonus : classBonuses) {
-				if (bonus.clazz == account.getGameClass()) {
-					return bonus.fuelBonus;
+			int fuelBonus = 0;
+			if (accountClassBonuses != null) {
+				for (AccountClassBonus bonus : accountClassBonuses) {
+					if (bonus.clazz == account.getGameClass()) {
+						fuelBonus += bonus.fuelBonus;
+					}
 				}
 			}
-			return 0;
+			if (allianceClassBonuses != null) {
+				for (AllianceClassBonus bonus : allianceClassBonuses) {
+					if (bonus.clazz == account.getAllianceClass()) {
+						fuelBonus += bonus.fuelBonus;
+					}
+				}
+			}
+			return fuelBonus;
 		}
 	}
 
-	private static Map<ShipyardItemType, ShipInfo> SHIP_INFO;
+	private final Map<ShipyardItemType, ShipInfo> theShipInfo;
 
-	static {
+	/** Creates the fleet rules */
+	public OGameFleet710() {
 		Map<ShipyardItemType, ShipInfo> shipInfo = new LinkedHashMap<>();
 		for (ShipyardItemType type : ShipyardItemType.values()) {
 			switch (type) {
@@ -196,12 +236,17 @@ public class OGameFleet710 implements FleetRules {
 			case InterPlanetaryMissile:
 			}
 		}
-		SHIP_INFO = Collections.unmodifiableMap(shipInfo);
+		theShipInfo = Collections.unmodifiableMap(shipInfo);
+	}
+
+	protected OGameFleet710 modifyShipInfo(ShipyardItemType type, Consumer<ShipInfo> modify) {
+		modify.accept(theShipInfo.get(type));
+		return this;
 	}
 
 	@Override
 	public int getCargoSpace(ShipyardItemType type, Account account) {
-		ShipInfo info = SHIP_INFO.get(type);
+		ShipInfo info = theShipInfo.get(type);
 		if (info == null) {
 			return 0;
 		}
@@ -245,7 +290,7 @@ public class OGameFleet710 implements FleetRules {
 
 	@Override
 	public int getFuelConsumption(ShipyardItemType type, Account account) {
-		ShipInfo info = SHIP_INFO.get(type);
+		ShipInfo info = theShipInfo.get(type);
 		if (info == null) {
 			return 0;
 		}
@@ -258,8 +303,8 @@ public class OGameFleet710 implements FleetRules {
 	}
 
 	@Override
-	public int getSpeed(ShipyardItemType type, Account account) {
-		ShipInfo info = SHIP_INFO.get(type);
+	public int getSpeed(ShipyardItemType type, Account account, boolean expedition, boolean allianceMember) {
+		ShipInfo info = theShipInfo.get(type);
 		if (info == null) {
 			return 0;
 		}
@@ -292,7 +337,7 @@ public class OGameFleet710 implements FleetRules {
 
 	@Override
 	public double getFuelConsumption(ShipyardItemType type, Account account, int distance, Duration flightTime) {
-		int maxSpeed = getSpeed(type, account);
+		int maxSpeed = getSpeed(type, account, false, false);
 		double speed = 35000 / (flightTime.getSeconds() - 10.0) * Math.sqrt(distance * 10.0 / maxSpeed);
 		double speedOver10Plus1 = speed / 10.0 + 1;
 		int rate = getFuelConsumption(type, account);

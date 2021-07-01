@@ -22,6 +22,8 @@ public interface PlannedFlight extends Nameable {
 	PlannedFlight setDestSlot(int destSlot);
 	boolean isDestMoon();
 	PlannedFlight setDestMoon(boolean destMoon);
+	boolean isDestAllianceMember();
+	PlannedFlight setDestAllianceMember(boolean destAllianceMember);
 
 	int getSpeed();
 	PlannedFlight setSpeed(int speed);

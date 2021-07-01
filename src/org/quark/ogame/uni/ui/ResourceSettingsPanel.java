@@ -20,6 +20,7 @@ import org.quark.ogame.OGameUtils;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.AccountUpgradeType;
+import org.quark.ogame.uni.AllianceClass;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
 import org.quark.ogame.uni.Planet;
@@ -68,7 +69,8 @@ public class ResourceSettingsPanel extends JPanel {
 					.withColumn(
 						resourceColumn("", int.class, goals, (p, row) -> getPSValue(p, row, goals), this::setPSValue, selectedPlanet, 0, 35)
 							.formatText((row, v) -> renderResourceRow(row, v))//
-							.withMutation(m -> m.asText(SpinnerFormat.INT).editableIf((row, v) -> !goals && canEditPSValue(row))))//
+							.withMutation(m -> m.asText(SpinnerFormat.INT).editableIf((row, v) -> !goals && canEditPSValue(row))
+								.mutateAttribute((rr, psValue) -> setPSValue(selectedPlanet.get(), rr, psValue))))//
 					.withColumn(resourceColumn("Metal", String.class, goals,
 						(planet, row) -> printProductionBySource(planet, row, ResourceType.Metal, goals), null, selectedPlanet, "0", 55))//
 					.withColumn(resourceColumn("Crystal", String.class, goals,
@@ -131,6 +133,7 @@ public class ResourceSettingsPanel extends JPanel {
 		Engineer(null, "Engineer"),
 		CommandingStaff(null, "Commanding Staff"), //
 		Collector(null, "Collector"),
+		Trader(null, "Trader"),
 		Storage(null, "Storage Capacity"),
 		Divider(null, "-------------------"),
 		Hourly(null, "Total per Hour"),
@@ -253,6 +256,8 @@ public class ResourceSettingsPanel extends JPanel {
 			return a.getOfficers().isCommandingStaff() ? 1 : 0;
 		case Collector:
 			return a.getGameClass() == AccountClass.Collector ? 1 : 0;
+		case Trader:
+			return a.getAllianceClass() == AllianceClass.Trader ? 1 : 0;
 		case Storage:
 			return 0;
 		case Divider:
@@ -285,6 +290,7 @@ public class ResourceSettingsPanel extends JPanel {
 		case Engineer:
 		case CommandingStaff:
 		case Collector:
+		case Trader:
 			return value == 0 ? "" : "Active";
 		case Storage:
 		case SlotBonus:
@@ -393,6 +399,8 @@ public class ResourceSettingsPanel extends JPanel {
 			return printProduction(p.byType.getOrDefault(ProductionSource.CommandingStaff, 0), ProductionDisplayType.Hourly);
 		case Collector:
 			return printProduction(p.byType.getOrDefault(ProductionSource.Collector, 0), ProductionDisplayType.Hourly);
+		case Trader:
+			return printProduction(p.byType.getOrDefault(ProductionSource.Trader, 0), ProductionDisplayType.Hourly);
 		case Storage:
 			if (resource == ResourceType.Energy) {
 				return "0";

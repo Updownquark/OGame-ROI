@@ -17,6 +17,9 @@ public interface Account extends Nameable {
 	AccountClass getGameClass();
 	Account setGameClass(AccountClass clazz);
 
+	AllianceClass getAllianceClass();
+	Account setAllianceClass(AllianceClass clazz);
+
 	Officers getOfficers();
 
 	Research getResearch();

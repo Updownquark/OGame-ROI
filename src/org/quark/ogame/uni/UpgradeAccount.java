@@ -94,6 +94,16 @@ public class UpgradeAccount implements Account {
 	}
 
 	@Override
+	public AllianceClass getAllianceClass() {
+		return theWrapped.getAllianceClass();
+	}
+
+	@Override
+	public Account setAllianceClass(AllianceClass clazz) {
+		return this;
+	}
+
+	@Override
 	public Officers getOfficers() {
 		return theWrapped.getOfficers();
 	}
