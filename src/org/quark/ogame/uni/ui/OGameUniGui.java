@@ -1056,23 +1056,26 @@ public class OGameUniGui extends JPanel {
 				}
 				str.append("</li><li>Click \"Submit new issue\"</li></ol>");
 			});
-		builder.withAbout(OGameUniGui.class, about -> about.withLatestVersion(() -> {
-			Release r;
-			try {
-				r = new GitHubApiHelper("Updownquark", "OGame-ROI").getLatestRelease(OGameUniGui.class);
-			} catch (IOException e) {
-				e.printStackTrace(System.out);
-				return null;
-			}
-			return r == null ? null : new AppPopulation.Version(r.getTagName(), r.getName(), r.getDescription());
-		}).withUpgrade(version -> {
-			try {
-				new GitHubApiHelper("Updownquark", "OGame-ROI").upgradeToLatest(OGameUniGui.class, builder.getTitle().get(),
-					builder.getIcon().get());
-			} catch (IllegalStateException | IOException e) {
-				e.printStackTrace(System.out);
-			}
-		})).systemLandF()//
+		builder.withAbout(OGameUniGui.class, about -> about//
+			.withCurrentVersionFromManifest()//
+			.withLatestVersion(() -> {
+				Release r;
+				try {
+					r = new GitHubApiHelper("Updownquark", "OGame-ROI").getLatestRelease(OGameUniGui.class);
+				} catch (IOException e) {
+					e.printStackTrace(System.out);
+					return null;
+				}
+				return r == null ? null : new AppPopulation.Version(r.getTagName(), r.getName(), r.getDescription());
+			}).withUpgrade(version -> {
+				try {
+					new GitHubApiHelper("Updownquark", "OGame-ROI").upgradeToLatest(OGameUniGui.class, builder.getTitle().get(),
+						builder.getIcon().get());
+				} catch (IllegalStateException | IOException e) {
+					e.printStackTrace(System.out);
+				}
+			}))//
+			.systemLandF()//
 			.build((config, onBuilt) -> {
 				try {
 					new GitHubApiHelper("Updownquark", "OGame-ROI").checkForNewVersion(OGameUniGui.class, builder.getTitle().get(),
