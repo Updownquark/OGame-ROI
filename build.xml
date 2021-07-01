@@ -6,7 +6,7 @@
 	<property name="app.name" value="OCCountant" />
 	<property name="app.short.name" value="${app.name}" />
 	<property name="app.vendor" value="Updownquark" />
-	<property name="app.version" value="0.9.24" />
+	<property name="app.version" value="0.10.0" />
 	<property name="app.descrip" value="An app for keeping track of economy stats and goals in OGame" />
 	<property name="main.class" value="org.quark.ogame.uni.ui.OGameUniGui"/>
 
@@ -26,7 +26,7 @@
             	<attribute name="SplashScreen-Image" value="icons/Juggling Planets.png"/>
             	<section name="org/quark/ogame/uni/ui/">
 	            	<attribute name="Specification-Title" value="${app.name}" />
-            		<attribute name="Specification-Version" value="0.0.0" />
+            		<attribute name="Specification-Version" value="${app.version}" />
             		<attribute name="Specification-Vendor" value="${app.vendor}" />
             		<attribute name="Implementation-Title" value="org.quark.ogame.uni.ui" />
             		<attribute name="Implementation-Version" value="${app.version}" />
@@ -34,7 +34,7 @@
             </manifest>
             <fileset dir="${dir.buildfile}/target/classes"/>
             <fileset dir="${dir.buildfile}/src"/>
-            <fileset dir="${dir.workspace}/Qommons/classes"/>
+            <fileset dir="${dir.workspace}/Qommons/target/classes"/>
             <fileset dir="${dir.workspace}/Qommons/src/main/java"/>
             <zipfileset excludes="META-INF/*.SF" src="${dir.workspace}/Qommons/lib/jdom-2.0.1.jar"/>
             <fileset dir="${dir.workspace}/ObServe/classes"/>
