@@ -30,8 +30,9 @@ public class OGameEconomy800pl7 extends OGameEconomy750 {
 			case Metal:
 			case Crystal:
 			case Deuterium:
-				production = production.plus((int) Math.round(production.byType.get(ProductionSource.getMine(resourceType)) * 0.05),
-					ProductionSource.Trader);
+				int mineProduction = production.byType.get(ProductionSource.getMine(resourceType))//
+					+ production.byType.get(ProductionSource.Slot);
+				production = production.plus((int) Math.round(mineProduction * 0.05), ProductionSource.Trader);
 				break;
 			case Energy:
 				long energyProduction = 0;
@@ -41,6 +42,7 @@ public class OGameEconomy800pl7 extends OGameEconomy750 {
 					case Solar:
 					case Satellite:
 					case Fusion:
+					case Slot:
 						energyProduction += production.byType.getOrDefault(src, 0);
 						break;
 					default:
@@ -52,14 +54,5 @@ public class OGameEconomy800pl7 extends OGameEconomy750 {
 			}
 		}
 		return production;
-	}
-
-	@Override
-	public int getSatelliteEnergy(Account account, Planet planet) {
-		int energy = super.getSatelliteEnergy(account, planet);
-		if (account.getAllianceClass() == AllianceClass.Trader) {
-			energy = (int) Math.round(energy * 1.05);
-		}
-		return energy;
 	}
 }
