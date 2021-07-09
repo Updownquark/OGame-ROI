@@ -1043,6 +1043,7 @@ public class OGameUniGui extends JPanel {
 		ruleSets.addAll(Arrays.asList(//
 			new OGameRuleSet710(), new OGameRuleSet711(), new OGameRuleSet750(), new OGameRuleSet800pl7()));
 		ObservableUiBuilder builder = ObservableSwingUtils.buildUI()//
+			.systemLandF()//
 			.withOldConfig("ogame-config").withOldConfig("OGameUI")//
 			.withConfig("occountant")//
 			.withTitle("OCcountant")//
@@ -1075,7 +1076,6 @@ public class OGameUniGui extends JPanel {
 					e.printStackTrace(System.out);
 				}
 			}))//
-			.systemLandF()//
 			.build((config, onBuilt) -> {
 				try {
 					new GitHubApiHelper("Updownquark", "OGame-ROI").checkForNewVersion(OGameUniGui.class, builder.getTitle().get(),
