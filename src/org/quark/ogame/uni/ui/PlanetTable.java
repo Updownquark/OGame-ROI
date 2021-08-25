@@ -4,9 +4,12 @@ import java.awt.Color;
 import java.awt.event.KeyEvent;
 import java.text.ParseException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -49,9 +52,27 @@ import org.quark.ogame.uni.Utilizable;
 import com.google.common.reflect.TypeToken;
 
 public class PlanetTable {
-	public static TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>> PLANET_COLUMN_TYPE;
+	public static final TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>> PLANET_COLUMN_TYPE;
+	private static final Map<Integer, Integer> DEFAULT_MIN_PLANET_TEMPS;
 	static {
 		PLANET_COLUMN_TYPE = new TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>>() {};
+		Map<Integer, Integer> temps = new LinkedHashMap<>();
+		temps.put(1, 220);
+		temps.put(2, 170);
+		temps.put(3, 120);
+		temps.put(4, 70);
+		temps.put(5, 60);
+		temps.put(6, 50);
+		temps.put(7, 40);
+		temps.put(8, 30);
+		temps.put(9, 20);
+		temps.put(10, 10);
+		temps.put(11, 0);
+		temps.put(12, -10);
+		temps.put(13, -50);
+		temps.put(14, -90);
+		temps.put(15, -130);
+		DEFAULT_MIN_PLANET_TEMPS = Collections.unmodifiableMap(temps);
 	}
 
 	enum PlanetColumnSet {
@@ -342,6 +363,11 @@ public class PlanetTable {
 						mut.asText(COORD_FORMAT).mutateAttribute((pwp, coords) -> {
 							if (pwp.planet != null) {
 								adjustCoord(pwp.planet.getCoordinates(), coords);
+								if (pwp.planet.getMinimumTemperature() == 0 && pwp.planet.getMaximumTemperature() == 0) {
+									int temp = DEFAULT_MIN_PLANET_TEMPS.get(pwp.planet.getCoordinates().getSlot());
+									pwp.planet.setMinimumTemperature(temp);
+									pwp.planet.setMaximumTemperature(temp + 40);
+								}
 							}
 						});
 					}));
