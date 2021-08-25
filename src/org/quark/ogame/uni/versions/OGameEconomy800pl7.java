@@ -16,6 +16,7 @@ public class OGameEconomy800pl7 extends OGameEconomy750 {
 				storage = Math.round(storage * 1.1);
 				break;
 			case Warrior:
+			case None:
 				break;
 			}
 		}

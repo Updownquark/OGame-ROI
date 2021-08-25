@@ -556,9 +556,10 @@ public class OGameUniGui extends JPanel {
 												.addComboField("Alliance:",
 													theSelectedAccount.asFieldEditor(TypeTokens.get().of(AllianceClass.class),
 														Account::getAllianceClass, Account::setAllianceClass, null),
-													ObservableCollection.of(TypeTokens.get().of(AllianceClass.class),
-														AllianceClass.values()), //
-													classEditor -> classEditor.fill().withValueTooltip(clazz -> describeClass(clazz))//
+													ObservableCollection.of(AllianceClass.class, AllianceClass.values()), //
+													classEditor -> classEditor.fill()
+														.renderAs(clazz -> clazz == null ? "None" : clazz.toString())
+														.withValueTooltip(clazz -> describeClass(clazz))//
 												)//
 										)//
 										.addHPanel("Collector Bonus:", "box",

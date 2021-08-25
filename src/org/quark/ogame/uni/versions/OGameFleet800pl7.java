@@ -24,6 +24,8 @@ public class OGameFleet800pl7 extends OGameFleet710 {
 		double speedMult = 1;
 		if (account.getAllianceClass() != null) {
 			switch (account.getAllianceClass()) {
+			case None:
+				break;
 			case Researcher:
 				if (expedition) {
 					speedMult += 0.1;
