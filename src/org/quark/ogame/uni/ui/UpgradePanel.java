@@ -29,6 +29,8 @@ import org.qommons.ArrayUtils;
 import org.qommons.Causable;
 import org.qommons.Causable.CausableKey;
 import org.qommons.QommonsUtils;
+import org.qommons.TimeUtils;
+import org.qommons.TimeUtils.DurationComponentType;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionElement;
@@ -172,6 +174,8 @@ public class UpgradePanel extends JPanel {
 		});
 		selection.changes().act(evt -> evt.getRootCausable().onFinish(key));
 		Format<Double> commaFormat = Format.doubleFormat("#,##0");
+		TimeUtils.RelativeTimeFormat durationFormat = TimeUtils.relativeFormat().withWeeks().abbreviated(true, false)//
+			.withMaxPrecision(DurationComponentType.Second).withMaxElements(100);
 		TableBuilder<PlannedAccountUpgrade, ?>[] table = new TableBuilder[1];
 		panel.addTextField("Filter:", uiFilter, TableContentControl.FORMAT,
 			f -> f.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP).modifyEditor(tf -> tf.setCommitOnType(true)));
@@ -239,7 +243,7 @@ public class UpgradePanel extends JPanel {
 					if (upgrade.getCost() == null || upgrade.getCost().getUpgradeTime() == null) {
 						return "";
 					}
-					return Format.DURATION.format(upgrade.getCost().getUpgradeTime());
+					return durationFormat.print(upgrade.getCost().getUpgradeTime());
 				}, timeCol -> timeCol.withWidths(40, 100, 120))//
 				.withColumn("Cargoes", Long.class, upgrade -> {
 					if (upgrade.getCost() == null) {
