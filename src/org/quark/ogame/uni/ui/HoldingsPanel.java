@@ -571,15 +571,32 @@ public class HoldingsPanel {
 								}
 							}).asText(Format.doubleFormat("0.00"));
 						}))//
-							.withColumn("Cargoes", Long.class, h -> {
-								if (h instanceof SyntheticHolding) {
-									return null;
-								}
+						.withColumn("Cargoes", Long.class, h -> {
+							if (h instanceof SyntheticHolding) {
+								return null;
+							}
 							long total = h.getMetal() + h.getCrystal() + h.getDeuterium();
 							long cap = theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.LargeCargo,
 								theUniGui.getSelectedAccount().get());
-								return (long) Math.ceil(total * 1.0 / cap);
-							}, col -> col.formatText(cargoes -> cargoes == null ? "" : commaFormat.format(cargoes * 1.0)))//
+							return (long) Math.ceil(total * 1.0 / cap);
+						}, col -> col.formatText(cargoes -> cargoes == null ? "" : commaFormat.format(cargoes * 1.0)))//
+						.withColumn("Value (KK)", Double.class, h -> {
+							TradeRatios r = theUniGui.getSelectedAccount().get().getUniverse().getTradeRatios();
+							double v = h.getMetal()//
+								+ h.getCrystal() / r.getCrystal() * r.getMetal()//
+								+ h.getDeuterium() / r.getDeuterium() * r.getMetal();
+							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
+								return 0.0;
+							} else {
+								return v / 1E6;
+							}
+						}, valueCol -> valueCol.formatText((h, d) -> {
+							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
+								return "";
+							} else {
+								return OGameUtils.TWO_DIGIT_FORMAT.format(d);
+							}
+						}))//
 						.withAdd(
 							() -> theUniGui.getSelectedAccount().get().getHoldings().create()//
 								.with(Holding::getName, "").create().get(),

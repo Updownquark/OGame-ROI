@@ -254,6 +254,15 @@ public class UpgradePanel extends JPanel {
 						theUniGui.getSelectedAccount().get());
 					return (long) Math.ceil(cost * 1.0 / cargoSpace);
 				}, cargoCol -> cargoCol.formatText(i -> i == null ? "" : commaFormat.format(i * 1.0)).withWidths(40, 50, 80))//
+				.withColumn("Value", String.class,
+					upgrade -> upgrade.getCost() == null ? ""
+						: OGameUtils.printResourceAmount(
+							upgrade.getCost().getMetalValue(theUniGui.getSelectedAccount().get().getUniverse().getTradeRatios())),
+					valueCol -> valueCol.decorate((cell, d) -> {
+						if (cell.getModelValue().getUpgrade() == null) {
+							d.bold();
+						}
+					}))//
 				.withColumn("ROI", Duration.class, upgrade -> upgrade.getROI(), //
 					roiCol -> roiCol.formatText(roi -> roi == null ? "" : Format.DURATION.format(roi)).withWidths(50, 100, 150))//
 				.withColumn("Type", String.class, this::getType, col -> col.withWidths(50, 80, 150))//
