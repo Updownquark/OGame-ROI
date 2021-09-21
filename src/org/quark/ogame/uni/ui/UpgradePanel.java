@@ -274,7 +274,7 @@ public class UpgradePanel extends JPanel {
 		ObservableCollection<PlannedAccountUpgrade> rows = ((ObservableTableModel<PlannedAccountUpgrade>) table[0].getEditor().getModel())
 			.getRows();
 		calcCosts[0] = () -> {
-			totalCost[0] = planetTotalCost[0] = selectedTotalCost[0] = UpgradeCost.ZERO;
+			totalCost[0] = planetTotalCost[0] = UpgradeCost.ZERO;
 			PlanetWithProduction selectedPlanet = theUniGui.getSelectedPlanet().get();
 			for (PlannedAccountUpgrade row : rows) {
 				if (row == planetTotalUpgrade || row == selectedTotalUpgrade || row == filteredTotalUpgrade) {
@@ -305,9 +305,7 @@ public class UpgradePanel extends JPanel {
 					}
 				}
 				PlannedAccountUpgrade target = selectedUpgrades.isEmpty() ? null : selectedTotalUpgrade;
-				if (target != selectedTotalUpgradeV.get()) {
-					selectedTotalUpgradeV.set(target, null);
-				}
+				selectedTotalUpgradeV.set(target, null);
 			});
 		});
 		calcCosts[0].run();
