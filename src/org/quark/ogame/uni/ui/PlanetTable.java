@@ -26,6 +26,7 @@ import org.observe.util.swing.CategoryRenderStrategy.CategoryKeyAdapter;
 import org.observe.util.swing.ModelCell;
 import org.observe.util.swing.PanelPopulation;
 import org.qommons.BiTuple;
+import org.qommons.collect.BetterList;
 import org.qommons.io.AdjustableComponent;
 import org.qommons.io.ParsedAdjustable;
 import org.qommons.io.SpinnerFormat;
@@ -841,7 +842,14 @@ public class PlanetTable {
 		int currentDiff = newCurrent - current;
 		goalDiff = newGoal - oldGoal - currentDiff;
 		type.setLevel(account.getWrapped(), wrappedBody, newCurrent);
-		ListIterator<PlannedUpgrade> upgradeIter = account.getWrapped().getPlannedUpgrades().getValues().reverse().listIterator();
+		BetterList<PlannedUpgrade> upgrades = account.getWrapped().getPlannedUpgrades().getValues();
+		if (newGoal == oldGoal && newCurrent > current) {
+			// If upgrades are completed, take them off the top
+		} else {
+			// If goals changed, modify the latest editions
+			upgrades = upgrades.reverse();
+		}
+		ListIterator<PlannedUpgrade> upgradeIter = upgrades.listIterator();
 		while (upgradeIter.hasNext()) {
 			PlannedUpgrade upgrade = upgradeIter.next();
 			if (upgrade.getPlanet() == planetId && upgrade.isMoon() == moon && upgrade.getType() == type
