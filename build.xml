@@ -6,7 +6,7 @@
 	<property name="app.name" value="OCcountant" />
 	<property name="app.short.name" value="${app.name}" />
 	<property name="app.vendor" value="Updownquark" />
-	<property name="app.version" value="0.10.6" />
+	<property name="app.version" value="0.10.7" />
 	<property name="app.descrip" value="An app for keeping track of economy stats and goals in OGame" />
 	<property name="main.class" value="org.quark.ogame.uni.ui.OGameUniGui"/>
 
