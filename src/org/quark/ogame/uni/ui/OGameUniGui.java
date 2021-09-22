@@ -1252,7 +1252,7 @@ public class OGameUniGui extends JPanel {
 					+ upgradeCrystal / tr.getCrystal() * tr.getMetal()//
 					+ upgradeDeuterium / tr.getDeuterium() * tr.getMetal();
 
-				if (newProduction <= oldPlanets) {
+				if (newProduction <= oldProduction) {
 					roi = null;
 				} else {
 					roi = Duration.ofSeconds(Math.round(cost.getMetalValue(tr) / (newProduction - oldProduction) * 3600));

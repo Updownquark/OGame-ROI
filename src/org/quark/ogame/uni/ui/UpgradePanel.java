@@ -179,6 +179,8 @@ public class UpgradePanel extends JPanel {
 		TableBuilder<PlannedAccountUpgrade, ?>[] table = new TableBuilder[1];
 		panel.addTextField("Filter:", uiFilter, TableContentControl.FORMAT,
 			f -> f.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP).modifyEditor(tf -> tf.setCommitOnType(true)));
+		TimeUtils.RelativeTimeFormat timeFormat = TimeUtils.relativeFormat()//
+			.abbreviated(true, false).withMaxPrecision(DurationComponentType.Second).withMaxElements(4).withWeeks();
 		panel.addTable(upgrades, upgradeTable -> {
 			table[0] = upgradeTable;
 			upgradeTable.fill().fillV()//
@@ -264,7 +266,7 @@ public class UpgradePanel extends JPanel {
 						}
 					}))//
 				.withColumn("ROI", Duration.class, upgrade -> upgrade.getROI(), //
-					roiCol -> roiCol.formatText(roi -> roi == null ? "" : Format.DURATION.format(roi)).withWidths(50, 100, 150))//
+					roiCol -> roiCol.formatText(roi -> roi == null ? "" : timeFormat.print(roi)).withWidths(50, 100, 150))//
 				.withColumn("Type", String.class, this::getType, col -> col.withWidths(50, 80, 150))//
 				.withColumn("Sub-Type", String.class, this::getSubType, col -> col.withWidths(50, 80, 150))//
 			// .withMultiAction(upgrades -> sortUpgrades(upgrades), action -> action//
