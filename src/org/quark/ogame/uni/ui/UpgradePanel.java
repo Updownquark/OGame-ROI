@@ -57,6 +57,9 @@ import org.quark.ogame.uni.ui.OGameUniGui.PlannedAccountUpgrade;
 import com.google.common.reflect.TypeToken;
 
 public class UpgradePanel extends JPanel {
+	public static final TimeUtils.RelativeTimeFormat DURATION_FORMAT = TimeUtils.relativeFormat()//
+		.abbreviated(true, false).withMaxPrecision(DurationComponentType.Second).withMaxElements(4).withWeeks();
+
 	private final OGameUniGui theUniGui;
 
 	private final PlannedAccountUpgrade theTotalUpgrade;
@@ -174,13 +177,9 @@ public class UpgradePanel extends JPanel {
 		});
 		selection.changes().act(evt -> evt.getRootCausable().onFinish(key));
 		Format<Double> commaFormat = Format.doubleFormat("#,##0");
-		TimeUtils.RelativeTimeFormat durationFormat = TimeUtils.relativeFormat().withWeeks().abbreviated(true, false)//
-			.withMaxPrecision(DurationComponentType.Second).withMaxElements(100);
 		TableBuilder<PlannedAccountUpgrade, ?>[] table = new TableBuilder[1];
 		panel.addTextField("Filter:", uiFilter, TableContentControl.FORMAT,
 			f -> f.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP).modifyEditor(tf -> tf.setCommitOnType(true)));
-		TimeUtils.RelativeTimeFormat timeFormat = TimeUtils.relativeFormat()//
-			.abbreviated(true, false).withMaxPrecision(DurationComponentType.Second).withMaxElements(4).withWeeks();
 		panel.addTable(upgrades, upgradeTable -> {
 			table[0] = upgradeTable;
 			upgradeTable.fill().fillV()//
@@ -245,7 +244,7 @@ public class UpgradePanel extends JPanel {
 					if (upgrade.getCost() == null || upgrade.getCost().getUpgradeTime() == null) {
 						return "";
 					}
-					return durationFormat.print(upgrade.getCost().getUpgradeTime());
+					return DURATION_FORMAT.print(upgrade.getCost().getUpgradeTime());
 				}, timeCol -> timeCol.withWidths(40, 100, 120))//
 				.withColumn("Cargoes", Long.class, upgrade -> {
 					if (upgrade.getCost() == null) {
@@ -266,7 +265,7 @@ public class UpgradePanel extends JPanel {
 						}
 					}))//
 				.withColumn("ROI", Duration.class, upgrade -> upgrade.getROI(), //
-					roiCol -> roiCol.formatText(roi -> roi == null ? "" : timeFormat.print(roi)).withWidths(50, 100, 150))//
+					roiCol -> roiCol.formatText(roi -> roi == null ? "" : DURATION_FORMAT.print(roi)).withWidths(50, 100, 150))//
 				.withColumn("Type", String.class, this::getType, col -> col.withWidths(50, 80, 150))//
 				.withColumn("Sub-Type", String.class, this::getSubType, col -> col.withWidths(50, 80, 150))//
 			// .withMultiAction(upgrades -> sortUpgrades(upgrades), action -> action//
@@ -553,7 +552,7 @@ public class UpgradePanel extends JPanel {
 							throw new IllegalStateException();
 						}
 					}, null)//
-				.addLabel("Sequence Time:", sequenceGenerator.getLifetimeMetric(), Format.DURATION, null)//
+				.addLabel("Sequence Time:", sequenceGenerator.getLifetimeMetric(), SpinnerFormat.flexDuration(DURATION_FORMAT), null)//
 				.addTable(sequence,
 					table -> table.fill().fillV().withAdaptiveHeight(10, 15, 100).withSelection(selected, false)//
 						.withIndexColumn("#", col -> col.withWidths(20, 30, 60))//
@@ -576,10 +575,10 @@ public class UpgradePanel extends JPanel {
 						}, null)//
 						.withColumn("Level", Integer.class, el -> el.getTargetLevel(), null)//
 						.withColumn("ROI", Duration.class,
-							el -> el.getRoi() == 0 ? null : Duration.ofSeconds(Math.round(el.getRoi() * 3600)),
-							col -> col.formatText(d -> d == null ? "" : QommonsUtils.printDuration(d, true)))//
+							el -> el.getRoi() <= 0 ? null : Duration.ofSeconds(Math.round(el.getRoi() * 3600)),
+							col -> col.formatText(d -> d == null ? "" : DURATION_FORMAT.print(d)))//
 						.withColumn("Time", Duration.class, el -> el.getTime() == 0 ? null : Duration.ofSeconds(el.getTime()),
-							col -> col.formatText(d -> d == null ? "" : QommonsUtils.printDuration(d, true)))//
+							col -> col.formatText(d -> d == null ? "" : DURATION_FORMAT.print(d)))//
 				)//
 				.addButton("Cancel", __ -> sequenceGenerator.cancel(),
 					btn -> btn.disableWith(sequenceGenerator.isActive().map(a -> a == null ? "Sequence is not generating" : null)))//
@@ -685,10 +684,9 @@ public class UpgradePanel extends JPanel {
 								if (ug.upgrade == null) {
 									return "";
 								}
-								return QommonsUtils.printDuration(Duration
+								return DURATION_FORMAT.print(Duration
 									.ofSeconds((long) (ug.upgrade.getTotalCost().getMetalValue(roiAccount.getUniverse().getTradeRatios())
-										/ (ug.newProduction - roiAccount.getProduction()) * 3600)),
-									true);
+										/ (ug.newProduction - roiAccount.getProduction()) * 3600)));
 							}, null)//
 						;
 					}));
@@ -802,10 +800,9 @@ public class UpgradePanel extends JPanel {
 									if (pu.upgrade == null) {
 										return "";
 									}
-									return QommonsUtils.printDuration(Duration.ofSeconds(
+									return DURATION_FORMAT.print(Duration.ofSeconds(
 										(long) (pu.upgrade.getTotalCost().getMetalValue(roiAccount.getUniverse().getTradeRatios())
-											/ (pu.productonValue - p.getProductionValue()) * 3600)),
-										true);
+											/ (pu.productonValue - p.getProductionValue()) * 3600)));
 								}, null)//
 							;
 						});
@@ -930,6 +927,7 @@ public class UpgradePanel extends JPanel {
 		JDialog dialog = WindowPopulation
 			.populateDialog(new JDialog(SwingUtilities.getWindowAncestor(this), "ROI Sequence", ModalityType.MODELESS), //
 				Observable.empty(), true)//
+			.disposeOnClose(true)//
 			.withVContent(panel -> panel.fill().fillV()//
 				.addLabel("Account:", ObservableValue.of(account.getName()), Format.TEXT, null)//
 				.addLabel("Sequence Time:", ObservableValue.of(sequenceGenerator.getLifetimeMetric().get()), Format.DURATION, null)//
@@ -945,7 +943,7 @@ public class UpgradePanel extends JPanel {
 							});
 						})//
 						.withColumn("Level", Integer.class, el -> el.level, null)//
-						.withColumn("Planets", String.class, el -> {
+						.withColumn("Planet", String.class, el -> {
 							if (el.planetIndexes == null) {
 								return "";
 							}
@@ -962,8 +960,8 @@ public class UpgradePanel extends JPanel {
 							}
 							return planets.toString();
 						}, col -> col.withWidths(50, 200, 2000))//
-						.withColumn("Time", Duration.class, el -> Duration.ofSeconds(el.time),
-							col -> col.formatText(d -> d == null ? "" : QommonsUtils.printDuration(d, true)))//
+						.withColumn("Accumulated Time", Duration.class, el -> Duration.ofSeconds(el.time),
+							col -> col.formatText(d -> d == null ? "" : DURATION_FORMAT.print(d)))//
 			)).getWindow();
 		dialog.setSize(500, 700);
 		dialog.setLocationRelativeTo(this);

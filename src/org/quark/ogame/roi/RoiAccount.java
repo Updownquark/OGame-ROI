@@ -213,6 +213,9 @@ public class RoiAccount implements Account {
 	}
 
 	public void advance(long time) {
+		if (time > 100_000L * 24 * 3600) {
+			BreakpointHere.breakpoint();
+		}
 		if (time < theStatus.get().theTime) {
 			BreakpointHere.breakpoint();
 		} else if (time == theStatus.get().theTime) {
@@ -221,7 +224,7 @@ public class RoiAccount implements Account {
 		AccountStatus status = theStatus.getForUpdate(theBranch);
 		while (status.theNextUpgradeCompletion > 0 && time >= status.theNextUpgradeCompletion) {
 			long next = status.theNextUpgradeCompletion;
-			status.theHoldings += getProduction() * (next - status.theTime) / 3_600;
+			status.theHoldings += getProduction() * ((next - status.theTime) / 3_600);
 			status.theNextUpgradeCompletion = 0;
 			theResearch.finishUpgradeTo(next);
 			for (RoiPlanet planet : thePlanets.getValues()) {
@@ -230,7 +233,7 @@ public class RoiAccount implements Account {
 			status.theTime = next;
 		}
 		if (time > status.theTime) {
-			status.theHoldings += getProduction() * (time - status.theTime) / 3_600;
+			status.theHoldings += getProduction() * ((time - status.theTime) / 3_600);
 			status.theTime = time;
 		}
 		debugCheckUpgradeCompletion();

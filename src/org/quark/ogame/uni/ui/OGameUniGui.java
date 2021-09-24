@@ -54,7 +54,6 @@ import org.qommons.collect.CollectionElement;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
 import org.quark.ogame.OGameUtils;
-import org.quark.ogame.roi.OGameRoiSettings;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountClass;
 import org.quark.ogame.uni.AccountUpgradeType;
@@ -672,8 +671,6 @@ public class OGameUniGui extends JPanel {
 														+ "<li>Click this button and select the saved file</li>"//
 														+ "</li></ul></html>"))//
 										)//
-										.addButton("Test ROI",
-											__ -> new OGameRoiSettings(theSelectedRuleSet.get(), theSelectedAccount.get()).test(15), null)//
 									, acctSettingsTab -> acctSettingsTab.setName("Settings"))//
 								.withVTab("planets", acctBuildingsPanel -> thePlanetPanel.addPlanetTable(acctBuildingsPanel)//
 									, acctBuildingsTab -> acctBuildingsTab.setName("Builds"))//
