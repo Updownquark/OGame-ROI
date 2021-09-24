@@ -213,9 +213,6 @@ public class RoiAccount implements Account {
 	}
 
 	public void advance(long time) {
-		if (time > 100_000L * 24 * 3600) {
-			BreakpointHere.breakpoint();
-		}
 		if (time < theStatus.get().theTime) {
 			BreakpointHere.breakpoint();
 		} else if (time == theStatus.get().theTime) {
