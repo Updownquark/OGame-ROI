@@ -3,6 +3,11 @@ package org.quark.ogame.uni.ui;
 import java.awt.Color;
 import java.awt.Dialog.ModalityType;
 import java.awt.EventQueue;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Writer;
 import java.text.ParseException;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -11,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 
 import javax.swing.JDialog;
+import javax.swing.JFileChooser;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
@@ -49,6 +56,7 @@ import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
 import org.quark.ogame.uni.OGameEconomyRuleSet.FullProduction;
+import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.UpgradeCost;
@@ -580,8 +588,13 @@ public class UpgradePanel extends JPanel {
 						.withColumn("Time", Duration.class, el -> el.getTime() == 0 ? null : Duration.ofSeconds(el.getTime()),
 							col -> col.formatText(d -> d == null ? "" : DURATION_FORMAT.print(d)))//
 				)//
-				.addButton("Cancel", __ -> sequenceGenerator.cancel(),
-					btn -> btn.disableWith(sequenceGenerator.isActive().map(a -> a == null ? "Sequence is not generating" : null)))//
+				.addHPanel(null, new JustifiedBoxLayout(false).mainCenter().crossJustified(),
+					p -> p
+						.addButton("Cancel", __ -> sequenceGenerator.cancel(),
+							btn -> btn.disableWith(sequenceGenerator.isActive().map(a -> a == null ? "Sequence is not generating" : null)))//
+						.addButton("Export", __ -> export(account, sequence),
+							btn -> btn.disableWith(sequenceGenerator.isActive().map(a -> a != null ? "Sequence is generating" : null)))//
+				)//
 				.addVPanel(editor -> editor.fill().fillV().addVPanel(//
 					p -> configureSequenceEditor(p.fill().fillV().visibleWhen(selected.map(s -> s != null)), account, sequenceGenerator,
 						sequence, selected))))
@@ -590,6 +603,8 @@ public class UpgradePanel extends JPanel {
 		dialog.setLocationRelativeTo(this);
 		dialog.setVisible(true);
 		QommonsTimer.getCommonInstance().offload(() -> {
+			sequenceGenerator.getEnergyType().set(//
+				sequenceGenerator.getNewPlanetTemp().get() < -100 ? ProductionSource.Fusion : ProductionSource.Satellite, null);
 			sequenceGenerator.produceSequence(sequence);
 			// List<RoiCompoundSequenceElement> condensed = RoiSequenceGenerator.condense(sequence);
 			// EventQueue.invokeLater(() -> displayRoiSequence(condensed, account, sequenceGenerator));
@@ -966,5 +981,125 @@ public class UpgradePanel extends JPanel {
 		dialog.setSize(500, 700);
 		dialog.setLocationRelativeTo(this);
 		dialog.setVisible(true);
+	}
+
+	private final JFileChooser theChooser = new JFileChooser();
+
+	private void export(Account account, List<RoiSequenceCoreElement> sequence) {
+		if (theChooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+			return;
+		}
+		File selected = theChooser.getSelectedFile();
+		if (selected.exists()) {
+			if (selected.isDirectory()) {
+				JOptionPane.showMessageDialog(this, selected.getName() + " is a directory", "Directory Selected",
+					JOptionPane.ERROR_MESSAGE);
+				return;
+			} else if (JOptionPane.OK_OPTION != JOptionPane.showConfirmDialog(this, selected.getName() + " exits. Overwrite?",
+				"File Exists", JOptionPane.WARNING_MESSAGE)) {
+				return;
+			}
+		}
+		int astro = account.getResearch().getAstrophysics();
+		int plasma = account.getResearch().getPlasma();
+		int irn = account.getResearch().getIntergalacticResearchNetwork();
+		Planet planet = account.getPlanets().getValues().peekFirst();
+		int metal, crystal, deut, crawlers, robo, nanite, lab;
+		if (planet == null) {
+			metal = crystal = deut = crawlers = robo = nanite = lab = 0;
+		} else {
+			metal = planet.getMetalMine();
+			crystal = planet.getCrystalMine();
+			deut = planet.getDeuteriumSynthesizer();
+			crawlers = planet.getCrawlers();
+			robo = planet.getRoboticsFactory();
+			nanite = planet.getNaniteFactory();
+			lab = planet.getResearchLab();
+		}
+		TimeUtils.RelativeTimeFormat timeFormat = TimeUtils.relativeFormat().abbreviated(true, false).withWeeks()
+			.withMaxPrecision(DurationComponentType.Second).withMaxElements(3);
+		try (Writer w = new BufferedWriter(new FileWriter(selected))) {
+			w.write("Upgrade,Level,ROI,Metal,Crystal,Deut,Astro,Plasma");
+			// w.write(",Crawlers,Robotics,Nanite,Lab,IRN");
+			w.write('\n');
+			StringBuilder str = new StringBuilder();
+			for (RoiSequenceCoreElement el : sequence) {
+				if (el.planetIndex > 0) {
+					continue;
+				}
+				switch (el.upgrade) {
+				case MetalMine:
+					metal = el.getTargetLevel();
+					break;
+				case CrystalMine:
+					crystal = el.getTargetLevel();
+					break;
+				case DeuteriumSynthesizer:
+					deut = el.getTargetLevel();
+					break;
+				case Astrophysics:
+					astro = el.getTargetLevel();
+					break;
+				case Plasma:
+					plasma = el.getTargetLevel();
+					break;
+				default:
+				}
+				for (RoiSequenceElement helper : el.getPreHelpers()) {
+					switch (el.upgrade) {
+					case Crawler:
+						crawlers = helper.getTargetLevel();
+						break;
+					case RoboticsFactory:
+						robo = helper.getTargetLevel();
+						break;
+					case NaniteFactory:
+						nanite = helper.getTargetLevel();
+						break;
+					case ResearchLab:
+						lab = helper.getTargetLevel();
+						break;
+					case IntergalacticResearchNetwork:
+						irn = helper.getTargetLevel();
+						break;
+					default:
+					}
+				}
+				for (RoiSequenceElement helper : el.getPostHelpers()) {
+					switch (el.upgrade) {
+					case Crawler:
+						crawlers = helper.getTargetLevel();
+						break;
+					case RoboticsFactory:
+						robo = helper.getTargetLevel();
+						break;
+					case NaniteFactory:
+						nanite = helper.getTargetLevel();
+						break;
+					case ResearchLab:
+						lab = helper.getTargetLevel();
+						break;
+					case IntergalacticResearchNetwork:
+						irn = helper.getTargetLevel();
+						break;
+					default:
+					}
+				}
+				str.setLength(0);
+				str.append(el.upgrade).append(',').append(el.getTargetLevel()).append(',')
+					.append(timeFormat.print(Duration.ofSeconds((long) (el.getRoi() * 3600)))).append(',')//
+					.append(metal).append(',').append(crystal).append(',').append(deut).append(',').append(astro).append(',')
+					.append(plasma);
+				// str.append(',').append(crawlers).append(',').append(robo).append(',').append(nanite).append(',').append(lab).append(',')
+				// .append(irn);
+				str.append('\n');
+				w.write(str.toString());
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+			JOptionPane.showMessageDialog(this, "Could not write to " + selected.getName(), "Export Failed", JOptionPane.ERROR_MESSAGE);
+		}
+		JOptionPane.showMessageDialog(this, "ROI Sequence exported to " + selected.getName(), "Export Successful",
+			JOptionPane.INFORMATION_MESSAGE);
 	}
 }
