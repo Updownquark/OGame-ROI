@@ -63,6 +63,7 @@ import org.quark.ogame.uni.OGameEconomyRuleSet;
 import org.quark.ogame.uni.OGameEconomyRuleSet.Production;
 import org.quark.ogame.uni.OGamePageReader;
 import org.quark.ogame.uni.OGameRuleSet;
+import org.quark.ogame.uni.Officers;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.PlannedUpgrade;
 import org.quark.ogame.uni.PointType;
@@ -71,6 +72,7 @@ import org.quark.ogame.uni.ResearchType;
 import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.TradeRatios;
+import org.quark.ogame.uni.Universe;
 import org.quark.ogame.uni.UpgradeAccount;
 import org.quark.ogame.uni.UpgradeAccount.UpgradePlanet;
 import org.quark.ogame.uni.UpgradeAccount.UpgradeRockyBody;
@@ -139,6 +141,30 @@ public class OGameUniGui extends JPanel {
 		theUpgradeRefresh = SimpleObservable.build().safe(false).withDescription("upgrade-refresh").build();
 		theSelectedAccount = selectedAccount.refresh(theUpgradeRefresh);
 		theUpgradeAccount = upgradeAccount.refresh(theUpgradeRefresh);
+
+		selectedAccount.changes().act(evt -> {
+			if (evt.getNewValue() == null) {
+				return;
+			}
+			Account a = evt.getNewValue();
+			Observable.or(//
+				EntityReflector.observeField(a, Account::getGameClass).noInitChanges(), //
+				EntityReflector.observeField(a, Account::getAllianceClass).noInitChanges(), //
+				EntityReflector.observeField(a.getOfficers(), Officers::isGeologist).noInitChanges(), //
+				EntityReflector.observeField(a.getOfficers(), Officers::isEngineer).noInitChanges(), //
+				EntityReflector.observeField(a.getOfficers(), Officers::isCommandingStaff).noInitChanges(), //
+				EntityReflector.observeField(a.getUniverse(), Universe::getCollectorEnergyBonus).noInitChanges(), //
+				EntityReflector.observeField(a.getUniverse(), Universe::getCollectorProductionBonus).noInitChanges(), //
+				EntityReflector.observeField(a.getUniverse(), Universe::getEconomySpeed).noInitChanges(), //
+				EntityReflector.observeField(a.getUniverse(), Universe::getHyperspaceCargoBonus).noInitChanges(), //
+				EntityReflector.observeField(a.getUniverse(), Universe::getResearchSpeed).noInitChanges(), //
+				EntityReflector.observeField(a.getUniverse().getTradeRatios(), TradeRatios::getMetal).noInitChanges(), //
+				EntityReflector.observeField(a.getUniverse().getTradeRatios(), TradeRatios::getCrystal).noInitChanges(), //
+				EntityReflector.observeField(a.getUniverse().getTradeRatios(), TradeRatios::getDeuterium).noInitChanges()//
+			).takeUntil(selectedAccount.noInitChanges()).act(evt2 -> {
+				refreshProduction();
+			});
+		});
 
 		ObservableCollection<PlanetWithProduction> planets = ObservableCollection
 			.flattenValue(upgradeAccount.map(LambdaUtils.printableFn(
@@ -319,6 +345,10 @@ public class OGameUniGui extends JPanel {
 
 	public HoldingsPanel getHoldings() {
 		return theHoldingsPanel;
+	}
+
+	public Observable<Void> getUpgradeRefresh() {
+		return theUpgradeRefresh.readOnly();
 	}
 
 	PlanetWithProduction productionFor(Planet planet) {
