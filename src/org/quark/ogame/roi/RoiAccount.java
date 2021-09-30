@@ -34,6 +34,7 @@ import org.quark.ogame.uni.PlannedFlight;
 import org.quark.ogame.uni.PlannedUpgrade;
 import org.quark.ogame.uni.Research;
 import org.quark.ogame.uni.ResearchType;
+import org.quark.ogame.uni.ResourcePackageType;
 import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.RockyBody;
 import org.quark.ogame.uni.ShipyardItemType;
@@ -1191,6 +1192,16 @@ public class RoiAccount implements Account {
 
 		@Override
 		public Holding setType(AccountUpgradeType type) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public ResourcePackageType getResourcePackageType() {
+			return null;
+		}
+
+		@Override
+		public Holding setResourcePackageType(ResourcePackageType type) {
 			throw new UnsupportedOperationException();
 		}
 

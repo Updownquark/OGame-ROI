@@ -1,7 +1,9 @@
 package org.quark.ogame.uni.ui;
 
 import java.awt.Color;
+import java.awt.EventQueue;
 import java.time.Duration;
+import java.util.function.Function;
 
 import org.observe.Observable;
 import org.observe.collect.ObservableCollection;
@@ -11,21 +13,23 @@ import org.observe.util.swing.ObservableCellEditor;
 import org.observe.util.swing.PanelPopulation.PanelPopulator;
 import org.qommons.Nameable;
 import org.qommons.Transaction;
+import org.qommons.collect.CollectionElement;
 import org.qommons.collect.ElementId;
 import org.qommons.io.Format;
 import org.qommons.io.SpinnerFormat;
 import org.quark.ogame.OGameUtils;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.Holding;
+import org.quark.ogame.uni.ResourcePackageType;
 import org.quark.ogame.uni.ResourceType;
 import org.quark.ogame.uni.ShipyardItemType;
 import org.quark.ogame.uni.Trade;
 import org.quark.ogame.uni.TradeRatios;
 import org.quark.ogame.uni.UpgradeCost;
-import org.quark.ogame.uni.UpgradeType;
 
 import com.google.common.reflect.TypeToken;
 
+/** Allows the user to keep track of resources a player holds and expects, as well as trade planning and recommendations */
 public class HoldingsPanel {
 	private final OGameUniGui theUniGui;
 
@@ -40,6 +44,7 @@ public class HoldingsPanel {
 	private final SyntheticTrade theTradesNeeded;
 	private final Trade theTotalTradesUpgradeTime;
 
+	/** @param uniGui The main app core */
 	public HoldingsPanel(OGameUniGui uniGui) {
 		theUniGui = uniGui;
 
@@ -443,12 +448,20 @@ public class HoldingsPanel {
 			synthTrades.mutableElement(totalTradesUpgradeId).set(theTotalTradesUpgradeTime);
 		});
 		theTrades = ObservableCollection.flattenCollections(TypeTokens.get().of(Trade.class), flatTrades, synthTrades).collect();
+
+		theUniGui.getUpgradeRefresh().act(__ -> EventQueue.invokeLater(() -> {
+			for (CollectionElement<Holding> holding : theHoldings.elements()) {
+				if (holding.get().getResourcePackageType() != null) {
+					fillTypedHolding(holding.get());
+					theHoldings.mutableElement(holding.getElementId()).set(holding.get());
+				}
+			}
+		}));
 	}
 
 	public void addPanel(PanelPopulator<?, ?> panel) {
-		ObservableCollection<AccountUpgradeType> holdingTypes = ObservableCollection.build(TypeTokens.get().of(AccountUpgradeType.class))
-			.safe(false).build();
-		holdingTypes.add(null);
+		ObservableCollection<Object> holdingTypes = ObservableCollection.build(TypeTokens.get().OBJECT).safe(false).build();
+		holdingTypes.add("None");
 		for (AccountUpgradeType type : AccountUpgradeType.values()) {
 			switch (type.type) {
 			case Building:
@@ -459,7 +472,21 @@ public class HoldingsPanel {
 				break; // Shipyard item's can't be canceled, so they can't be used for stashing resources
 			}
 		}
+		holdingTypes.with((Object[]) ResourcePackageType.values());
 		Format<Double> commaFormat = Format.doubleFormat("#,##0");
+		Function<Object, String> typeRenderer = t -> {
+			if (t == null) {
+				return "";
+			} else if (t instanceof ResourcePackageType) {
+				if (t == ResourcePackageType.Deuterium) {
+					return "Deut Pkg";
+				} else {
+					return t + " Pkg";
+				}
+			} else {
+				return t.toString();
+			}
+		};
 		panel.addHPanel(null, new JustifiedBoxLayout(false).mainJustified().crossJustified(),
 			split -> split.fill().fillV()//
 				.addVPanel(holdingsPanel -> holdingsPanel.fill().fillV().decorate(d -> d.withTitledBorder("Holdings", Color.black))//
@@ -469,45 +496,48 @@ public class HoldingsPanel {
 							nameMutator.mutateAttribute(Holding::setName).editableIf((h, n) -> !(h instanceof SyntheticHolding))
 								.withEditor(ObservableCellEditor.createTextEditor(SpinnerFormat.NUMERICAL_TEXT));
 						}))//
-						.withColumn("Type", AccountUpgradeType.class, Holding::getType, typeCol -> typeCol.withMutation(typeMutator -> {
+						.withColumn("Type", Object.class, //
+							h -> h.getType() != null ? h.getType() : h.getResourcePackageType(),
+							typeCol -> typeCol.formatText(typeRenderer).withMutation(typeMutator -> {
 							typeMutator.mutateAttribute((h, t) -> {
-								h.setType(t);
-								if (t == null) {//
-								} else if (t.type == UpgradeType.Research) {
-									int preLevel = theUniGui.getSelectedAccount().get().getResearch().getResearchLevel(t.research);
-									h.setLevel(preLevel + 1);
-									UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(//
-										theUniGui.getSelectedAccount().get(), null, t, preLevel, preLevel + 1);
-									h.setMetal(cost.getMetal());
-									h.setCrystal(cost.getCrystal());
-									h.setDeuterium(cost.getDeuterium());
-								} else if (h.getLevel() <= 0) {
-									h.setLevel(1);
-								}
+									if (t == null || "None".equals(t)) {//
+										h.setType(null);
+										h.setResourcePackageType(null);
+									} else if (t instanceof AccountUpgradeType) {
+										AccountUpgradeType ut = (AccountUpgradeType) t;
+										h.setResourcePackageType(null);
+										h.setType(ut);
+										h.setLevel(ut.getLevel(theUniGui.getSelectedAccount().get(),
+											theUniGui.getSelectedAccount().get().getPlanets().getValues().getFirst()) + 1);
+									} else if (t instanceof ResourcePackageType) {
+										h.setType(null);
+										if (h.getLevel() <= 0 || h.getLevel() >= 10) { // Probably left over from an upgrade type
+											h.setLevel(1);
+										}
+										h.setResourcePackageType((ResourcePackageType) t);
+									} else {
+										System.err.println("What is this? " + t.getClass().getName());
+									}
+									fillTypedHolding(h);
 							}).editableIf((h, n) -> !(h instanceof SyntheticHolding))//
-									.asCombo(t -> t == null ? "" : t.toString(), holdingTypes);
+									.asCombo(typeRenderer, holdingTypes);
 						}))//
 						.withColumn("#", Integer.class, Holding::getLevel, levelCol -> levelCol.formatText((h, lvl) -> {
-							if (h.getType() == null) {
+							if (h.getType() == null && h.getResourcePackageType() == null) {
 								return "";
 							} else {
 								return String.valueOf(lvl);
 							}
 						}).withWidths(20, 20, 30).withMutation(lvlMutator -> lvlMutator.mutateAttribute((h, lvl) -> {
 							h.setLevel(lvl);
-							UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(//
-								theUniGui.getSelectedAccount().get(),
-								theUniGui.getSelectedAccount().get().getPlanets().getValues().peekFirst(), h.getType(), lvl - 1, lvl);
-							h.setMetal(cost.getMetal());
-							h.setCrystal(cost.getCrystal());
-							h.setDeuterium(cost.getDeuterium());
+							fillTypedHolding(h);
 						}).editableIf((h, lvl) -> {
 							if (h instanceof SyntheticHolding) {
 								return false;
 							} else {
-								return h.getType()!=null;
+								return h.getType() != null || h.getResourcePackageType() != null;
 							}
-						}).filterAccept((h, lvl) -> lvl > 0 ? null : "Level must be positive")))//
+						}).filterAccept((h, lvl) -> lvl > 0 ? null : "Level must be positive").asText(SpinnerFormat.INT)))//
 						.withColumn("Metal (KK)", Double.class, h->{
 							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
 								return h.getMetal()*1.0;
@@ -768,6 +798,43 @@ public class HoldingsPanel {
 		);
 	}
 
+	private void fillTypedHolding(Holding h) {
+		int level = h.getLevel();
+		if (h.getType() != null) {
+			UpgradeCost cost = theUniGui.getRules().get().economy().getUpgradeCost(//
+				theUniGui.getSelectedAccount().get(), theUniGui.getSelectedAccount().get().getPlanets().getValues().peekFirst(),
+				h.getType(), level - 1, level);
+			h.setMetal(cost.getMetal());
+			h.setCrystal(cost.getCrystal());
+			h.setDeuterium(cost.getDeuterium());
+		} else if (h.getResourcePackageType() != null) {
+			PlanetWithProduction total = theUniGui.getTotalProduction().getFirst();
+			long mult = level * 24L;
+			switch (h.getResourcePackageType()) {
+			case Metal:
+				h.setMetal(total.getMetal().totalNet * mult);
+				h.setCrystal(0);
+				h.setDeuterium(0);
+				break;
+			case Crystal:
+				h.setMetal(0);
+				h.setCrystal(total.getCrystal().totalNet * mult);
+				h.setDeuterium(0);
+				break;
+			case Deuterium:
+				h.setMetal(0);
+				h.setCrystal(0);
+				h.setDeuterium(total.getDeuterium().totalNet * mult);
+				break;
+			case Complete:
+				h.setMetal(total.getMetal().totalNet * mult);
+				h.setCrystal(total.getCrystal().totalNet * mult);
+				h.setDeuterium(total.getDeuterium().totalNet * mult);
+				break;
+			}
+		}
+	}
+
 	private static abstract class SyntheticHolding implements Holding {
 		@Override
 		public Nameable setName(String name) {
@@ -781,6 +848,16 @@ public class HoldingsPanel {
 
 		@Override
 		public Holding setType(AccountUpgradeType type) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public ResourcePackageType getResourcePackageType() {
+			return null;
+		}
+
+		@Override
+		public Holding setResourcePackageType(ResourcePackageType type) {
 			throw new UnsupportedOperationException();
 		}
 

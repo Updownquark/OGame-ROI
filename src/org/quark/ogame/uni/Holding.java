@@ -6,6 +6,9 @@ public interface Holding extends NamedEntity {
 	AccountUpgradeType getType();
 	Holding setType(AccountUpgradeType type);
 
+	ResourcePackageType getResourcePackageType();
+	Holding setResourcePackageType(ResourcePackageType type);
+
 	int getLevel();
 	Holding setLevel(int level);
 
