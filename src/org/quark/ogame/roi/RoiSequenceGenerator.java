@@ -726,7 +726,18 @@ public class RoiSequenceGenerator {
 		planet.setCrawlerUtilization(theRules.economy().getMaxUtilization(Utilizable.Crawler, account, planet));
 		planet.setFusionReactorUtilization(theRules.economy().getMaxUtilization(Utilizable.FusionReactor, account, planet));
 
-		if (theEnergyType.get() == ProductionSource.Fusion && account.roiPlanets().size() >= MIN_FUSION_PLANET) {
+		ProductionSource type = theEnergyType.get();
+		if (type == ProductionSource.Fusion && account.roiPlanets().size() < MIN_FUSION_PLANET) {
+			// It's not practical to raise energy tech enough to start fusion until the account has been developed enough.
+			// We'll capture this with a minimum planet count.
+			if (theRules.economy().getSatelliteEnergy(account, planet) < 5) {
+				type = ProductionSource.Solar;
+			} else {
+				type = ProductionSource.Satellite;
+			}
+		}
+		switch (type) {
+		case Fusion:
 			if (planet.getFusionReactor() == 0) {
 				upgrade.withPostHelper(upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.SolarSatellite, 0));
 				upgrade.withPostHelper(
@@ -774,8 +785,9 @@ public class RoiSequenceGenerator {
 				}
 				energy = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0);
 			}
-		} else if (theEnergyType.get() == ProductionSource.Solar) {
-			Production energy = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0);
+			break;
+		case Solar:
+			energy = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0);
 			while (energy.totalNet < 0) {
 				if (isCanceled) {
 					return;
@@ -784,11 +796,15 @@ public class RoiSequenceGenerator {
 					upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.SolarPlant, planet.getSolarPlant() + 1));
 				energy = theRules.economy().getProduction(account, planet, ResourceType.Energy, 0);
 			}
-		} else {
+			break;
+		case Satellite:
 			int sats = OGameUtils.getRequiredSatellites(account, planet, theRules.economy());
 			if (planet.getSolarSatellites() < sats) {
 				upgrade.withPostHelper(upgrade(account, upgrade.planetIndex, false, AccountUpgradeType.SolarSatellite, sats));
 			}
+			break;
+		default:
+			throw new IllegalStateException("Unrecognized energy source: " + type);
 		}
 		OGameUtils.optimizeEnergy(account, planet, theRules.economy());
 		addAccessories(account, upgrade);
@@ -977,17 +993,41 @@ public class RoiSequenceGenerator {
 
 		el.setTargetLevel(targetLevel, theRules.economy().getUpgradeCost(account, body, upgrade, currentLevel, targetLevel));
 		account.upgrade(upgrade, body, targetLevel - currentLevel);
-		while (body instanceof Planet && body.getUsedFields() >= theRules.economy().getFields((Planet) body)) {
+		int used = body == null ? 0 : body.getUsedFields();
+		int total;
+		if (body == null) {
+			total = 1;
+		} else if (body instanceof Planet) {
+			total=theRules.economy().getFields((Planet) body);
+		} else {
+			total= theRules.economy().getFields((Moon) body);
+		}
+		while (body instanceof Planet && used >= total) {
 			// See if we can tear down solar first
-			if (theEnergyType.get() != ProductionSource.Solar && ((Planet) body).getSolarPlant() > 0) {
-				el.withDependency(upgrade(account, planetIndex, moon, AccountUpgradeType.SolarPlant, ((Planet) body).getSolarPlant() - 1));
+			boolean usingSolar = ((Planet) body).getSolarPlant() > 0;
+			if (usingSolar) {
+				switch (theEnergyType.get()) {
+				case Solar:
+					usingSolar = true;
+					break;
+				case Fusion:
+					usingSolar = account.roiPlanets().size() < MIN_FUSION_PLANET
+						&& theRules.economy().getSatelliteEnergy(account, (Planet) body) < 5;
+					break;
+				default:
+					usingSolar = false;
+					break;
+				}
+			}
+			if (!usingSolar && ((Planet) body).getSolarPlant() > 0) {
+				el.withDependency(upgrade(account, planetIndex, false, AccountUpgradeType.SolarPlant, ((Planet) body).getSolarPlant() - 1));
 			} else {
 				el.withDependency(
-					upgrade(account, planetIndex, moon, AccountUpgradeType.Terraformer, ((Planet) body).getTerraformer() + 1));
+					upgrade(account, planetIndex, false, AccountUpgradeType.Terraformer, ((Planet) body).getTerraformer() + 1));
 			}
 		}
 		while (body instanceof Moon && body.getUsedFields() >= theRules.economy().getFields((Moon) body)) {
-			el.withDependency(upgrade(account, planetIndex, moon, AccountUpgradeType.LunarBase, ((Moon) body).getLunarBase() + 1));
+			el.withDependency(upgrade(account, planetIndex, true, AccountUpgradeType.LunarBase, ((Moon) body).getLunarBase() + 1));
 		}
 		return el;
 	}
@@ -1206,7 +1246,8 @@ public class RoiSequenceGenerator {
 				// This can happen as things get moved around, e.g. astro getting moved ahead of an upgrade on the new planet
 				return false;
 			}
-			account.getPlanets().newValue();
+			account.getPlanets().newValue().setMinimumTemperature(theNewPlanetTemp.get());
+			account.getPlanets().newValue().setMaximumTemperature(theNewPlanetTemp.get() + 40);
 		}
 		// if (account.roiPlanets().size() < theRules.economy().getMaxPlanets(account)) {
 		// RoiPlanet newPlanet = (RoiPlanet) account.getPlanets().newValue();
