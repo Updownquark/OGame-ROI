@@ -1002,7 +1002,7 @@ public class RoiSequenceGenerator {
 		} else {
 			total= theRules.economy().getFields((Moon) body);
 		}
-		while (body instanceof Planet && used >= total) {
+		while (body instanceof Planet && used >= total && upgrade != AccountUpgradeType.Terraformer && !isCanceled) {
 			// See if we can tear down solar first
 			boolean usingSolar = ((Planet) body).getSolarPlant() > 0;
 			if (usingSolar) {
@@ -1025,9 +1025,13 @@ public class RoiSequenceGenerator {
 				el.withDependency(
 					upgrade(account, planetIndex, false, AccountUpgradeType.Terraformer, ((Planet) body).getTerraformer() + 1));
 			}
+			used = body.getUsedFields();
+			total = theRules.economy().getFields((Planet) body);
 		}
-		while (body instanceof Moon && body.getUsedFields() >= theRules.economy().getFields((Moon) body)) {
+		while (body instanceof Moon && used >= total && upgrade != AccountUpgradeType.LunarBase && !isCanceled) {
 			el.withDependency(upgrade(account, planetIndex, true, AccountUpgradeType.LunarBase, ((Moon) body).getLunarBase() + 1));
+			used = body.getUsedFields();
+			total = theRules.economy().getFields((Moon) body);
 		}
 		return el;
 	}

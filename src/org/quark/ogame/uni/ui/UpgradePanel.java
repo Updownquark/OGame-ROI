@@ -55,10 +55,12 @@ import org.quark.ogame.roi.RoiSequenceGenerator;
 import org.quark.ogame.uni.Account;
 import org.quark.ogame.uni.AccountUpgradeType;
 import org.quark.ogame.uni.BuildingType;
+import org.quark.ogame.uni.OGameEconomyRuleSet;
 import org.quark.ogame.uni.OGameEconomyRuleSet.FullProduction;
 import org.quark.ogame.uni.OGameEconomyRuleSet.ProductionSource;
 import org.quark.ogame.uni.Planet;
 import org.quark.ogame.uni.ShipyardItemType;
+import org.quark.ogame.uni.TradeRatios;
 import org.quark.ogame.uni.UpgradeCost;
 import org.quark.ogame.uni.ui.OGameUniGui.PlannedAccountUpgrade;
 
@@ -131,8 +133,9 @@ public class UpgradePanel extends JPanel {
 		TypeToken<PlannedAccountUpgrade> upgradeType = TypeTokens.get().of(PlannedAccountUpgrade.class);
 		boolean[] planetCallbackLock = new boolean[1];
 		ObservableCollection<PlannedAccountUpgrade> totalUpgrades = ObservableCollection.flattenCollections(upgradeType,
-			ObservableCollection.flattenValue(theUniGui.getSelectedPlanet()
-				.map(sp -> sp == null ? ObservableCollection.of(upgradeType) : ObservableCollection.of(upgradeType, planetTotalUpgrade)))
+			ObservableCollection
+				.flattenValue(theUniGui.getSelectedPlanet().map(
+					sp -> sp == null ? ObservableCollection.of(upgradeType) : ObservableCollection.of(upgradeType, planetTotalUpgrade)))
 				.flow().refresh(theUniGui.getSelectedPlanet().noInitChanges()).collect(), //
 			// TODO Can't get the selected upgrade total to not throw reentrant exceptions
 			ObservableCollection
@@ -221,12 +224,10 @@ public class UpgradePanel extends JPanel {
 				.withColumn("Upgrade", AccountUpgradeType.class,
 					upgrade -> upgrade.getUpgrade() == null ? null : upgrade.getUpgrade().getType(),
 					c -> c.formatText(t -> t == null ? "" : t.toString()))//
-				.withColumn("From", int.class, upgrade -> upgrade.getFrom(),
-					fromCol -> fromCol.withWidths(25, 45, 100)//
-						.formatText((u, i) -> u.getUpgrade() == null ? "" : ("" + i)))//
-				.withColumn("To", int.class, upgrade -> upgrade.getTo(),
-					toCol -> toCol.withWidths(25, 45, 100)//
-						.formatText((u, i) -> u.getUpgrade() == null ? "" : ("" + i)))//
+				.withColumn("From", int.class, upgrade -> upgrade.getFrom(), fromCol -> fromCol.withWidths(25, 45, 100)//
+					.formatText((u, i) -> u.getUpgrade() == null ? "" : ("" + i)))//
+				.withColumn("To", int.class, upgrade -> upgrade.getTo(), toCol -> toCol.withWidths(25, 45, 100)//
+					.formatText((u, i) -> u.getUpgrade() == null ? "" : ("" + i)))//
 				.withColumn("Metal", String.class,
 					upgrade -> upgrade.getCost() == null ? "" : OGameUtils.printResourceAmount(upgrade.getCost().getMetal()),
 					metalCol -> metalCol.decorate((cell, d) -> {
@@ -477,7 +478,7 @@ public class UpgradePanel extends JPanel {
 					f -> f.decorate(deco -> deco.bold().withFontSize(14).withForeground(Color.red)))//
 				.addTextField("Target Planet:", sequenceGenerator.getTargetPlanet(), SpinnerFormat.INT, f -> f.fill())//
 				.addTextField("New Planet Slot:", sequenceGenerator.getNewPlanetSlot(), SpinnerFormat.INT, f -> f.fill())//
-				.addTextField("New Planet Temp:", sequenceGenerator.getNewPlanetTemp(), SpinnerFormat.INT, f -> f.fill())//
+				.addTextField("New Planet Min. Temp:", sequenceGenerator.getNewPlanetTemp(), SpinnerFormat.INT, f -> f.fill())//
 				.addButton("Generate", __ -> genRoiSequence(account, sequenceGenerator),
 					btn -> btn.disableWith(sequenceGenerator.isActive())))
 			.getWindow();
@@ -561,32 +562,30 @@ public class UpgradePanel extends JPanel {
 						}
 					}, null)//
 				.addLabel("Sequence Time:", sequenceGenerator.getLifetimeMetric(), SpinnerFormat.flexDuration(DURATION_FORMAT), null)//
-				.addTable(sequence,
-					table -> table.fill().fillV().withAdaptiveHeight(10, 15, 100).withSelection(selected, false)//
-						.withIndexColumn("#", col -> col.withWidths(20, 30, 60))//
-						.withColumn("Upgrade", AccountUpgradeType.class, el -> el.upgrade, col -> {
-							col.decorate((cell, deco) -> {
-								Color borderColor = upgradeColors.get(cell.getCellValue());
-								if (borderColor != null) {
-									deco.withLineBorder(borderColor, 2, false);
-								}
-							});
-						})//
-						.withColumn("Planet", String.class, el -> {
-							if (el.planetIndex < 0) {
-								return "";
-							} else if (el.planetIndex < account.getPlanets().getValues().size()) {
-								return account.getPlanets().getValues().get(el.planetIndex).getName();
-							} else {
-								return "Planet " + (el.planetIndex + 1);
+				.addTable(sequence, table -> table.fill().fillV().withAdaptiveHeight(10, 15, 100).withSelection(selected, false)//
+					.withIndexColumn("#", col -> col.withWidths(20, 30, 60))//
+					.withColumn("Upgrade", AccountUpgradeType.class, el -> el.upgrade, col -> {
+						col.decorate((cell, deco) -> {
+							Color borderColor = upgradeColors.get(cell.getCellValue());
+							if (borderColor != null) {
+								deco.withLineBorder(borderColor, 2, false);
 							}
-						}, null)//
-						.withColumn("Level", Integer.class, el -> el.getTargetLevel(), null)//
-						.withColumn("ROI", Duration.class,
-							el -> el.getRoi() <= 0 ? null : Duration.ofSeconds(Math.round(el.getRoi() * 3600)),
-							col -> col.formatText(d -> d == null ? "" : DURATION_FORMAT.print(d)))//
-						.withColumn("Time", Duration.class, el -> el.getTime() == 0 ? null : Duration.ofSeconds(el.getTime()),
-							col -> col.formatText(d -> d == null ? "" : DURATION_FORMAT.print(d)))//
+						});
+					})//
+					.withColumn("Planet", String.class, el -> {
+						if (el.planetIndex < 0) {
+							return "";
+						} else if (el.planetIndex < account.getPlanets().getValues().size()) {
+							return account.getPlanets().getValues().get(el.planetIndex).getName();
+						} else {
+							return "Planet " + (el.planetIndex + 1);
+						}
+					}, null)//
+					.withColumn("Level", Integer.class, el -> el.getTargetLevel(), null)//
+					.withColumn("ROI", Duration.class, el -> el.getRoi() <= 0 ? null : Duration.ofSeconds(Math.round(el.getRoi() * 3600)),
+						col -> col.formatText(d -> d == null ? "" : DURATION_FORMAT.print(d)))//
+					.withColumn("Time", Duration.class, el -> el.getTime() == 0 ? null : Duration.ofSeconds(el.getTime()),
+						col -> col.formatText(d -> d == null ? "" : DURATION_FORMAT.print(d)))//
 				)//
 				.addHPanel(null, new JustifiedBoxLayout(false).mainCenter().crossJustified(),
 					p -> p
@@ -603,6 +602,9 @@ public class UpgradePanel extends JPanel {
 		dialog.setLocationRelativeTo(this);
 		dialog.setVisible(true);
 		QommonsTimer.getCommonInstance().offload(() -> {
+			// There's definitely a bug related to small new planets.
+			// But a typical use case of this should probably assume unlimited planet size anyway.
+			sequenceGenerator.getNewPlanetFields().set(500, null);
 			sequenceGenerator.getEnergyType().set(//
 				sequenceGenerator.getNewPlanetTemp().get() < -100 ? ProductionSource.Fusion : ProductionSource.Satellite, null);
 			sequenceGenerator.produceSequence(sequence);
@@ -617,6 +619,8 @@ public class UpgradePanel extends JPanel {
 		RoiAccount roiAccount = new RoiAccount(generator, account);
 		Map<AccountUpgradeType, Upgrade> upgrades = new HashMap<>();
 		ObservableCollection<UpgradeDependency> dependencies = ObservableCollection.build(UpgradeDependency.class).safe(false).build();
+		TimeUtils.RelativeTimeFormat timeFormat = TimeUtils.relativeFormat().withWeeks().abbreviated(true, false).withMaxElements(3)
+			.withMaxPrecision(DurationComponentType.Second);
 		selected.changes().act(evt -> {
 			RoiAccount acct = roiAccount; // Just putting this in a variable so I can inspect it while debugging inside the lambda
 			dependencies.clear();
@@ -639,20 +643,22 @@ public class UpgradePanel extends JPanel {
 				addDependencies(evt.getNewValue(), dependencies);
 			}
 		});
-		editor.addCollapsePanel(true, new JustifiedBoxLayout(true),
-			cp -> cp.fill()//
-				.withHeader(header -> header.addLabel(null, "Dependencies", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
-				.addTable(dependencies, table -> {
-					table.fill().withAdaptiveHeight(3, 7, 20)//
-						.withColumn("Type", String.class, dep -> dep.dependencyType, null)//
-						.withColumn("Upgrade", AccountUpgradeType.class, dep -> dep.upgrade.upgrade, null)//
-						.withColumn("From", int.class, dep -> dep.upgrade.getLevel(roiAccount), null)//
-						.withColumn("To", int.class, dep -> dep.upgrade.getTargetLevel(), null)//
-						.withColumn("Metal", long.class, dep -> dep.upgrade.getCost().getMetal(), null)//
-						.withColumn("Crystal", long.class, dep -> dep.upgrade.getCost().getCrystal(), null)//
-						.withColumn("Deuterium", long.class, dep -> dep.upgrade.getCost().getDeuterium(), null)//
-					;
-				}));
+		editor.addCollapsePanel(true, new JustifiedBoxLayout(true), cp -> cp.fill()//
+			.withHeader(header -> header.addLabel(null, "Dependencies", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
+			.addTable(dependencies, table -> {
+				table.fill().withAdaptiveHeight(3, 7, 20)//
+					.withColumn("Type", String.class, dep -> dep.dependencyType, null)//
+					.withColumn("Upgrade", AccountUpgradeType.class, dep -> dep.upgrade.upgrade, null)//
+					.withColumn("From", int.class, dep -> dep.upgrade.getLevel(roiAccount), null)//
+					.withColumn("To", int.class, dep -> dep.upgrade.getTargetLevel(), null)//
+					.withColumn("Metal", long.class, dep -> dep.upgrade.getCost().getMetal(),
+						col -> col.formatText(c -> OGameUtils.printResourceAmount(c)))//
+					.withColumn("Crystal", long.class, dep -> dep.upgrade.getCost().getCrystal(),
+						col -> col.formatText(c -> OGameUtils.printResourceAmount(c)))//
+					.withColumn("Deuterium", long.class, dep -> dep.upgrade.getCost().getDeuterium(),
+						col -> col.formatText(c -> OGameUtils.printResourceAmount(c)))//
+				;
+			}));
 		editor.addCollapsePanel(true, new JustifiedBoxLayout(true), cp -> cp.fill()//
 			.withHeader(header -> header.addLabel(null, "Account Status", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
 			.addTable(ObservableCollection.of(RoiAccount.class, roiAccount).flow().refresh(selected.noInitChanges()).collect(), acct -> {
@@ -660,52 +666,13 @@ public class UpgradePanel extends JPanel {
 					.withColumn("Planets", int.class, a -> a.getPlanets().getValues().size(), null)//
 					.withColumn("Astro", int.class, a -> a.getResearch().getAstrophysics(), null)//
 					.withColumn("Plasma", int.class, a -> a.getResearch().getPlasma(), null)//
+					.withColumn("Account Value", long.class, UpgradePanel.this::calcAccountValue,
+						col -> col.withWidths(50, 100, 150).formatText(v -> OGameUtils.printResourceAmount(v)))//
 					// TODO Energy, etc.
-					.withColumn("Total Production", long.class, a -> a.getProduction(), null)//
+					.withColumn("Total Production", long.class, a -> a.getProduction(),
+						col -> col.withWidths(50, 100, 150).formatText(p -> OGameUtils.printResourceAmount(p)))//
 				;
 			}));
-		SettableValue<AccountUpgradeType> selectedHypoUpgrade = SettableValue.build(AccountUpgradeType.class).safe(false).build();
-		editor.addCollapsePanel(true, new JustifiedBoxLayout(true),
-			cp -> cp.fill()//
-				.withHeader(header -> header.addLabel(null, "Account Upgrades", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
-				.addTable(ObservableCollection.of(AccountUpgradeType.class, AccountUpgradeType.Astrophysics, AccountUpgradeType.Plasma)
-					.flow().refresh(selected.noInitChanges()).collect(), acct -> {
-						acct.fill().withAdaptiveHeight(2, 2, 2).withSelection(selectedHypoUpgrade, false)//
-							.withNameColumn(AccountUpgradeType::name, null, false, null)//
-							.withColumn("M Cost", String.class, u -> {
-								Upgrade ug = upgrades.get(u);
-								return ug.upgrade == null ? "" : ("" + ug.upgrade.getTotalCost().getMetal());
-							}, null)//
-							.withColumn("C Cost", String.class, u -> {
-								Upgrade ug = upgrades.get(u);
-								return ug.upgrade == null ? "" : ("" + ug.upgrade.getTotalCost().getCrystal());
-							}, null)//
-							.withColumn("D Cost", String.class, u -> {
-								Upgrade ug = upgrades.get(u);
-								return ug.upgrade == null ? "" : ("" + ug.upgrade.getTotalCost().getDeuterium());
-							}, null)//
-							.withColumn("T Cost", String.class, u -> {
-								Upgrade ug = upgrades.get(u);
-								return ug.upgrade == null ? ""
-									: ("" + ug.upgrade.getTotalCost().getMetalValue(account.getUniverse().getTradeRatios()));
-							}, null)//
-							.withColumn("New Prod", String.class, u -> {
-								long prod = upgrades.get(u).newProduction;
-								long delta = prod - roiAccount.getProduction();
-								return prod + " (" + (delta < 0 ? "" : "+") + delta + ")";
-							}, null)//
-							.withColumn("ROI", String.class, u -> {
-								Upgrade ug = upgrades.get(u);
-								if (ug.upgrade == null) {
-									return "";
-								}
-								return DURATION_FORMAT.print(Duration
-									.ofSeconds((long) (ug.upgrade.getTotalCost().getMetalValue(roiAccount.getUniverse().getTradeRatios())
-										/ (ug.newProduction - roiAccount.getProduction()) * 3600)));
-							}, null)//
-						;
-					}));
-
 		SettableValue<RoiPlanet> selectedPlanet = SettableValue.build(RoiPlanet.class).safe(false).build();
 		selected.noInitChanges().act(evt -> {
 			if (evt.getNewValue() == null || evt.getOldValue() == evt.getNewValue()) {
@@ -722,25 +689,71 @@ public class UpgradePanel extends JPanel {
 				}
 			}
 		});
-		editor.addCollapsePanel(true, new JustifiedBoxLayout(true),
-			cp -> cp.fill()//
-				.withHeader(header -> header.addLabel(null, "Planet Status", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
-				.addTable(roiAccount.roiPlanets().flow().refresh(selected.noInitChanges()).collect(), planets -> {
-					planets.fill().withAdaptiveHeight(5, 10, 17).withSelection(selectedPlanet, false)//
-						.withNameColumn(Planet::getName, null, true, null)//
-						.withColumn("M", int.class, Planet::getMetalMine, null)//
-						.withColumn("C", int.class, Planet::getCrystalMine, null)//
-						.withColumn("D", int.class, Planet::getDeuteriumSynthesizer, null)//
-						.withColumn("M Prod", int.class, p -> p == null ? 0 : p.getProduction().metal, null)//
-						.withColumn("C Prod", int.class, p -> p == null ? 0 : p.getProduction().crystal, null)//
-						.withColumn("D Prod", int.class, p -> p == null ? 0 : p.getProduction().deuterium, null)//
-						.withColumn("Prod Value", long.class, p -> p == null ? 0 : p.getProductionValue(), null)//
-						.withColumn("Sats", int.class, Planet::getSolarSatellites, null)//
-						.withColumn("Solar", int.class, Planet::getSolarPlant, null)//
-						.withColumn("Fzn", int.class, Planet::getFusionReactor, null)//
-						.withColumn("Crawler", int.class, Planet::getCrawlers, null)//
-						.withColumn("Fzn Util", int.class, Planet::getFusionReactorUtilization, null)//
-						.withColumn("Crawler Util", int.class, Planet::getCrawlerUtilization, null)//
+		editor.addCollapsePanel(true, new JustifiedBoxLayout(true), cp -> cp.fill()//
+			.withHeader(header -> header.addLabel(null, "Planet Status", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
+			.addTable(roiAccount.roiPlanets().flow().refresh(selected.noInitChanges()).collect(), planets -> {
+				planets.fill().withAdaptiveHeight(5, 10, 17).withSelection(selectedPlanet, false)//
+					.withNameColumn(Planet::getName, null, true, null)//
+					.withColumn("M", int.class, Planet::getMetalMine, null)//
+					.withColumn("C", int.class, Planet::getCrystalMine, null)//
+					.withColumn("D", int.class, Planet::getDeuteriumSynthesizer, null)//
+					.withColumn("M Prod", int.class, p -> p == null ? 0 : p.getProduction().metal,
+						col -> col.formatText(c -> OGameUtils.printResourceAmount(c)))//
+					.withColumn("C Prod", int.class, p -> p == null ? 0 : p.getProduction().crystal,
+						col -> col.formatText(c -> OGameUtils.printResourceAmount(c)))//
+					.withColumn("D Prod", int.class, p -> p == null ? 0 : p.getProduction().deuterium,
+						col -> col.formatText(c -> OGameUtils.printResourceAmount(c)))//
+					.withColumn("Prod Value", long.class, p -> p == null ? 0 : p.getProductionValue(),
+						col -> col.formatText(c -> OGameUtils.printResourceAmount(c)))//
+					.withColumn("Sats", int.class, Planet::getSolarSatellites, null)//
+					.withColumn("Solar", int.class, Planet::getSolarPlant, null)//
+					.withColumn("Fzn", int.class, Planet::getFusionReactor, null)//
+					.withColumn("Crawler", int.class, Planet::getCrawlers, null)//
+					.withColumn("Fzn Util", int.class, Planet::getFusionReactorUtilization, null)//
+					.withColumn("Crawler Util", int.class, Planet::getCrawlerUtilization, null)//
+				;
+			}));
+
+		SettableValue<AccountUpgradeType> selectedHypoUpgrade = SettableValue.build(AccountUpgradeType.class).safe(false).build();
+		editor.addCollapsePanel(true, new JustifiedBoxLayout(true), cp -> cp.fill()//
+			.withHeader(header -> header.addLabel(null, "Account Upgrades", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
+			.addTable(ObservableCollection.of(AccountUpgradeType.class, AccountUpgradeType.Astrophysics, AccountUpgradeType.Plasma).flow()
+				.refresh(selected.noInitChanges()).collect(), acct -> {
+					acct.fill().withAdaptiveHeight(2, 2, 2).withSelection(selectedHypoUpgrade, false)//
+						.withNameColumn(AccountUpgradeType::name, null, false, null)//
+						.withColumn("M Cost", String.class, u -> {
+							Upgrade ug = upgrades.get(u);
+							return ug.upgrade == null ? "" : ("" + OGameUtils.printResourceAmount(ug.upgrade.getTotalCost().getMetal()));
+						}, null)//
+						.withColumn("C Cost", String.class, u -> {
+							Upgrade ug = upgrades.get(u);
+							return ug.upgrade == null ? "" : ("" + OGameUtils.printResourceAmount(ug.upgrade.getTotalCost().getCrystal()));
+						}, null)//
+						.withColumn("D Cost", String.class, u -> {
+							Upgrade ug = upgrades.get(u);
+							return ug.upgrade == null ? ""
+								: ("" + OGameUtils.printResourceAmount(ug.upgrade.getTotalCost().getDeuterium()));
+						}, null)//
+						.withColumn("T Cost", String.class, u -> {
+							Upgrade ug = upgrades.get(u);
+							return ug.upgrade == null ? "" : ("" + OGameUtils
+								.printResourceAmount(ug.upgrade.getTotalCost().getMetalValue(account.getUniverse().getTradeRatios())));
+						}, null)//
+						.withColumn("New Prod", String.class, u -> {
+							long prod = upgrades.get(u).newProduction;
+							long delta = prod - roiAccount.getProduction();
+							return OGameUtils.printResourceAmount(prod) + " (" + (delta < 0 ? "" : "+")
+								+ OGameUtils.printResourceAmount(delta) + ")";
+						}, null)//
+						.withColumn("ROI", String.class, u -> {
+							Upgrade ug = upgrades.get(u);
+							if (ug.upgrade == null) {
+								return "";
+							}
+							return timeFormat.print(Duration
+								.ofSeconds((long) (ug.upgrade.getTotalCost().getMetalValue(roiAccount.getUniverse().getTradeRatios())
+									/ (ug.newProduction - roiAccount.getProduction()) * 3600)));
+						}, null)//
 					;
 				}));
 		selectedPlanet.noInitChanges().act(evt -> {
@@ -749,79 +762,81 @@ public class UpgradePanel extends JPanel {
 					evt.getNewValue() + ": " + theUniGui.getRules().get().economy().getFullProduction(roiAccount, evt.getNewValue()));
 			}
 		});
-		editor.addCollapsePanel(true, new JustifiedBoxLayout(true),
-			cp -> cp.fill().fillV()//
-				.withHeader(header -> header.addLabel(null, "Planet Upgrades", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
-				.addVPanel(planetEditor -> {
-					planetEditor.fill().fillV().visibleWhen(selectedPlanet.map(p -> p != null));
-					planetEditor.addTable(ObservableCollection
-						.of(AccountUpgradeType.class, AccountUpgradeType.MetalMine, AccountUpgradeType.CrystalMine,
-							AccountUpgradeType.DeuteriumSynthesizer, AccountUpgradeType.Astrophysics, AccountUpgradeType.Plasma)
-						.flow().refresh(selectedPlanet.noInitChanges()).collect(), planet -> {
-							planet.fill().fillV().withAdaptiveHeight(5, 5, 5).withSelection(selectedHypoUpgrade, false)//
-								.withNameColumn(AccountUpgradeType::name, null, false, null)//
-								.withColumn("M Cost", String.class, u -> {
-									PlanetUpgrade pu = upgrades.get(u).planetProductions
-										.get(roiAccount.roiPlanets().indexOf(selectedPlanet.get()));
-									return pu.upgrade == null ? "" : ("" + pu.upgrade.getTotalCost().getMetal());
-								}, null)//
-								.withColumn("C Cost", String.class, u -> {
-									PlanetUpgrade pu = upgrades.get(u).planetProductions
-										.get(roiAccount.roiPlanets().indexOf(selectedPlanet.get()));
-									return pu.upgrade == null ? "" : ("" + pu.upgrade.getTotalCost().getCrystal());
-								}, null)//
-								.withColumn("D Cost", String.class, u -> {
-									PlanetUpgrade pu = upgrades.get(u).planetProductions
-										.get(roiAccount.roiPlanets().indexOf(selectedPlanet.get()));
-									return pu.upgrade == null ? "" : ("" + pu.upgrade.getTotalCost().getDeuterium());
-								}, null)//
-								.withColumn("T Cost", String.class, u -> {
-									PlanetUpgrade pu = upgrades.get(u).planetProductions
-										.get(roiAccount.roiPlanets().indexOf(selectedPlanet.get()));
-									return pu.upgrade == null ? ""
-										: ("" + pu.upgrade.getTotalCost().getMetalValue(account.getUniverse().getTradeRatios()));
-								}, null)//
-								.withColumn("M Prod", String.class, u -> {
-									RoiPlanet p = selectedPlanet.get();
-									PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
-									long prod = pu.production.metal;
-									long delta = prod - p.getProduction().metal;
-									return prod + " (" + (delta < 0 ? "" : "+") + delta + ")";
-								}, null)//
-								.withColumn("C Prod", String.class, u -> {
-									RoiPlanet p = selectedPlanet.get();
-									PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
-									long prod = pu.production.crystal;
-									long delta = prod - p.getProduction().crystal;
-									return prod + " (" + (delta < 0 ? "" : "+") + delta + ")";
-								}, null)//
-								.withColumn("D Prod", String.class, u -> {
-									RoiPlanet p = selectedPlanet.get();
-									PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
-									long prod = pu.production.deuterium;
-									long delta = prod - p.getProduction().deuterium;
-									return prod + " (" + (delta < 0 ? "" : "+") + delta + ")";
-								}, null)//
-								.withColumn("Total Prod", String.class, u -> {
-									RoiPlanet p = selectedPlanet.get();
-									PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
-									long prod = pu.productonValue;
-									long delta = prod - p.getProductionValue();
-									return prod + " (" + (delta < 0 ? "" : "+") + delta + ")";
-								}, null)//
-								.withColumn("ROI", String.class, u -> {
-									RoiPlanet p = selectedPlanet.get();
-									PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
-									if (pu.upgrade == null) {
-										return "";
-									}
-									return DURATION_FORMAT.print(Duration.ofSeconds(
-										(long) (pu.upgrade.getTotalCost().getMetalValue(roiAccount.getUniverse().getTradeRatios())
-											/ (pu.productonValue - p.getProductionValue()) * 3600)));
-								}, null)//
-							;
-						});
-				}));
+		editor.addCollapsePanel(true, new JustifiedBoxLayout(true), cp -> cp.fill().fillV()//
+			.withHeader(header -> header.addLabel(null, "Planet Upgrades", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
+			.addVPanel(planetEditor -> {
+				planetEditor.fill().fillV().visibleWhen(selectedPlanet.map(p -> p != null));
+				planetEditor.addTable(ObservableCollection
+					.of(AccountUpgradeType.class, AccountUpgradeType.MetalMine, AccountUpgradeType.CrystalMine,
+						AccountUpgradeType.DeuteriumSynthesizer, AccountUpgradeType.Astrophysics, AccountUpgradeType.Plasma)
+					.flow().refresh(selectedPlanet.noInitChanges()).collect(), planet -> {
+						planet.fill().fillV().withAdaptiveHeight(5, 5, 5).withSelection(selectedHypoUpgrade, false)//
+							.withNameColumn(AccountUpgradeType::name, null, false, null)//
+							.withColumn("M Cost", String.class, u -> {
+								PlanetUpgrade pu = upgrades.get(u).planetProductions
+									.get(roiAccount.roiPlanets().indexOf(selectedPlanet.get()));
+								return pu.upgrade == null ? ""
+									: ("" + OGameUtils.printResourceAmount(pu.upgrade.getTotalCost().getMetal()));
+							}, null)//
+							.withColumn("C Cost", String.class, u -> {
+								PlanetUpgrade pu = upgrades.get(u).planetProductions
+									.get(roiAccount.roiPlanets().indexOf(selectedPlanet.get()));
+								return pu.upgrade == null ? ""
+									: ("" + OGameUtils.printResourceAmount(pu.upgrade.getTotalCost().getCrystal()));
+							}, null)//
+							.withColumn("D Cost", String.class, u -> {
+								PlanetUpgrade pu = upgrades.get(u).planetProductions
+									.get(roiAccount.roiPlanets().indexOf(selectedPlanet.get()));
+								return pu.upgrade == null ? ""
+									: ("" + OGameUtils.printResourceAmount(pu.upgrade.getTotalCost().getDeuterium()));
+							}, null)//
+							.withColumn("T Cost", String.class, u -> {
+								PlanetUpgrade pu = upgrades.get(u).planetProductions
+									.get(roiAccount.roiPlanets().indexOf(selectedPlanet.get()));
+								return pu.upgrade == null ? "" : ("" + OGameUtils
+									.printResourceAmount(pu.upgrade.getTotalCost().getMetalValue(account.getUniverse().getTradeRatios())));
+							}, null)//
+							.withColumn("M Prod", String.class, u -> {
+								RoiPlanet p = selectedPlanet.get();
+								PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
+								long prod = pu.production.metal;
+								long delta = prod - p.getProduction().metal;
+								return prod + " (" + (delta < 0 ? "" : "+") + OGameUtils.printResourceAmount(delta) + ")";
+							}, null)//
+							.withColumn("C Prod", String.class, u -> {
+								RoiPlanet p = selectedPlanet.get();
+								PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
+								long prod = pu.production.crystal;
+								long delta = prod - p.getProduction().crystal;
+								return prod + " (" + (delta < 0 ? "" : "+") + OGameUtils.printResourceAmount(delta) + ")";
+							}, null)//
+							.withColumn("D Prod", String.class, u -> {
+								RoiPlanet p = selectedPlanet.get();
+								PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
+								long prod = pu.production.deuterium;
+								long delta = prod - p.getProduction().deuterium;
+								return prod + " (" + (delta < 0 ? "" : "+") + OGameUtils.printResourceAmount(delta) + ")";
+							}, null)//
+							.withColumn("Total Prod", String.class, u -> {
+								RoiPlanet p = selectedPlanet.get();
+								PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
+								long prod = pu.productonValue;
+								long delta = prod - p.getProductionValue();
+								return prod + " (" + (delta < 0 ? "" : "+") + OGameUtils.printResourceAmount(delta) + ")";
+							}, null)//
+							.withColumn("ROI", String.class, u -> {
+								RoiPlanet p = selectedPlanet.get();
+								PlanetUpgrade pu = upgrades.get(u).planetProductions.get(roiAccount.roiPlanets().indexOf(p));
+								if (pu.upgrade == null) {
+									return "";
+								}
+								return timeFormat.print(Duration
+									.ofSeconds((long) (pu.upgrade.getTotalCost().getMetalValue(roiAccount.getUniverse().getTradeRatios())
+										/ (pu.productonValue - p.getProductionValue()) * 3600)));
+							}, null)//
+						;
+					});
+			}));
 		ObservableCollection<UpgradeDependency> hypoDependencies = ObservableCollection.build(UpgradeDependency.class).safe(false).build();
 		selectedHypoUpgrade.refresh(selectedPlanet.noInitChanges()).changes().act(evt -> {
 			hypoDependencies.clear();
@@ -837,21 +852,23 @@ public class UpgradePanel extends JPanel {
 			}
 			addDependencies(upgrade, hypoDependencies);
 		});
-		editor.addCollapsePanel(true, new JustifiedBoxLayout(true),
-			cp -> cp.fill()//
-				.withHeader(header -> header.addLabel(null, "Hypothetical Upgrade Dependencies",
-					lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
-				.addTable(hypoDependencies, table -> {
-					table.fill().withAdaptiveHeight(3, 7, 20)//
-						.withColumn("Type", String.class, dep -> dep.dependencyType, null)//
-						.withColumn("Upgrade", AccountUpgradeType.class, dep -> dep.upgrade.upgrade, null)//
-						.withColumn("From", int.class, dep -> dep.upgrade.getLevel(roiAccount), null)//
-						.withColumn("To", int.class, dep -> dep.upgrade.getTargetLevel(), null)//
-						.withColumn("Metal", long.class, dep -> dep.upgrade.getCost().getMetal(), null)//
-						.withColumn("Crystal", long.class, dep -> dep.upgrade.getCost().getCrystal(), null)//
-						.withColumn("Deuterium", long.class, dep -> dep.upgrade.getCost().getDeuterium(), null)//
-					;
-				}));
+		editor.addCollapsePanel(true, new JustifiedBoxLayout(true), cp -> cp.fill()//
+			.withHeader(header -> header.addLabel(null, "Hypothetical Upgrade Dependencies",
+				lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
+			.addTable(hypoDependencies, table -> {
+				table.fill().withAdaptiveHeight(3, 7, 20)//
+					.withColumn("Type", String.class, dep -> dep.dependencyType, null)//
+					.withColumn("Upgrade", AccountUpgradeType.class, dep -> dep.upgrade.upgrade, null)//
+					.withColumn("From", int.class, dep -> dep.upgrade.getLevel(roiAccount), null)//
+					.withColumn("To", int.class, dep -> dep.upgrade.getTargetLevel(), null)//
+					.withColumn("Metal", long.class, dep -> dep.upgrade.getCost().getMetal(),
+						col -> col.formatText(c -> OGameUtils.printResourceAmount(c)))//
+					.withColumn("Crystal", long.class, dep -> dep.upgrade.getCost().getCrystal(),
+						col -> col.formatText(c -> OGameUtils.printResourceAmount(c)))//
+					.withColumn("Deuterium", long.class, dep -> dep.upgrade.getCost().getDeuterium(),
+						col -> col.formatText(c -> OGameUtils.printResourceAmount(c)))//
+				;
+			}));
 	}
 
 	private void addDependencies(RoiSequenceCoreElement coreEl, ObservableCollection<UpgradeDependency> dependencies) {
@@ -937,6 +954,22 @@ public class UpgradePanel extends JPanel {
 		return new Upgrade(production, cost, planetProductions);
 	}
 
+	private long calcAccountValue(Account account) {
+		OGameEconomyRuleSet eco = theUniGui.getRules().get().economy();
+		TradeRatios tr = account.getUniverse().getTradeRatios();
+		double total = 0;
+		for (AccountUpgradeType upgrade : AccountUpgradeType.values()) {
+			if (upgrade.research != null) {
+				total += eco.getUpgradeCost(account, null, upgrade, 0, upgrade.getLevel(account, null)).getMetalValue(tr);
+			} else {
+				for (Planet p : account.getPlanets().getValues()) {
+					total += eco.getUpgradeCost(account, p, upgrade, 0, upgrade.getLevel(account, p)).getMetalValue(tr);
+				}
+			}
+		}
+		return (long) total;
+	}
+
 	private void displayRoiSequence(List<RoiCompoundSequenceElement> condensed, Account account, RoiSequenceGenerator sequenceGenerator) {
 		List<String> planetNames = QommonsUtils.map(account.getPlanets().getValues(), Planet::getName, true);
 		JDialog dialog = WindowPopulation
@@ -946,38 +979,37 @@ public class UpgradePanel extends JPanel {
 			.withVContent(panel -> panel.fill().fillV()//
 				.addLabel("Account:", ObservableValue.of(account.getName()), Format.TEXT, null)//
 				.addLabel("Sequence Time:", ObservableValue.of(sequenceGenerator.getLifetimeMetric().get()), Format.DURATION, null)//
-				.addTable(ObservableCollection.of(RoiCompoundSequenceElement.class, condensed),
-					table -> table.fill().fillV()//
-						.withIndexColumn("#", col -> col.withWidths(20, 30, 60))//
-						.withColumn("Upgrade", AccountUpgradeType.class, el -> el.upgrade, col -> {
-							col.decorate((cell, deco) -> {
-								Color borderColor = upgradeColors.get(cell.getCellValue());
-								if (borderColor != null) {
-									deco.withLineBorder(borderColor, 2, false);
-								}
-							});
-						})//
-						.withColumn("Level", Integer.class, el -> el.level, null)//
-						.withColumn("Planet", String.class, el -> {
-							if (el.planetIndexes == null) {
-								return "";
+				.addTable(ObservableCollection.of(RoiCompoundSequenceElement.class, condensed), table -> table.fill().fillV()//
+					.withIndexColumn("#", col -> col.withWidths(20, 30, 60))//
+					.withColumn("Upgrade", AccountUpgradeType.class, el -> el.upgrade, col -> {
+						col.decorate((cell, deco) -> {
+							Color borderColor = upgradeColors.get(cell.getCellValue());
+							if (borderColor != null) {
+								deco.withLineBorder(borderColor, 2, false);
 							}
-							StringBuilder planets = new StringBuilder();
-							for (int p = 0; p < el.planetIndexes.length; p++) {
-								if (p > 0) {
-									planets.append(' ');
-								}
-								if (el.planetIndexes[p] < planetNames.size()) {
-									planets.append(planetNames.get(el.planetIndexes[p]));
-								} else {
-									planets.append("Planet " + (el.planetIndexes[p] + 1));
-								}
+						});
+					})//
+					.withColumn("Level", Integer.class, el -> el.level, null)//
+					.withColumn("Planet", String.class, el -> {
+						if (el.planetIndexes == null) {
+							return "";
+						}
+						StringBuilder planets = new StringBuilder();
+						for (int p = 0; p < el.planetIndexes.length; p++) {
+							if (p > 0) {
+								planets.append(' ');
 							}
-							return planets.toString();
-						}, col -> col.withWidths(50, 200, 2000))//
-						.withColumn("Accumulated Time", Duration.class, el -> Duration.ofSeconds(el.time),
-							col -> col.formatText(d -> d == null ? "" : DURATION_FORMAT.print(d)))//
-			)).getWindow();
+							if (el.planetIndexes[p] < planetNames.size()) {
+								planets.append(planetNames.get(el.planetIndexes[p]));
+							} else {
+								planets.append("Planet " + (el.planetIndexes[p] + 1));
+							}
+						}
+						return planets.toString();
+					}, col -> col.withWidths(50, 200, 2000))//
+					.withColumn("Accumulated Time", Duration.class, el -> Duration.ofSeconds(el.time),
+						col -> col.formatText(d -> d == null ? "" : DURATION_FORMAT.print(d)))//
+				)).getWindow();
 		dialog.setSize(500, 700);
 		dialog.setLocationRelativeTo(this);
 		dialog.setVisible(true);
