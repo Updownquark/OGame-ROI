@@ -1250,8 +1250,6 @@ public class RoiSequenceGenerator {
 				// This can happen as things get moved around, e.g. astro getting moved ahead of an upgrade on the new planet
 				return false;
 			}
-			account.getPlanets().newValue().setMinimumTemperature(theNewPlanetTemp.get());
-			account.getPlanets().newValue().setMaximumTemperature(theNewPlanetTemp.get() + 40);
 		}
 		// if (account.roiPlanets().size() < theRules.economy().getMaxPlanets(account)) {
 		// RoiPlanet newPlanet = (RoiPlanet) account.getPlanets().newValue();

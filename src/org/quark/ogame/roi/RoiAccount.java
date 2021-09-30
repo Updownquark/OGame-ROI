@@ -916,7 +916,7 @@ public class RoiAccount implements Account {
 
 		@Override
 		public int getMinimumTemperature() {
-			return getTargetBody() != null ? getTargetBody().getMinimumTemperature() : theSequence.getNewPlanetTemp().get() - 20;
+			return getTargetBody() != null ? getTargetBody().getMinimumTemperature() : theSequence.getNewPlanetTemp().get();
 		}
 
 		@Override
@@ -926,7 +926,7 @@ public class RoiAccount implements Account {
 
 		@Override
 		public int getMaximumTemperature() {
-			return getTargetBody() != null ? getTargetBody().getMaximumTemperature() : theSequence.getNewPlanetTemp().get() + 20;
+			return getTargetBody() != null ? getTargetBody().getMaximumTemperature() : theSequence.getNewPlanetTemp().get() + 40;
 		}
 
 		@Override
