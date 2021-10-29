@@ -26,6 +26,7 @@ import org.observe.util.swing.CategoryRenderStrategy.CategoryKeyAdapter;
 import org.observe.util.swing.ModelCell;
 import org.observe.util.swing.PanelPopulation;
 import org.qommons.BiTuple;
+import org.qommons.Colors;
 import org.qommons.collect.BetterList;
 import org.qommons.io.AdjustableComponent;
 import org.qommons.io.ParsedAdjustable;
@@ -54,6 +55,28 @@ import com.google.common.reflect.TypeToken;
 
 public class PlanetTable {
 	public static final TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>> PLANET_COLUMN_TYPE;
+
+	public static final Color PERCENT0 = Colors.red;
+	public static final Color PERCENT10 = Colors.merge(Colors.red, Colors.orange, 0.33f);
+	public static final Color PERCENT20 = Colors.merge(Colors.red, Colors.orange, 0.67f);
+	public static final Color PERCENT30 = Colors.orange;
+	private static final Color DARK_YELLOW = Colors.stain(Colors.yellow, 0.4f);
+	public static final Color PERCENT40 = Colors.merge(Colors.orange, DARK_YELLOW, 0.25f);
+	public static final Color PERCENT50 = Colors.merge(Colors.orange, DARK_YELLOW, 0.5f);
+	public static final Color PERCENT60 = Colors.merge(Colors.orange, DARK_YELLOW, 0.75f);
+	public static final Color PERCENT70 = DARK_YELLOW;
+	public static final Color PERCENT80 = Colors.merge(DARK_YELLOW, Colors.black, 0.33f);
+	public static final Color PERCENT90 = Colors.merge(DARK_YELLOW, Colors.black, 0.67f);
+	public static final Color PERCENT100 = Colors.black;
+	public static final Color PERCENT110 = Colors.blueViolet;
+	public static final Color PERCENT120 = Colors.stain(Colors.cyan, 0.2f);
+	public static final Color PERCENT130 = Colors.stain(Colors.chartreuse, 0.05f);
+	public static final Color PERCENT140 = Colors.stain(Colors.deepPink, 0.2f);
+	public static final Color PERCENT150 = PERCENT100;
+	public static final List<Color> PERCENT_COLORS = Collections.unmodifiableList(Arrays.asList(//
+		PERCENT0, PERCENT10, PERCENT20, PERCENT30, PERCENT40, PERCENT50, PERCENT60, PERCENT70, PERCENT80, PERCENT90, PERCENT100, PERCENT110,
+		PERCENT120, PERCENT130, PERCENT140, PERCENT150));
+
 	private static final Map<Integer, Integer> DEFAULT_MIN_PLANET_TEMPS;
 	static {
 		PLANET_COLUMN_TYPE = new TypeToken<CategoryRenderStrategy<PlanetWithProduction, ?>>() {};
@@ -238,6 +261,14 @@ public class PlanetTable {
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> usageColumns1 = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			planetColumn("M %", int.class, p -> p.planet == null ? null : p.planet.getMetalUtilization(), Planet::setMetalUtilization, 45)
 				.withHeaderTooltip("Metal Mine Utilization").formatText(v -> v == null ? "" : v + "%")
+				.decorate((m, deco) -> {
+					if (m.getCellValue() != null) {
+						deco.withForeground(PERCENT_COLORS.get(m.getCellValue() / 10));
+						if (m.getCellValue() != 100) {
+							deco.bold();
+						}
+					}
+				})//
 				.withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
 					int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.MetalMine,
 						theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
@@ -245,6 +276,14 @@ public class PlanetTable {
 				}).clicks(1)), //
 			planetColumn("C %", int.class, p -> p.planet == null ? null : p.planet.getCrystalUtilization(), Planet::setCrystalUtilization,
 				45).withHeaderTooltip("Crystal Mine Utilization").formatText(v -> v == null ? "" : v + "%")
+					.decorate((m, deco) -> {
+						if (m.getCellValue() != null) {
+							deco.withForeground(PERCENT_COLORS.get(m.getCellValue() / 10));
+							if (m.getCellValue() != 100) {
+								deco.bold();
+							}
+						}
+					})//
 					.withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
 						int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.CrystalMine,
 							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
@@ -252,13 +291,31 @@ public class PlanetTable {
 					}).clicks(1)), //
 			planetColumn("D %", int.class, p -> p.planet == null ? null : p.planet.getDeuteriumUtilization(),
 				Planet::setDeuteriumUtilization, 45).withHeaderTooltip("Deuterium Synthesizer Utilization")
-					.formatText(v -> v == null ? "" : v + "%").withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
+					.formatText(v -> v == null ? "" : v + "%")//
+					.decorate((m, deco) -> {
+						if (m.getCellValue() != null) {
+							deco.withForeground(PERCENT_COLORS.get(m.getCellValue() / 10));
+							if (m.getCellValue() != 100) {
+								deco.bold();
+							}
+						}
+					})//
+					.withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
 						int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.DeuteriumSynthesizer,
 							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
 						return ResourceSettingsPanel.getPercentages(max);
 					}).clicks(1)), //
 			planetColumn("Cr %", int.class, p -> p.planet == null ? null : p.planet.getCrawlerUtilization(), Planet::setCrawlerUtilization,
 				45).withHeaderTooltip("Crawler Utilization").formatText(v -> v == null ? "" : v + "%")
+					.decorate((m, deco) -> {
+						if (m.getCellValue() != null) {
+							deco.withForeground(PERCENT_COLORS.get(m.getCellValue() / 10));
+							if (m.getCellValue() != theUniGui.getRules().get().economy().getMaxUtilization(//
+								Utilizable.Crawler, theUniGui.getSelectedAccount().get(), m.getModelValue().planet)) {
+								deco.bold();
+							}
+						}
+					})//
 					.withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
 						int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.Crawler,
 							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
@@ -268,15 +325,47 @@ public class PlanetTable {
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> itemColumns = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			planetColumn("M+", int.class, p -> p.planet == null ? null : p.planet.getMetalBonus(), Planet::setMetalBonus, 45)
 				.withHeaderTooltip("Metal Bonus Item").formatText(v -> v == null ? "" : v + "%")
+				.decorate((m, deco) -> {
+					if (m.getCellValue() != null) {
+						deco.withForeground(PERCENT_COLORS.get(m.getCellValue() / 10 + 10));
+						if (m.getCellValue() != 0) {
+							deco.bold();
+						}
+					}
+				})//
 				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)), //
 			planetColumn("C+", int.class, p -> p.planet == null ? null : p.planet.getCrystalBonus(), Planet::setCrystalBonus, 45)
 				.withHeaderTooltip("Crystal Bonus Item").formatText(v -> v == null ? "" : v + "%")
+				.decorate((m, deco) -> {
+					if (m.getCellValue() != null) {
+						deco.withForeground(PERCENT_COLORS.get(m.getCellValue() / 10 + 10));
+						if (m.getCellValue() != 0) {
+							deco.bold();
+						}
+					}
+				})//
 				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)), //
 			planetColumn("D+", int.class, p -> p.planet == null ? null : p.planet.getDeuteriumBonus(), Planet::setDeuteriumBonus, 45)
 				.withHeaderTooltip("Deuterium Bonus Item").formatText(v -> v == null ? "" : v + "%")
+				.decorate((m, deco) -> {
+					if (m.getCellValue() != null) {
+						deco.withForeground(PERCENT_COLORS.get(m.getCellValue() / 10 + 10));
+						if (m.getCellValue() != 0) {
+							deco.bold();
+						}
+					}
+				})//
 				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)), //
 			planetColumn("E+", int.class, p -> p.planet == null ? null : p.planet.getEnergyBonus(), Planet::setEnergyBonus, 45)
 				.withHeaderTooltip("Energy Bonus Item").formatText(v -> v == null ? "" : v + "%")
+				.decorate((m, deco) -> {
+					if (m.getCellValue() != null) {
+						deco.withForeground(PERCENT_COLORS.get(m.getCellValue() / 10 + 10));
+						if (m.getCellValue() != 0) {
+							deco.bold();
+						}
+					}
+				})//
 				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)) //
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> energyBldgs = ObservableCollection.of(PLANET_COLUMN_TYPE,
@@ -318,6 +407,14 @@ public class PlanetTable {
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> usageColumns2 = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			planetColumn("Solar %", int.class, p -> p.planet == null ? null : p.planet.getSolarPlantUtilization(),
 				Planet::setSolarPlantUtilization, 55).withHeaderTooltip("Solar Plant Utilization").formatText(v -> v == null ? "" : v + "%")
+					.decorate((m, deco) -> {
+						if (m.getCellValue() != null) {
+							deco.withForeground(PERCENT_COLORS.get(m.getCellValue() / 10));
+							if (m.getCellValue() != 100) {
+								deco.bold();
+							}
+						}
+					})//
 					.withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
 						int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.SolarPlant,
 							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
@@ -325,19 +422,43 @@ public class PlanetTable {
 					}).clicks(1)), //
 			planetColumn("Sat %", int.class, p -> p.planet == null ? null : p.planet.getSolarSatelliteUtilization(),
 				Planet::setSolarSatelliteUtilization, 45).withHeaderTooltip("Solar Satellite Utilization")
-					.formatText(v -> v == null ? "" : v + "%").withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
+					.formatText(v -> v == null ? "" : v + "%")//
+					.decorate((m, deco) -> {
+						if (m.getCellValue() != null) {
+							deco.withForeground(PERCENT_COLORS.get(m.getCellValue() / 10));
+							if (m.getCellValue() != 100) {
+								deco.bold();
+							}
+						}
+					})//
+					.withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
 						int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.SolarSatellite,
 							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
 						return ResourceSettingsPanel.getPercentages(max);
 					}).clicks(1)), //
 			planetColumn("FZN %", int.class, p -> p.planet == null ? null : p.planet.getFusionReactorUtilization(),
 				Planet::setFusionReactorUtilization, 45).withHeaderTooltip("Fusion Reactor Utilization")
-					.formatText(v -> v == null ? "" : v + "%").withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
+					.formatText(v -> v == null ? "" : v + "%")//
+					.decorate((m, deco) -> {
+						if (m.getCellValue() != null) {
+							deco.withForeground(PERCENT_COLORS.get(m.getCellValue() / 10));
+							if (m.getCellValue() != 100) {
+								deco.bold();
+							}
+						}
+					})//
+					.withMutation(m -> m.asCombo(v -> v + "%", (cell, until) -> {
 						int max = theUniGui.getRules().get().economy().getMaxUtilization(Utilizable.FusionReactor,
 							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
 						return ResourceSettingsPanel.getPercentages(max);
 					}).clicks(1)), //
-			planetColumn("Net Enrgy", int.class, p -> p.planet == null ? null : p.getEnergy().totalNet, null, 65)
+			planetColumn("Net Enrgy", int.class, p -> p.planet == null ? null : p.getEnergy().totalNet, null, 65)//
+				.decorate((m, deco) -> {
+					if (m.getCellValue() == null || m.getCellValue() >= 0) {
+						return;
+					}
+					deco.bold().withForeground(Colors.red);
+				})//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> storageColumns = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			intPlanetColumn("M Stor", AccountUpgradeType.MetalStorage, 45), //
