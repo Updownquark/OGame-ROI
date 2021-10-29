@@ -1316,6 +1316,7 @@ public class OGameUniGui extends JPanel {
 				}
 				return ProductionUpgradeType.None;
 			case Energy:
+			case Plasma:
 				return ProductionUpgradeType.Global;
 			default:
 				return ProductionUpgradeType.None;
