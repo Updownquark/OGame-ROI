@@ -14,6 +14,7 @@ import org.observe.util.TypeTokens;
 import org.observe.util.swing.CategoryRenderStrategy;
 import org.observe.util.swing.ObservableSwingUtils;
 import org.observe.util.swing.PanelPopulation.PanelPopulator;
+import org.qommons.StringUtils;
 import org.qommons.TimeUtils;
 import org.qommons.io.SpinnerFormat;
 import org.quark.ogame.OGameUtils;
@@ -162,6 +163,9 @@ public class ResourceSettingsPanel extends JPanel {
 		if (time.type == null) {
 			return "";
 		}
+		if (Math.abs(production) < 1E6) {
+			printInt((int) Math.round(production));
+		}
 		switch (time.type) {
 		case Year:
 			production *= TimeUtils.getDaysInYears(1) * 24;
@@ -180,6 +184,45 @@ public class ResourceSettingsPanel extends JPanel {
 		}
 		return OGameUtils.printResourceAmount(production);
 	}
+
+	private static String printInt(int i) {
+		StringBuilder str = new StringBuilder();
+		if (i < 0) {
+			str.append('-');
+			i = -i;
+		}
+		boolean printed = false;
+		if (i >= 1_000_000_000) {
+			str.append(i / 1_000_000_000).append(',');
+			i /= 1_000;
+			printed = true;
+		}
+		if (printed || i >= 1_000_000) {
+			if (printed) {
+				StringUtils.printInt(i / 1_000_000, 3, str).append(',');
+			} else {
+				str.append(i / 1_000_000).append(',');
+			}
+			i /= 1_000;
+			printed = true;
+		}
+		if (printed || i >= 1_000) {
+			if (printed) {
+				StringUtils.printInt(i / 1_000, 3, str).append(',');
+			} else {
+				str.append(i / 1_000).append(',');
+			}
+			i /= 1_000;
+			printed = true;
+		}
+		if (printed) {
+			StringUtils.printInt(i, 3, str);
+		} else {
+			str.append(i);
+		}
+		return str.toString();
+	}
+
 
 	int getCargoes(PlanetWithProduction planet, boolean subtractCargoCost, ProductionDisplayType time) {
 		double production = planet.getMetal().totalNet * 1.0 + planet.getCrystal().totalNet + planet.getDeuterium().totalNet;
@@ -370,37 +413,37 @@ public class ResourceSettingsPanel extends JPanel {
 		}
 		switch (row) {
 		case Basic:
-			return printProduction(p.byType.getOrDefault(ProductionSource.Base, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.Base, 0));
 		case Metal:
-			return printProduction(p.byType.getOrDefault(ProductionSource.MetalMine, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.MetalMine, 0));
 		case Crystal:
-			return printProduction(p.byType.getOrDefault(ProductionSource.CrystalMine, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.CrystalMine, 0));
 		case Deut:
-			return printProduction(p.byType.getOrDefault(ProductionSource.DeuteriumSynthesizer, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.DeuteriumSynthesizer, 0));
 		case Solar:
-			return printProduction(p.byType.getOrDefault(ProductionSource.Solar, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.Solar, 0));
 		case Fusion:
-			return printProduction(p.byType.getOrDefault(ProductionSource.Fusion, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.Fusion, 0));
 		case Satellite:
-			return printProduction(p.byType.getOrDefault(ProductionSource.Satellite, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.Satellite, 0));
 		case Crawler:
-			return printProduction(p.byType.getOrDefault(ProductionSource.Crawler, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.Crawler, 0));
 		case SlotBonus:
-			return printProduction(p.byType.getOrDefault(ProductionSource.Slot, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.Slot, 0));
 		case Plasma:
-			return printProduction(p.byType.getOrDefault(ProductionSource.Plasma, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.Plasma, 0));
 		case Items:
-			return printProduction(p.byType.getOrDefault(ProductionSource.Item, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.Item, 0));
 		case Geologist:
-			return printProduction(p.byType.getOrDefault(ProductionSource.Geologist, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.Geologist, 0));
 		case Engineer:
-			return printProduction(p.byType.getOrDefault(ProductionSource.Engineer, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.Engineer, 0));
 		case CommandingStaff:
-			return printProduction(p.byType.getOrDefault(ProductionSource.CommandingStaff, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.CommandingStaff, 0));
 		case Collector:
-			return printProduction(p.byType.getOrDefault(ProductionSource.Collector, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.Collector, 0));
 		case Trader:
-			return printProduction(p.byType.getOrDefault(ProductionSource.Trader, 0), ProductionDisplayType.Hourly);
+			return printInt(p.byType.getOrDefault(ProductionSource.Trader, 0));
 		case Storage:
 			if (resource == ResourceType.Energy) {
 				return "0";
