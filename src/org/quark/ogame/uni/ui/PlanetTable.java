@@ -240,7 +240,7 @@ public class PlanetTable {
 								upgrade(p.upgradePlanet, upgrade.getUpgrade());
 							}
 						}
-					}))//
+					}).editableIf((pwp, u) -> pwp.planet != null))//
 		);
 
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mineColumns = ObservableCollection.of(PLANET_COLUMN_TYPE,
@@ -491,7 +491,7 @@ public class PlanetTable {
 									pwp.planet.setMaximumTemperature(temp + 40);
 								}
 							}
-						});
+						}).editableIf((pwp, u) -> pwp.planet != null);
 					}));
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonBuildings = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			new CategoryRenderStrategy<PlanetWithProduction, Object>("Upgrd", TypeTokens.get().OBJECT,
@@ -515,7 +515,7 @@ public class PlanetTable {
 								upgrade(p.upgradePlanet.getMoon(), upgrade.getUpgrade());
 							}
 						}
-					})), //
+					}).editableIf((pwp, u) -> pwp.planet != null)), //
 			intMoonColumn("Lunar Base", AccountUpgradeType.LunarBase, 60), //
 			intMoonColumn("Robotics", AccountUpgradeType.RoboticsFactory, 55), //
 			intMoonColumn("Phalanx", AccountUpgradeType.SensorPhalanx, 55), //

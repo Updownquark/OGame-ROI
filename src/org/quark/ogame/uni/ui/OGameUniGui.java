@@ -174,13 +174,13 @@ public class OGameUniGui extends JPanel {
 			.transform(TypeTokens.get().of(PlanetWithProduction.class),
 				tx -> tx.cache(true).reEvalOnUpdate(false).map(LambdaUtils.printableFn(this::productionFor, "production", null)))//
 			.collect();
-		thePlanets = planets.flow().refresh(theUpgradeRefresh).collect();
+		thePlanets = planets.flow().refresh(theUpgradeRefresh).filterMod(fm -> fm.noAdd("Can't add this way")).collect();
 		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).withDescription("selected-planet").build();
 
 		PlanetWithProduction total = new PlanetWithProduction(null, null)//
 			.setProduction(ZERO, ZERO, ZERO, ZERO).setUpgradeProduction(ZERO, ZERO, ZERO, ZERO);
 		theTotalProduction = ObservableCollection.build(PlanetWithProduction.class).safe(false).withDescription("total-planet-production")
-			.build().with(total);
+			.build().with(total).flow().unmodifiable(true).collectPassive();
 		thePlanetsWithTotal = ObservableCollection.flattenCollections(TypeTokens.get().of(PlanetWithProduction.class), //
 			getPlanets(), theTotalProduction).collect();
 		// theSelectedAccount.noInitChanges().act(evt -> { // DEBUG
@@ -219,11 +219,17 @@ public class OGameUniGui extends JPanel {
 				for (PlanetWithProduction p : evt.getOldValues()) {
 					if (p.planet.getAccount() == current) {
 						// Remove planet-specific upgrades to avoid orphaning them
-						for (CollectionElement<PlannedUpgrade> upgrade : current.getPlannedUpgrades().getValues().elements()) {
-							if (upgrade.get().getPlanet() == p.planet.getId()) {
-								current.getPlannedUpgrades().getValues().mutableElement(upgrade.getElementId()).remove();
+						EventQueue.invokeLater(() -> {
+							// Don't do it if it's a move
+							if (current.getPlanets().getValues().contains(p.planet)) {
+								return;
 							}
-						}
+							for (CollectionElement<PlannedUpgrade> upgrade : current.getPlannedUpgrades().getValues().elements()) {
+								if (upgrade.get().getPlanet() == p.planet.getId()) {
+									current.getPlannedUpgrades().getValues().mutableElement(upgrade.getElementId()).remove();
+								}
+							}
+						});
 					}
 				}
 				break;
