@@ -194,7 +194,7 @@ public class ResourceSettingsPanel extends JPanel {
 		boolean printed = false;
 		if (i >= 1_000_000_000) {
 			str.append(i / 1_000_000_000).append(',');
-			i /= 1_000;
+			i %= 1_000;
 			printed = true;
 		}
 		if (printed || i >= 1_000_000) {
@@ -203,7 +203,7 @@ public class ResourceSettingsPanel extends JPanel {
 			} else {
 				str.append(i / 1_000_000).append(',');
 			}
-			i /= 1_000;
+			i %= 1_000;
 			printed = true;
 		}
 		if (printed || i >= 1_000) {
@@ -212,7 +212,7 @@ public class ResourceSettingsPanel extends JPanel {
 			} else {
 				str.append(i / 1_000).append(',');
 			}
-			i /= 1_000;
+			i %= 1_000;
 			printed = true;
 		}
 		if (printed) {

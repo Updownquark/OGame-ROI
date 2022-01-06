@@ -267,7 +267,7 @@ public class UpgradePanel extends JPanel {
 				.withColumn("Value", String.class,
 					upgrade -> upgrade.getCost() == null ? ""
 						: OGameUtils.printResourceAmount(
-							upgrade.getCost().getMetalValue(theUniGui.getSelectedAccount().get().getUniverse().getTradeRatios())),
+							upgrade.getCost().getMetalValue(theUniGui.getCurrentTradeRatio())),
 					valueCol -> valueCol.decorate((cell, d) -> {
 						if (cell.getModelValue().getUpgrade() == null) {
 							d.bold();

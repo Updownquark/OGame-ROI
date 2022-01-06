@@ -247,7 +247,7 @@ public class OGameFleet710 implements FleetRules {
 	@Override
 	public int getCargoSpace(ShipyardItemType type, Account account) {
 		ShipInfo info = theShipInfo.get(type);
-		if (info == null) {
+		if (account == null || info == null) {
 			return 0;
 		}
 		double bonus = 0;

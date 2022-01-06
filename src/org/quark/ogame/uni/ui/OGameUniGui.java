@@ -290,6 +290,14 @@ public class OGameUniGui extends JPanel {
 		return theSelectedRuleSet;
 	}
 
+	public TradeRatios getCurrentTradeRatio() {
+		Account account = theSelectedAccount.get();
+		if (account == null) {
+			return TradeRatios.DEFAULT;
+		}
+		return account.getUniverse().getTradeRatios();
+	}
+
 	public SettableValue<Account> getSelectedAccount() {
 		return theSelectedAccount;
 	}
