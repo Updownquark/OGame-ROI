@@ -45,8 +45,8 @@ public class FlightPanel {
 
 	public FlightPanel(OGameUniGui uniGui) {
 		theUniGui = uniGui;
-		theSelectedFlight = SettableValue.build(PlannedFlight.class).safe(false).build();
-		theShipAmounts = ObservableSortedSet.build(ShipAmount.class, (sa1, sa2) -> sa1.type.compareTo(sa2.type)).safe(false).build();
+		theSelectedFlight = SettableValue.build(PlannedFlight.class).build();
+		theShipAmounts = ObservableSortedSet.build(ShipAmount.class, (sa1, sa2) -> sa1.type.compareTo(sa2.type)).build();
 
 		boolean[] shipAmountChanging = new boolean[1];
 		theSelectedFlight.changes().act(evt -> {
@@ -106,7 +106,7 @@ public class FlightPanel {
 			.of(TypeTokens.get().of(ShipyardItemType.class), //
 				Arrays.stream(ShipyardItemType.values()).filter(type -> type.mobile).collect(Collectors.toList()))//
 			.flow().whereContained(theShipAmounts.flow().map(TypeTokens.get().of(ShipyardItemType.class), sa -> sa.type), false).collect();
-		theShipsToAdd = SettableValue.build(ShipyardItemType.class).safe(false).build();
+		theShipsToAdd = SettableValue.build(ShipyardItemType.class).build();
 		theShipsToAdd.changes().act(evt -> {
 			if (evt.getNewValue() == null) {
 				return;

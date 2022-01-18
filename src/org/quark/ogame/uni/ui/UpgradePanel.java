@@ -94,7 +94,7 @@ public class UpgradePanel extends JPanel {
 	}
 
 	public void addPanel(PanelPopulator<?, ?> panel) {
-		SettableValue<TableContentControl> uiFilter = SettableValue.build(TableContentControl.class).safe(false)
+		SettableValue<TableContentControl> uiFilter = SettableValue.build(TableContentControl.class)
 			.withValue(TableContentControl.DEFAULT).build();
 		ObservableValue<TableContentControl> tableFilter = uiFilter.map(filter -> {
 			if (filter == null || filter == TableContentControl.DEFAULT) {
@@ -127,9 +127,9 @@ public class UpgradePanel extends JPanel {
 			}
 		};
 
-		ObservableCollection<PlannedAccountUpgrade> selectedUpgrades = ObservableCollection.build(PlannedAccountUpgrade.class).safe(false)
+		ObservableCollection<PlannedAccountUpgrade> selectedUpgrades = ObservableCollection.build(PlannedAccountUpgrade.class)
 			.build();
-		SettableValue<PlannedAccountUpgrade> selectedTotalUpgradeV = SettableValue.build(PlannedAccountUpgrade.class).safe(false).build();
+		SettableValue<PlannedAccountUpgrade> selectedTotalUpgradeV = SettableValue.build(PlannedAccountUpgrade.class).build();
 		TypeToken<PlannedAccountUpgrade> upgradeType = TypeTokens.get().of(PlannedAccountUpgrade.class);
 		boolean[] planetCallbackLock = new boolean[1];
 		ObservableCollection<PlannedAccountUpgrade> totalUpgrades = ObservableCollection.flattenCollections(upgradeType,
@@ -154,7 +154,7 @@ public class UpgradePanel extends JPanel {
 			theUniGui.getUpgrades().flow().refresh(theUniGui.getSelectedPlanet().noInitChanges()).collect(), //
 			totalUpgrades).collect();
 
-		SettableValue<PlannedAccountUpgrade> selection = SettableValue.build(PlannedAccountUpgrade.class).safe(false).build();
+		SettableValue<PlannedAccountUpgrade> selection = SettableValue.build(PlannedAccountUpgrade.class).build();
 		CausableKey key = Causable.key((cause, values) -> {
 			PlannedAccountUpgrade upgrade = selection.get();
 			if (planetCallbackLock[0] || upgrade == null || upgrade.getPlanet() == null) {
@@ -533,7 +533,7 @@ public class UpgradePanel extends JPanel {
 	private void genRoiSequence(Account account, RoiSequenceGenerator sequenceGenerator) {
 		Format<Double> dblFormat = Format.doubleFormat(3).build();
 		ObservableCollection<RoiSequenceCoreElement> sequence = ObservableCollection.build(RoiSequenceCoreElement.class).build(); // Safe
-		SettableValue<RoiSequenceCoreElement> selected = SettableValue.build(RoiSequenceCoreElement.class).safe(false).build();
+		SettableValue<RoiSequenceCoreElement> selected = SettableValue.build(RoiSequenceCoreElement.class).build();
 		JDialog dialog = WindowPopulation
 			.populateDialog(new JDialog(SwingUtilities.getWindowAncestor(this), "ROI Sequence", ModalityType.MODELESS), //
 				Observable.empty(), true)//
@@ -618,7 +618,7 @@ public class UpgradePanel extends JPanel {
 		ObservableCollection<RoiSequenceCoreElement> sequence, SettableValue<RoiSequenceCoreElement> selected) {
 		RoiAccount roiAccount = new RoiAccount(generator, account);
 		Map<AccountUpgradeType, Upgrade> upgrades = new HashMap<>();
-		ObservableCollection<UpgradeDependency> dependencies = ObservableCollection.build(UpgradeDependency.class).safe(false).build();
+		ObservableCollection<UpgradeDependency> dependencies = ObservableCollection.build(UpgradeDependency.class).build();
 		TimeUtils.RelativeTimeFormat timeFormat = TimeUtils.relativeFormat().withWeeks().abbreviated(true, false).withMaxElements(3)
 			.withMaxPrecision(DurationComponentType.Second);
 		selected.changes().act(evt -> {
@@ -673,7 +673,7 @@ public class UpgradePanel extends JPanel {
 						col -> col.withWidths(50, 100, 150).formatText(p -> OGameUtils.printResourceAmount(p)))//
 				;
 			}));
-		SettableValue<RoiPlanet> selectedPlanet = SettableValue.build(RoiPlanet.class).safe(false).build();
+		SettableValue<RoiPlanet> selectedPlanet = SettableValue.build(RoiPlanet.class).build();
 		selected.noInitChanges().act(evt -> {
 			if (evt.getNewValue() == null || evt.getOldValue() == evt.getNewValue()) {
 				return;
@@ -714,7 +714,7 @@ public class UpgradePanel extends JPanel {
 				;
 			}));
 
-		SettableValue<AccountUpgradeType> selectedHypoUpgrade = SettableValue.build(AccountUpgradeType.class).safe(false).build();
+		SettableValue<AccountUpgradeType> selectedHypoUpgrade = SettableValue.build(AccountUpgradeType.class).build();
 		editor.addCollapsePanel(true, new JustifiedBoxLayout(true), cp -> cp.fill()//
 			.withHeader(header -> header.addLabel(null, "Account Upgrades", lbl -> lbl.decorate(deco -> deco.bold().withFontSize(14))))//
 			.addTable(ObservableCollection.of(AccountUpgradeType.class, AccountUpgradeType.Astrophysics, AccountUpgradeType.Plasma).flow()
@@ -837,7 +837,7 @@ public class UpgradePanel extends JPanel {
 						;
 					});
 			}));
-		ObservableCollection<UpgradeDependency> hypoDependencies = ObservableCollection.build(UpgradeDependency.class).safe(false).build();
+		ObservableCollection<UpgradeDependency> hypoDependencies = ObservableCollection.build(UpgradeDependency.class).build();
 		selectedHypoUpgrade.refresh(selectedPlanet.noInitChanges()).changes().act(evt -> {
 			hypoDependencies.clear();
 			if (evt.getNewValue() == null) {

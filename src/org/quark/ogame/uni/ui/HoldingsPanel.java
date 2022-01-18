@@ -202,7 +202,7 @@ public class HoldingsPanel {
 				return needed * 3600 / production; // seconds
 			}
 		};
-		ObservableCollection<Holding> synthHoldings = ObservableCollection.build(TypeTokens.get().of(Holding.class)).safe(false).build()
+		ObservableCollection<Holding> synthHoldings = ObservableCollection.build(TypeTokens.get().of(Holding.class)).build()
 			.with(theTotalHolding, theProductionTimeHolding, theUpgradeTimeHolding);
 		ElementId totalId = synthHoldings.getElement(0).getElementId();
 		ElementId productionId = synthHoldings.getElement(1).getElementId();
@@ -430,7 +430,7 @@ public class HoldingsPanel {
 				return needed * 3600 / production; // seconds
 			}
 		};
-		ObservableCollection<Trade> synthTrades = ObservableCollection.build(TypeTokens.get().of(Trade.class)).safe(false).build()
+		ObservableCollection<Trade> synthTrades = ObservableCollection.build(TypeTokens.get().of(Trade.class)).build()
 			.with(theTotalTrade, theUpgradeTimeTrade, theTradesNeeded, theTotalTradesUpgradeTime);
 		ElementId totalTradeId = synthTrades.getElement(0).getElementId();
 		ElementId upgradeTimeTradeId = synthTrades.getElement(1).getElementId();
@@ -460,7 +460,7 @@ public class HoldingsPanel {
 	}
 
 	public void addPanel(PanelPopulator<?, ?> panel) {
-		ObservableCollection<Object> holdingTypes = ObservableCollection.build(TypeTokens.get().OBJECT).safe(false).build();
+		ObservableCollection<Object> holdingTypes = ObservableCollection.build(TypeTokens.get().OBJECT).build();
 		holdingTypes.add("None");
 		for (AccountUpgradeType type : AccountUpgradeType.values()) {
 			switch (type.type) {

@@ -119,8 +119,8 @@ public class PlanetTable {
 	public void addPlanetTable(PanelPopulation.PanelPopulator<?, ?> panel) {
 		ObservableCollection<Integer> itemOptions = ObservableCollection.of(TypeTokens.get().INT, 40, 30, 20, 10, 0);
 
-		ObservableCollection<Object> planetUpgrades = ObservableCollection.build(Object.class).safe(false).build();
-		ObservableCollection<Object> moonUpgrades = ObservableCollection.build(Object.class).safe(false).build();
+		ObservableCollection<Object> planetUpgrades = ObservableCollection.build(Object.class).build();
+		ObservableCollection<Object> moonUpgrades = ObservableCollection.build(Object.class).build();
 		planetUpgrades.add("None");
 		moonUpgrades.add("None");
 		for (BuildingType b : BuildingType.values()) {
@@ -156,7 +156,7 @@ public class PlanetTable {
 			}
 		});
 
-		ObservableCollection<Object> researchUpgrades = ObservableCollection.build(Object.class).safe(false).build();
+		ObservableCollection<Object> researchUpgrades = ObservableCollection.build(Object.class).build();
 		researchUpgrades.add("None");
 		for (ResearchType r : ResearchType.values()) {
 			researchUpgrades.add(r);

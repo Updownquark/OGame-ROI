@@ -36,7 +36,7 @@ public class ProductionPanel extends JPanel {
 			.withFormat(ObservableConfigFormat.enumFormat(ProductionDisplayType.class, () -> ProductionDisplayType.Hourly))
 			.buildValue(null);
 		// Not persisted, always start on the actual planets production
-		showGoalProduction = SettableValue.build(boolean.class).safe(false).withValue(false).build();
+		showGoalProduction = SettableValue.build(boolean.class).withValue(false).build();
 	}
 
 	public void addPanel(PanelPopulator<?, ?> panel) {

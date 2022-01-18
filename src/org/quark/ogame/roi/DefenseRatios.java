@@ -16,12 +16,12 @@ public class DefenseRatios {
 	private final SettableValue<Integer> thePlasmaTurrets;
 
 	public DefenseRatios() {
-		theRocketLaunchers = SettableValue.build(int.class).withValue(0).safe(false).build();
-		theLightLasers = SettableValue.build(int.class).withValue(0).safe(false).build();
-		theHeavyLasers = SettableValue.build(int.class).withValue(0).safe(false).build();
-		theGaussCannons = SettableValue.build(int.class).withValue(0).safe(false).build();
-		theIonCannons = SettableValue.build(int.class).withValue(0).safe(false).build();
-		thePlasmaTurrets = SettableValue.build(int.class).withValue(0).safe(false).build();
+		theRocketLaunchers = SettableValue.build(int.class).withValue(0).build();
+		theLightLasers = SettableValue.build(int.class).withValue(0).build();
+		theHeavyLasers = SettableValue.build(int.class).withValue(0).build();
+		theGaussCannons = SettableValue.build(int.class).withValue(0).build();
+		theIonCannons = SettableValue.build(int.class).withValue(0).build();
+		thePlasmaTurrets = SettableValue.build(int.class).withValue(0).build();
 	}
 
 	public SettableValue<Integer> getRocketLaunchers() {

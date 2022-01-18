@@ -86,27 +86,28 @@ public class RoiSequenceGenerator {
 		theRules = rules;
 		theAccount = account;
 		StampedLockingStrategy locker = new StampedLockingStrategy(this);
-		isActive = SettableValue.build(boolean.class).withValue(false).withLock(locker).build();
+		isActive = SettableValue.build(boolean.class).withValue(false).withLocking(locker).build();
 		ObservableValue<String> disabled = isActive.map(active -> active ? "Sequence is already being calculated" : null);
 
-		theNewPlanetSlot = SettableValue.build(int.class).withValue(8).withLock(locker).build().disableWith(disabled);
-		theNewPlanetFields = SettableValue.build(int.class).withValue(200).withLock(locker).build().disableWith(disabled);
-		theNewPlanetTemp = SettableValue.build(int.class).withValue(30).withLock(locker).build().disableWith(disabled);
+		theNewPlanetSlot = SettableValue.build(int.class).withValue(8).withLocking(locker).build().disableWith(disabled);
+		theNewPlanetFields = SettableValue.build(int.class).withValue(200).withLocking(locker).build().disableWith(disabled);
+		theNewPlanetTemp = SettableValue.build(int.class).withValue(30).withLocking(locker).build().disableWith(disabled);
 		theTargetPlanet = SettableValue.build(int.class)//
 			.withValue(Math.max(15, account.getPlanets().getValues().size() + 2))//
-			.withLock(locker).build().disableWith(disabled);
-		theEnergyType = SettableValue.build(ProductionSource.class).withValue(ProductionSource.Satellite).withLock(locker).build()
+			.withLocking(locker).build().disableWith(disabled);
+		theEnergyType = SettableValue.build(ProductionSource.class).withValue(ProductionSource.Satellite).withLocking(locker).build()
 			.disableWith(disabled);
-		theTemplateMoon = SettableValue.build(Moon.class).withLock(locker).build().disableWith(disabled);
-		theStorageContainment = SettableValue.build(Duration.class).withValue(Duration.ZERO).withLock(locker).build().disableWith(disabled);
-		theDefense = SettableValue.build(Duration.class).withValue(Duration.ZERO).withLock(locker).build().disableWith(disabled);
+		theTemplateMoon = SettableValue.build(Moon.class).withLocking(locker).build().disableWith(disabled);
+		theStorageContainment = SettableValue.build(Duration.class).withValue(Duration.ZERO).withLocking(locker).build()
+			.disableWith(disabled);
+		theDefense = SettableValue.build(Duration.class).withValue(Duration.ZERO).withLocking(locker).build().disableWith(disabled);
 		theDefenseRatio = new DefenseRatios();
-		isWithHoldingCargoes = SettableValue.build(boolean.class).withValue(false).withLock(locker).build().disableWith(disabled);
-		isWithHarvestingCargoes = SettableValue.build(boolean.class).withValue(false).withLock(locker).build().disableWith(disabled);
+		isWithHoldingCargoes = SettableValue.build(boolean.class).withValue(false).withLocking(locker).build().disableWith(disabled);
+		isWithHarvestingCargoes = SettableValue.build(boolean.class).withValue(false).withLocking(locker).build().disableWith(disabled);
 
-		theStatus = SettableValue.build(String.class).withLock(locker).build();
-		theProgress = SettableValue.build(Integer.class).withLock(locker).build();
-		theLifetimeMetric = SettableValue.build(Duration.class).withLock(locker).build();
+		theStatus = SettableValue.build(String.class).withLocking(locker).build();
+		theProgress = SettableValue.build(Integer.class).withLocking(locker).build();
+		theLifetimeMetric = SettableValue.build(Duration.class).withLocking(locker).build();
 	}
 
 	public OGameRuleSet getRules() {
@@ -320,7 +321,7 @@ public class RoiSequenceGenerator {
 				});
 			Mutation original = new Mutation(seqArray, lifetimeMetric);
 			BetterTreeSet<Mutation> sortedMutations = BetterTreeSet
-				.<Mutation> buildTreeSet((m1, m2) -> Long.compare(m1.lifetimeMetric, m2.lifetimeMetric)).safe(false).build();
+				.<Mutation> buildTreeSet((m1, m2) -> Long.compare(m1.lifetimeMetric, m2.lifetimeMetric)).build();
 			sortedMutations.add(original);
 			int mutationCount = 100;
 			for (int i = 1; i < mutationCount; i++) {

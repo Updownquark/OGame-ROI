@@ -137,8 +137,8 @@ public class OGameUniGui extends JPanel {
 				return a == null ? null : new UpgradeAccount(a);
 			}, "UpgradeAccount::new", null), opts -> opts.cache(true).reEvalOnUpdate(false).fireIfUnchanged(true));
 
-		thePlanetRefresh = SimpleObservable.build().safe(false).withDescription("planet-refresh").build();
-		theUpgradeRefresh = SimpleObservable.build().safe(false).withDescription("upgrade-refresh").build();
+		thePlanetRefresh = SimpleObservable.build().withDescription("planet-refresh").build();
+		theUpgradeRefresh = SimpleObservable.build().withDescription("upgrade-refresh").build();
 		theSelectedAccount = selectedAccount.refresh(theUpgradeRefresh);
 		theUpgradeAccount = upgradeAccount.refresh(theUpgradeRefresh);
 
@@ -175,11 +175,11 @@ public class OGameUniGui extends JPanel {
 				tx -> tx.cache(true).reEvalOnUpdate(false).map(LambdaUtils.printableFn(this::productionFor, "production", null)))//
 			.collect();
 		thePlanets = planets.flow().refresh(theUpgradeRefresh).filterMod(fm -> fm.noAdd("Can't add this way")).collect();
-		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).safe(false).withDescription("selected-planet").build();
+		theSelectedPlanet = SettableValue.build(PlanetWithProduction.class).withDescription("selected-planet").build();
 
 		PlanetWithProduction total = new PlanetWithProduction(null, null)//
 			.setProduction(ZERO, ZERO, ZERO, ZERO).setUpgradeProduction(ZERO, ZERO, ZERO, ZERO);
-		theTotalProduction = ObservableCollection.build(PlanetWithProduction.class).safe(false).withDescription("total-planet-production")
+		theTotalProduction = ObservableCollection.build(PlanetWithProduction.class).withDescription("total-planet-production")
 			.build().with(total).flow().unmodifiable(true).collectPassive();
 		thePlanetsWithTotal = ObservableCollection.flattenCollections(TypeTokens.get().of(PlanetWithProduction.class), //
 			getPlanets(), theTotalProduction).collect();
@@ -269,8 +269,8 @@ public class OGameUniGui extends JPanel {
 		refreshProduction();
 		doPlanningLater();
 
-		thePlanetEmpireFile = SettableValue.build(File.class).safe(false).build();
-		theMoonEmpireFile = SettableValue.build(File.class).safe(false).build();
+		thePlanetEmpireFile = SettableValue.build(File.class).build();
+		theMoonEmpireFile = SettableValue.build(File.class).build();
 
 		thePlanetPanel = new PlanetTable(this);
 		theProductionPanel = new ProductionPanel(this);

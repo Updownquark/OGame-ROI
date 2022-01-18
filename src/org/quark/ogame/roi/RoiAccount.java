@@ -387,7 +387,7 @@ public class RoiAccount implements Account {
 
 		public RoiValueSet(Class<E> type, Function<Integer, E> creator) {
 			theType = ConfiguredValueType.empty(TypeTokens.get().of(type));
-			theValues = ObservableCollection.build(theType.getType()).safe(false).build();
+			theValues = ObservableCollection.build(theType.getType()).build();
 			theCreator = creator;
 		}
 
