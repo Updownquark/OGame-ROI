@@ -18,6 +18,7 @@ import org.observe.SettableValue;
 import org.qommons.ArrayUtils;
 import org.qommons.IntList;
 import org.qommons.QommonsUtils;
+import org.qommons.ThreadConstraint;
 import org.qommons.Transaction;
 import org.qommons.collect.BetterList;
 import org.qommons.collect.CollectionUtils;
@@ -52,7 +53,7 @@ public class RoiSequenceGenerator {
 	private static final boolean SUPER_OPTIMIZATION = false;
 
 	static {
-		BetterList<AccountUpgradeType> upgrades = new BetterTreeList<>(false);
+		BetterList<AccountUpgradeType> upgrades = BetterTreeList.<AccountUpgradeType> build().build();
 		upgrades.with(//
 			AccountUpgradeType.MetalMine, AccountUpgradeType.CrystalMine, AccountUpgradeType.DeuteriumSynthesizer, //
 			AccountUpgradeType.Astrophysics, AccountUpgradeType.Plasma);
@@ -85,7 +86,7 @@ public class RoiSequenceGenerator {
 	public RoiSequenceGenerator(OGameRuleSet rules, Account account) {
 		theRules = rules;
 		theAccount = account;
-		StampedLockingStrategy locker = new StampedLockingStrategy(this);
+		StampedLockingStrategy locker = new StampedLockingStrategy(this, ThreadConstraint.EDT);
 		isActive = SettableValue.build(boolean.class).withValue(false).withLocking(locker).build();
 		ObservableValue<String> disabled = isActive.map(active -> active ? "Sequence is already being calculated" : null);
 

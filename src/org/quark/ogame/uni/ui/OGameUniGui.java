@@ -1084,54 +1084,56 @@ public class OGameUniGui extends JPanel {
 		List<OGameRuleSet> ruleSets = new ArrayList<>();
 		ruleSets.addAll(Arrays.asList(//
 			new OGameRuleSet710(), new OGameRuleSet711(), new OGameRuleSet750(), new OGameRuleSet800pl7()));
-		ObservableUiBuilder builder = ObservableSwingUtils.buildUI()//
-			.systemLandF()//
-			.withOldConfig("ogame-config").withOldConfig("OGameUI")//
-			.withConfig("occountant")//
-			.withTitle("OCcountant")//
-			.withIcon(OGameUniGui.class, "/icons/HeldPlanet.png")//
-			.enableCloseWithoutSave()//
-			.withErrorReporting("https://github.com/Updownquark/OGame-ROI/issues/new", (str, error) -> {
-				if (error) {
-					str.append("<ol><li>Describe your issue, what you did to produce it, what effects it had, etc.</li>");
-				} else {
-					str.append("<ol><li>Describe your issue or feature idea");
-				}
-				str.append("</li><li>Click \"Submit new issue\"</li></ol>");
-			});
-		builder.withAbout(OGameUniGui.class, about -> about//
-			.withCurrentVersionFromManifest()//
-			.withLatestVersion(() -> {
-				Release r;
-				try {
-					r = new GitHubApiHelper("Updownquark", "OGame-ROI").getLatestRelease(OGameUniGui.class);
-				} catch (IOException e) {
-					e.printStackTrace(System.out);
-					return null;
-				}
-				return r == null ? null : new AppPopulation.Version(r.getTagName(), r.getName(), r.getDescription());
-			}).withUpgrade(version -> {
-				try {
-					new GitHubApiHelper("Updownquark", "OGame-ROI").upgradeToLatest(OGameUniGui.class, builder.getTitle().get(),
-						builder.getIcon().get());
-				} catch (IllegalStateException | IOException e) {
-					e.printStackTrace(System.out);
-				}
-			}))//
-			.build((config, onBuilt) -> {
-				try {
-					new GitHubApiHelper("Updownquark", "OGame-ROI").checkForNewVersion(OGameUniGui.class, builder.getTitle().get(),
-						builder.getIcon().get(), release -> {
-							String declinedRelease = config.get("declined-release");
-							return !release.getTagName().equals(declinedRelease);
-						}, release -> config.set("declined-release", release.getTagName()), () -> {
-							onBuilt.accept(new OGameUniGui(config, ruleSets, getAccounts(config, "accounts/account")));
-						});
-				} catch (IOException e) {
-					// Put this on System.out so we don't trigger the bug warning
-					e.printStackTrace(System.out);
-				}
-			});
+		EventQueue.invokeLater(() -> {
+			ObservableUiBuilder builder = ObservableSwingUtils.buildUI()//
+				.systemLandF()//
+				.withOldConfig("ogame-config").withOldConfig("OGameUI")//
+				.withConfig("occountant")//
+				.withTitle("OCcountant")//
+				.withIcon(OGameUniGui.class, "/icons/HeldPlanet.png")//
+				.enableCloseWithoutSave()//
+				.withErrorReporting("https://github.com/Updownquark/OGame-ROI/issues/new", (str, error) -> {
+					if (error) {
+						str.append("<ol><li>Describe your issue, what you did to produce it, what effects it had, etc.</li>");
+					} else {
+						str.append("<ol><li>Describe your issue or feature idea");
+					}
+					str.append("</li><li>Click \"Submit new issue\"</li></ol>");
+				});
+			builder.withAbout(OGameUniGui.class, about -> about//
+				.withCurrentVersionFromManifest()//
+				.withLatestVersion(() -> {
+					Release r;
+					try {
+						r = new GitHubApiHelper("Updownquark", "OGame-ROI").getLatestRelease(OGameUniGui.class);
+					} catch (IOException e) {
+						e.printStackTrace(System.out);
+						return null;
+					}
+					return r == null ? null : new AppPopulation.Version(r.getTagName(), r.getName(), r.getDescription());
+				}).withUpgrade(version -> {
+					try {
+						new GitHubApiHelper("Updownquark", "OGame-ROI").upgradeToLatest(OGameUniGui.class, builder.getTitle().get(),
+							builder.getIcon().get());
+					} catch (IllegalStateException | IOException e) {
+						e.printStackTrace(System.out);
+					}
+				}))//
+				.build((config, onBuilt) -> {
+					try {
+						new GitHubApiHelper("Updownquark", "OGame-ROI").checkForNewVersion(OGameUniGui.class, builder.getTitle().get(),
+							builder.getIcon().get(), release -> {
+								String declinedRelease = config.get("declined-release");
+								return !release.getTagName().equals(declinedRelease);
+							}, release -> config.set("declined-release", release.getTagName()), () -> {
+								onBuilt.accept(new OGameUniGui(config, ruleSets, getAccounts(config, "accounts/account")));
+							});
+					} catch (IOException e) {
+						// Put this on System.out so we don't trigger the bug warning
+						e.printStackTrace(System.out);
+					}
+				});
+		});
 	}
 
 	public static SyncValueSet<Account> getAccounts(ObservableConfig config, String path) {

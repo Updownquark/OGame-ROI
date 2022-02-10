@@ -462,7 +462,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 	}
 
 	/** Storage amount per storage building level, starting at level 0 */
-	private final BetterSortedSet<Long> STORAGE = new BetterTreeSet<>(false, Long::compareTo).with(10L);
+	private final BetterSortedSet<Long> STORAGE = BetterTreeSet.<Long> buildTreeSet(Long::compareTo).build().with(10L);
 
 	@Override
 	public Production getProduction(Account account, Planet planet, ResourceType resourceType, double energyFactor) {
@@ -819,7 +819,7 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 		int levels = planetOrMoon.getBuildingLevel(BuildingType.ResearchLab);
 		int irn = account.getResearch().getIntergalacticResearchNetwork();
 		if (irn > 0) {
-			SortedTreeList<Integer> labLevels = new SortedTreeList<>(false, (i1, i2) -> -Integer.compare(i1, i2));
+			SortedTreeList<Integer> labLevels = SortedTreeList.<Integer> buildTreeList((i1, i2) -> -Integer.compare(i1, i2)).build();
 			for (Planet planet : account.getPlanets().getValues()) {
 				// if (planet != planetOrMoon) { The app doesn't actually care where the research starts from, so just use the best case
 					labLevels.add(planet.getBuildingLevel(BuildingType.ResearchLab));
