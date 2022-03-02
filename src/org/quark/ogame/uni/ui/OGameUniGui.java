@@ -1081,6 +1081,8 @@ public class OGameUniGui extends JPanel {
 	}
 
 	public static void main(String[] args) {
+		// Direct3D has issues with swing on some graphics cards. Might put this in the ObServe swing architecture some time.
+		System.setProperty("sun.java2d.d3d", "false");
 		List<OGameRuleSet> ruleSets = new ArrayList<>();
 		ruleSets.addAll(Arrays.asList(//
 			new OGameRuleSet710(), new OGameRuleSet711(), new OGameRuleSet750(), new OGameRuleSet800pl7()));
