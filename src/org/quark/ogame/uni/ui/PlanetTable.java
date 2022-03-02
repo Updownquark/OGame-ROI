@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -98,6 +99,8 @@ public class PlanetTable {
 		temps.put(15, -130);
 		DEFAULT_MIN_PLANET_TEMPS = Collections.unmodifiableMap(temps);
 	}
+
+	private static final PlanetWithProduction ALL_PLANETS = new PlanetWithProduction(null, null);
 
 	enum PlanetColumnSet {
 		Mines, Utilization, Facilities, Defense, Fleet, Moon, MoonFleet
@@ -199,7 +202,7 @@ public class PlanetTable {
 			}, null, 80)//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonNameColumn = ObservableCollection.of(PLANET_COLUMN_TYPE,
-			planetColumn("Name", String.class, p -> p.planet == null ? "" : p.planet.getMoon().getName(),
+			planetColumnWithAll("Name", String.class, p -> p.planet == null ? "" : p.planet.getMoon().getName(),
 				(p, name) -> p.getMoon().setName(name), 100));
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> moonFieldColumns = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			intMoonColumn("Moon Fields", false, moon -> theUniGui.getRules().get().economy().getFields(moon), null, 80), //
@@ -259,7 +262,8 @@ public class PlanetTable {
 		}) //*/
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> usageColumns1 = ObservableCollection.of(PLANET_COLUMN_TYPE,
-			planetColumn("M %", int.class, p -> p.planet == null ? null : p.planet.getMetalUtilization(), Planet::setMetalUtilization, 45)
+			planetColumnWithAll("M %", int.class, p -> p.planet == null ? null : p.planet.getMetalUtilization(),
+				Planet::setMetalUtilization, 45)
 				.withHeaderTooltip("Metal Mine Utilization").formatText(v -> v == null ? "" : v + "%")
 				.decorate((m, deco) -> {
 					if (m.getCellValue() != null) {
@@ -274,7 +278,8 @@ public class PlanetTable {
 						theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
 					return ResourceSettingsPanel.getPercentages(max);
 				}).clicks(1)), //
-			planetColumn("C %", int.class, p -> p.planet == null ? null : p.planet.getCrystalUtilization(), Planet::setCrystalUtilization,
+			planetColumnWithAll("C %", int.class, p -> p.planet == null ? null : p.planet.getCrystalUtilization(),
+				Planet::setCrystalUtilization,
 				45).withHeaderTooltip("Crystal Mine Utilization").formatText(v -> v == null ? "" : v + "%")
 					.decorate((m, deco) -> {
 						if (m.getCellValue() != null) {
@@ -289,7 +294,7 @@ public class PlanetTable {
 							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
 						return ResourceSettingsPanel.getPercentages(max);
 					}).clicks(1)), //
-			planetColumn("D %", int.class, p -> p.planet == null ? null : p.planet.getDeuteriumUtilization(),
+			planetColumnWithAll("D %", int.class, p -> p.planet == null ? null : p.planet.getDeuteriumUtilization(),
 				Planet::setDeuteriumUtilization, 45).withHeaderTooltip("Deuterium Synthesizer Utilization")
 					.formatText(v -> v == null ? "" : v + "%")//
 					.decorate((m, deco) -> {
@@ -305,7 +310,8 @@ public class PlanetTable {
 							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
 						return ResourceSettingsPanel.getPercentages(max);
 					}).clicks(1)), //
-			planetColumn("Cr %", int.class, p -> p.planet == null ? null : p.planet.getCrawlerUtilization(), Planet::setCrawlerUtilization,
+			planetColumnWithAll("Cr %", int.class, p -> p.planet == null ? null : p.planet.getCrawlerUtilization(),
+				Planet::setCrawlerUtilization,
 				45).withHeaderTooltip("Crawler Utilization").formatText(v -> v == null ? "" : v + "%")
 					.decorate((m, deco) -> {
 						if (m.getCellValue() != null) {
@@ -323,7 +329,7 @@ public class PlanetTable {
 					}).clicks(1)) //
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> itemColumns = ObservableCollection.of(PLANET_COLUMN_TYPE,
-			planetColumn("M+", int.class, p -> p.planet == null ? null : p.planet.getMetalBonus(), Planet::setMetalBonus, 45)
+			planetColumnWithAll("M+", int.class, p -> p.planet == null ? null : p.planet.getMetalBonus(), Planet::setMetalBonus, 45)
 				.withHeaderTooltip("Metal Bonus Item").formatText(v -> v == null ? "" : v + "%")
 				.decorate((m, deco) -> {
 					if (m.getCellValue() != null) {
@@ -334,7 +340,7 @@ public class PlanetTable {
 					}
 				})//
 				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)), //
-			planetColumn("C+", int.class, p -> p.planet == null ? null : p.planet.getCrystalBonus(), Planet::setCrystalBonus, 45)
+			planetColumnWithAll("C+", int.class, p -> p.planet == null ? null : p.planet.getCrystalBonus(), Planet::setCrystalBonus, 45)
 				.withHeaderTooltip("Crystal Bonus Item").formatText(v -> v == null ? "" : v + "%")
 				.decorate((m, deco) -> {
 					if (m.getCellValue() != null) {
@@ -345,7 +351,7 @@ public class PlanetTable {
 					}
 				})//
 				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)), //
-			planetColumn("D+", int.class, p -> p.planet == null ? null : p.planet.getDeuteriumBonus(), Planet::setDeuteriumBonus, 45)
+			planetColumnWithAll("D+", int.class, p -> p.planet == null ? null : p.planet.getDeuteriumBonus(), Planet::setDeuteriumBonus, 45)
 				.withHeaderTooltip("Deuterium Bonus Item").formatText(v -> v == null ? "" : v + "%")
 				.decorate((m, deco) -> {
 					if (m.getCellValue() != null) {
@@ -356,7 +362,7 @@ public class PlanetTable {
 					}
 				})//
 				.withMutation(m -> m.asCombo(v -> v + "%", itemOptions).clicks(1)), //
-			planetColumn("E+", int.class, p -> p.planet == null ? null : p.planet.getEnergyBonus(), Planet::setEnergyBonus, 45)
+			planetColumnWithAll("E+", int.class, p -> p.planet == null ? null : p.planet.getEnergyBonus(), Planet::setEnergyBonus, 45)
 				.withHeaderTooltip("Energy Bonus Item").formatText(v -> v == null ? "" : v + "%")
 				.decorate((m, deco) -> {
 					if (m.getCellValue() != null) {
@@ -403,9 +409,9 @@ public class PlanetTable {
 				}), //
 			intPlanetColumn("Solar", AccountUpgradeType.SolarPlant, 55), //
 			intPlanetColumn("Fusion", AccountUpgradeType.FusionReactor, 55),
-			planetColumn("Net Enrgy", int.class, p -> p.planet == null ? null : p.getEnergy().totalNet, null, 65));
+			planetColumnWithAll("Net Enrgy", int.class, p -> p.planet == null ? null : p.getEnergy().totalNet, null, 65));
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> usageColumns2 = ObservableCollection.of(PLANET_COLUMN_TYPE,
-			planetColumn("Solar %", int.class, p -> p.planet == null ? null : p.planet.getSolarPlantUtilization(),
+			planetColumnWithAll("Solar %", int.class, p -> p.planet == null ? null : p.planet.getSolarPlantUtilization(),
 				Planet::setSolarPlantUtilization, 55).withHeaderTooltip("Solar Plant Utilization").formatText(v -> v == null ? "" : v + "%")
 					.decorate((m, deco) -> {
 						if (m.getCellValue() != null) {
@@ -420,7 +426,7 @@ public class PlanetTable {
 							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
 						return ResourceSettingsPanel.getPercentages(max);
 					}).clicks(1)), //
-			planetColumn("Sat %", int.class, p -> p.planet == null ? null : p.planet.getSolarSatelliteUtilization(),
+			planetColumnWithAll("Sat %", int.class, p -> p.planet == null ? null : p.planet.getSolarSatelliteUtilization(),
 				Planet::setSolarSatelliteUtilization, 45).withHeaderTooltip("Solar Satellite Utilization")
 					.formatText(v -> v == null ? "" : v + "%")//
 					.decorate((m, deco) -> {
@@ -436,7 +442,7 @@ public class PlanetTable {
 							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
 						return ResourceSettingsPanel.getPercentages(max);
 					}).clicks(1)), //
-			planetColumn("FZN %", int.class, p -> p.planet == null ? null : p.planet.getFusionReactorUtilization(),
+			planetColumnWithAll("FZN %", int.class, p -> p.planet == null ? null : p.planet.getFusionReactorUtilization(),
 				Planet::setFusionReactorUtilization, 45).withHeaderTooltip("Fusion Reactor Utilization")
 					.formatText(v -> v == null ? "" : v + "%")//
 					.decorate((m, deco) -> {
@@ -452,7 +458,7 @@ public class PlanetTable {
 							theUniGui.getSelectedAccount().get(), cell.getModelValue().planet);
 						return ResourceSettingsPanel.getPercentages(max);
 					}).clicks(1)), //
-			planetColumn("Net Enrgy", int.class, p -> p.planet == null ? null : p.getEnergy().totalNet, null, 65)//
+			planetColumnWithAll("Net Enrgy", int.class, p -> p.planet == null ? null : p.getEnergy().totalNet, null, 65)//
 				.decorate((m, deco) -> {
 					if (m.getCellValue() == null || m.getCellValue() >= 0) {
 						return;
@@ -626,6 +632,13 @@ public class PlanetTable {
 				selectedColumns)
 			.collect();
 
+		ObservableCollection<PlanetWithProduction> planetRows = ObservableCollection.flattenCollections(PlanetWithProduction.class, //
+			theUniGui.getPlanets(), //
+			ObservableCollection.flattenValue(theSelectedColumns
+				.map(cs -> cs == PlanetColumnSet.Utilization ? ObservableCollection.of(PlanetWithProduction.class, ALL_PLANETS) : null)), //
+			ObservableCollection
+				.flattenValue(theSelectedColumns.map(cs -> cs == PlanetColumnSet.Utilization ? null : theUniGui.getTotalProduction())) //
+		).collect();
 		ObservableCollection<Research> researchColl = ObservableCollection
 			.flattenValue(theUniGui.getSelectedAccount().<ObservableCollection<Research>> map(
 				TypeTokens.get().keyFor(ObservableCollection.class).parameterized(Research.class), account -> {
@@ -690,19 +703,28 @@ public class PlanetTable {
 					.withColumn(intResearchColumn("Shield", ResearchType.Shielding, 45))//
 					.withColumn(intResearchColumn("Armor", ResearchType.Armor, 40))//
 			)//
-			.addTable(theUniGui.getPlanetsWithTotal(),
+			.addTable(planetRows,
 				planetTable -> planetTable.fill().fillV().withItemName("planet").withAdaptiveHeight(6, 30, 50)//
 					.dragSourceRow(s -> s.toObject()).dragAcceptRow(a -> a.fromObject())// Allow dragging to reorder planets
 					.decorate(d -> d.withTitledBorder("Planets", Color.black))//
 					// This is a little hacky, but the next line tells the column the item name
 					.withColumns(initPlanetColumns)
 					// function
-					.withNameColumn(p -> p.planet == null ? "Totals" : p.planet.getName(), (p, name) -> p.planet.setName(name), false,
-						nameCol -> nameCol.withWidths(50, 100, 150).decorate((cell, decorator) -> {
-							if (cell.getModelValue().planet == null) {
-								decorator.bold();
-							}
-						}))//
+					.withNameColumn(p -> {
+						if (p.planet != null) {
+							return p.planet.getName();
+						} else if (p == ALL_PLANETS) {
+							return "Set For All";
+						} else {
+							return "Totals";
+						}
+					}, (p, name) -> p.planet.setName(name), false,
+						nameCol -> nameCol.withMutation(mut -> mut.editableIf((p, n) -> p.planet != null)).withWidths(50, 100, 150)
+							.decorate((cell, decorator) -> {
+								if (cell.getModelValue().planet == null) {
+									decorator.bold();
+								}
+							}))//
 					.withColumns(planetColumns)//
 					.withSelection(selectedPlanet, false)//
 					.withAdd(() -> theUniGui.createPlanet(), null)//
@@ -779,17 +801,52 @@ public class PlanetTable {
 		}
 	}
 
-	public static <T> CategoryRenderStrategy<PlanetWithProduction, T> planetColumn(String name, Class<T> type,
+	public <T> CategoryRenderStrategy<PlanetWithProduction, T> planetColumnWithAll(String name, Class<T> type,
 		Function<PlanetWithProduction, T> getter, BiConsumer<Planet, T> setter, int width) {
+		return planetColumn(name, type, pwp -> {
+			if (pwp == ALL_PLANETS) {
+				T value = null;
+				boolean first = true;
+				boolean allSame = false; // Don't report a value for no planets
+				for (PlanetWithProduction p : theUniGui.getPlanets()) {
+					if (first) {
+						allSame = true;
+						value = getter.apply(p);
+						first = false;
+					} else {
+						T pValue = getter.apply(p);
+						if (!Objects.equals(value, pValue)) {
+							allSame = false;
+							break;
+						}
+					}
+				}
+				return allSame ? value : null;
+			} else {
+				return getter.apply(pwp);
+			}
+		}, (pwp, value) -> {
+			if (pwp.planet != null) {
+				setter.accept(pwp.planet, value);
+			} else if (pwp == ALL_PLANETS) {
+				for (PlanetWithProduction p2 : theUniGui.getPlanets()) {
+					setter.accept(p2.planet, value);
+				}
+			}
+		}, width);
+	}
+
+	public static <T> CategoryRenderStrategy<PlanetWithProduction, T> planetColumn(String name, Class<T> type,
+		Function<PlanetWithProduction, T> getter, BiConsumer<PlanetWithProduction, T> setter, int width) {
 		CategoryRenderStrategy<PlanetWithProduction, T> column = new CategoryRenderStrategy<PlanetWithProduction, T>(name,
 			TypeTokens.get().of(type), getter).formatText(v -> v == null ? "" : v.toString());
 		column.withWidths(width, width, width);
 		if (setter != null) {
 			column.withMutation(
-				m -> m.editableIf((p, v) -> p.planet != null).mutateAttribute((p, v) -> setter.accept(p.planet, v)).withRowUpdate(true));
+				m -> m.editableIf((p, v) -> p.planet != null || p == ALL_PLANETS).mutateAttribute(setter).withRowUpdate(true));
 		}
 		column.decorate((cell, decorator) -> {
-			if (cell.getModelValue().planet == null) {
+			if (cell.getModelValue().planet == null && cell.getModelValue() != ALL_PLANETS) {
 				decorator.bold();
 			}
 		});
@@ -897,7 +954,7 @@ public class PlanetTable {
 	}
 
 	CategoryRenderStrategy<PlanetWithProduction, Levels> intPlanetColumn(String name, AccountUpgradeType type, boolean moon, int width) {
-		return planetColumn(name, Levels.class, //
+		return planetColumnWithAll(name, Levels.class, //
 			p -> {
 				UpgradeAccount ua = theUniGui.getUpgradeAccount().get();
 				if (ua == null) {
@@ -1019,7 +1076,7 @@ public class PlanetTable {
 
 	CategoryRenderStrategy<PlanetWithProduction, Integer> intPlanetColumn(String name, boolean allowNegative, boolean useTotal,
 		Function<Planet, Integer> getter, BiConsumer<Planet, Integer> setter, int width) {
-		CategoryRenderStrategy<PlanetWithProduction, Integer> column = planetColumn(name, int.class, p -> {
+		CategoryRenderStrategy<PlanetWithProduction, Integer> column = planetColumnWithAll(name, int.class, p -> {
 			if (p.planet != null) {
 				return getter.apply(p.planet);
 			} else if (!useTotal) {

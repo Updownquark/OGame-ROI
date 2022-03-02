@@ -6,7 +6,7 @@
 	<property name="app.name" value="OCcountant" />
 	<property name="app.short.name" value="${app.name}" />
 	<property name="app.vendor" value="Updownquark" />
-	<property name="app.version" value="0.10.12" />
+	<property name="app.version" value="0.10.13" />
 	<property name="app.descrip" value="An app for keeping track of economy stats and goals in OGame" />
 	<property name="main.class" value="org.quark.ogame.uni.ui.OGameUniGui"/>
 
@@ -15,9 +15,6 @@
     <property name="dir.jarfile" value="${dir.buildfile}/target/deploy"/>
 	<property name="jar.file" value="${dir.jarfile}/${app.short.name}.jar" />
 	<property environment="env" />
-	<!--<property name="java_home" value="${env.JAVA_HOME}" />-->
-	<property name="java_home" value="C:\Program Files\Java\jdk1.8.0_181" />
-	<property name="packager" value="${java_home}/bin/javapackager.exe" />
     <target name="jar">
         <jar destfile="${jar.file}" filesetmanifest="mergewithoutmain">
             <manifest>
@@ -46,30 +43,4 @@
             <fileset dir="${dir.workspace}/ObServe-ext/src/main/java"/>
         </jar>
     </target>
-	<target name="deploy-exe" depends="jar">
-		<copy todir="target/native/exe">
-			<fileset dir="${dir.jarfile}">
-				<include name="${app.short.name}.jar" />
-			</fileset>
-		</copy>
-	</target>
-	<!--<target name="exe"
-		depends="jar"
-		>
-		<exec executable="${packager}">
-			<arg value="-deploy" />
-			<arg line="-native exe" />
-			<arg line="-outdir ${dir.buildfile}/target/native" />
-			<arg line="-outfile ${app.short.name}" />
-			<arg line="-title &quot;${app.name}&quot;" />
-			<arg line="-description &quot;${app.descrip}&quot;" />
-			<arg line="-srcfiles ${jar.file}" />
-			<arg line="-appclass ${main.class}" />
-			<arg line="-name &quot;${app.name}&quot;" />
-			<arg value="-Bmainjar=${jar.file}" />
-			<arg value="-BappVersion=${app.version}" />
-			<arg value="-Bvendor=${app.vendor}" />
-			<arg value="-Bicon=icons/broom.ico" />
-		</exec>
-	</target>-->
 </project>
