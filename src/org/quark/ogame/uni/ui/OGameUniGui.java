@@ -747,7 +747,8 @@ public class OGameUniGui extends JPanel {
 	public static <M> void decorateDiffColumn(CategoryRenderStrategy<M, Integer> column, IntFunction<Integer> goal) {
 		column.withRenderer(new ObservableCellRenderer.DefaultObservableCellRenderer<M, Integer>((m, c) -> c == null ? "" : c.toString()) {
 			@Override
-			public Component getCellRendererComponent(Component parent, ModelCell<M, Integer> cell, CellRenderContext ctx) {
+			public Component getCellRendererComponent(Component parent, ModelCell<? extends M, ? extends Integer> cell,
+				CellRenderContext ctx) {
 				Component c = super.getCellRendererComponent(parent, cell, ctx);
 				Integer value = cell.getCellValue();
 				if (value == null) {
