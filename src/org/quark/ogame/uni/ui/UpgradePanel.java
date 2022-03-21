@@ -189,8 +189,7 @@ public class UpgradePanel extends JPanel {
 		selection.changes().act(evt -> evt.getRootCausable().onFinish(key));
 		Format<Double> commaFormat = Format.doubleFormat("#,##0");
 		TableBuilder<PlannedAccountUpgrade, ?>[] table = new TableBuilder[1];
-		panel.addTextField("Filter:", uiFilter, TableContentControl.FORMAT,
-			f -> f.fill().withTooltip(TableContentControl.TABLE_CONTROL_TOOLTIP).modifyEditor(tf -> tf.setCommitOnType(true)));
+		panel.addTextField(null, uiFilter, TableContentControl.FORMAT, f -> TableContentControl.configureSearchField(f, true));
 		panel.addTable(upgrades, upgradeTable -> {
 			table[0] = upgradeTable;
 			upgradeTable.fill().fillV()//

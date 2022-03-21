@@ -773,12 +773,17 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 
 	protected long getUpgradeTime(Account account, RockyBody planetOrMoon, AccountUpgradeType upgrade, long [] resAmounts){
 		double hours = 0;
+		int speed;
 		switch (upgrade.type) {
 		case Building:
 			if (planetOrMoon == null) {
 				return 0; //Null planet means they don't care about the time
 			}
-			hours = (resAmounts[0] + resAmounts[1]) / 2500 / account.getUniverse().getEconomySpeed();
+			speed = account.getUniverse().getEconomySpeed();
+			if (speed == 0) {
+				speed = 1;
+			}
+			hours = (resAmounts[0] + resAmounts[1]) / 2500 / speed;
 			hours /= (1 + planetOrMoon.getRoboticsFactory());
 			int nanite = planetOrMoon.getBuildingLevel(BuildingType.NaniteFactory);
 			if (nanite > 0) {
@@ -786,7 +791,11 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			}
 			break;
 		case Research:
-			hours = (resAmounts[0] + resAmounts[1]) / 1000 / account.getUniverse().getResearchSpeed();
+			speed = account.getUniverse().getResearchSpeed();
+			if (speed == 0) {
+				speed = 1;
+			}
+			hours = (resAmounts[0] + resAmounts[1]) / 1000 / speed;
 			int labLevels=getTotalLabLevels(account, planetOrMoon);
 			hours/=labLevels;
 			break;
@@ -794,7 +803,11 @@ public class OGameEconomy710 implements OGameEconomyRuleSet {
 			if (planetOrMoon == null) {
 				return 0; //Null planet means they don't care about the time
 			}
-			hours = (resAmounts[0] + resAmounts[1]) / 2500 / account.getUniverse().getEconomySpeed();
+			speed = account.getUniverse().getEconomySpeed();
+			if (speed == 0) {
+				speed = 1;
+			}
+			hours = (resAmounts[0] + resAmounts[1]) / 2500 / speed;
 			hours /= (1 + planetOrMoon.getShipyard());
 			nanite = planetOrMoon.getBuildingLevel(BuildingType.NaniteFactory);
 			if (nanite > 0) {

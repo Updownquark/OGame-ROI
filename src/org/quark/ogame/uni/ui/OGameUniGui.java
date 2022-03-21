@@ -432,12 +432,22 @@ public class OGameUniGui extends JPanel {
 		theTotalProduction.mutableElement(theTotalProduction.getTerminalElement(true).getElementId()).set(total);
 	}
 	
+	private boolean isCalculatingPlanning;
+
 	void doPlanningLater() {
+		if (isCalculatingPlanning && EventQueue.isDispatchThread()) {
+			return;
+		}
 		long now = System.currentTimeMillis();
 		isPlanningDirty = now;
 		EventQueue.invokeLater(() -> {
 			if (isPlanningDirty == now) {
-				recalcPlanning();
+				isCalculatingPlanning = true;
+				try {
+					recalcPlanning();
+				} finally {
+					isCalculatingPlanning = false;
+				}
 			}
 		});
 	}
@@ -716,13 +726,18 @@ public class OGameUniGui extends JPanel {
 														+ "</li></ul></html>"))//
 										)//
 									, acctSettingsTab -> acctSettingsTab.setName("Settings"))//
-								.withVTab("planets", acctBuildingsPanel -> thePlanetPanel.addPlanetTable(acctBuildingsPanel)//
-									, acctBuildingsTab -> acctBuildingsTab.setName("Builds"))//
-								.withVTab("production", productionPanel -> theProductionPanel.addPanel(productionPanel), //
+								.withHTab("planets", new JustifiedBoxLayout(true).mainJustified().crossJustified(),
+									acctBuildingsPanel -> thePlanetPanel.addPlanetTable(acctBuildingsPanel),
+									acctBuildingsTab -> acctBuildingsTab.setName("Empire"))//
+								.withHTab("production", new JustifiedBoxLayout(true).mainJustified().crossJustified(),
+									productionPanel -> theProductionPanel.addPanel(productionPanel), //
 									productionTab -> productionTab.setName("Production"))//
-								.withVTab("resSettings", resSettingsPanel -> theResourceSettingsPanel.addPanel(resSettingsPanel), //
+								.withHTab("resSettings",
+									new JustifiedBoxLayout(true).mainJustified().crossJustified().setShowingInvisible(true),
+									resSettingsPanel -> theResourceSettingsPanel.addPanel(resSettingsPanel), //
 									resSettingsTab -> resSettingsTab.setName("Resource Settings"))//
-								.withVTab("upgrades", upgradesPanel -> theUpgradePanel.addPanel(upgradesPanel), //
+								.withHTab("upgrades", new JustifiedBoxLayout(true).mainJustified().crossJustified(),
+									upgradesPanel -> theUpgradePanel.addPanel(upgradesPanel), //
 									upgradesTab -> upgradesTab.setName("Upgrades"))//
 								// .withVTab("construction",
 								// constructionPanel -> new ConstructionPanel(theConfig, theSelectedRuleSet, theSelectedAccount)

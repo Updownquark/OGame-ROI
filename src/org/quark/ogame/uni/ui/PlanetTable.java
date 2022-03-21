@@ -215,11 +215,11 @@ public class PlanetTable {
 			intPlanetColumn("Min T", true, false, Planet::getMinimumTemperature, (planet, t) -> {
 				planet.setMinimumTemperature(t);
 				planet.setMaximumTemperature(t + 40);
-			}, 40), //
+			}, 45), //
 			intPlanetColumn("Max T", true, false, Planet::getMaximumTemperature, (planet, t) -> {
 				planet.setMaximumTemperature(t);
 				planet.setMinimumTemperature(t - 40);
-			}, 40)//
+			}, 45)//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> upgradeColumn = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			new CategoryRenderStrategy<PlanetWithProduction, Object>("Upgrd", TypeTokens.get().OBJECT,
@@ -467,9 +467,9 @@ public class PlanetTable {
 				})//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> storageColumns = ObservableCollection.of(PLANET_COLUMN_TYPE,
-			intPlanetColumn("M Stor", AccountUpgradeType.MetalStorage, 45), //
-			intPlanetColumn("C Stor", AccountUpgradeType.CrystalStorage, 45), //
-			intPlanetColumn("D Stor", AccountUpgradeType.DeuteriumStorage, 45)//
+			intPlanetColumn("M Stor", AccountUpgradeType.MetalStorage, 50), //
+			intPlanetColumn("C Stor", AccountUpgradeType.CrystalStorage, 50), //
+			intPlanetColumn("D Stor", AccountUpgradeType.DeuteriumStorage, 50)//
 		);
 		ObservableCollection<CategoryRenderStrategy<PlanetWithProduction, ?>> mainFacilities = ObservableCollection.of(PLANET_COLUMN_TYPE,
 			intPlanetColumn("Robotics", AccountUpgradeType.RoboticsFactory, 60), //
