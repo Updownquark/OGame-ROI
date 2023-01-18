@@ -538,68 +538,53 @@ public class HoldingsPanel {
 								return h.getType() != null || h.getResourcePackageType() != null;
 							}
 						}).filterAccept((h, lvl) -> lvl > 0 ? null : "Level must be positive").asText(SpinnerFormat.INT)))//
-						.withColumn("Metal (KK)", Double.class, h->{
-							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
-								return h.getMetal()*1.0;
-							} else {
-								return h.getMetal()/1E6;
-							}
-						}, metalCol -> metalCol.formatText((h, m) -> {
+						.withColumn("Metal", Double.class, h -> h.getMetal() * 1.0, //
+							metalCol -> metalCol.formatText((h, m) -> {
 							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
 								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(m.longValue()));
 							} else {
-								return OGameUtils.TWO_DIGIT_FORMAT.format(m);
+								return OGameUtils.printResourceAmount(m);
 							}
 						}).withMutation(metalMutation -> {
-							metalMutation.mutateAttribute((h, m) -> h.setMetal((long) (m * 1E6))).editableIf((h, n) -> {
+							metalMutation.mutateAttribute((h, m) -> h.setMetal(m.longValue())).editableIf((h, n) -> {
 								if (h instanceof SyntheticHolding) {
 									return false;
 								} else {
 									return h.getType() == null;
 								}
-							}).asText(Format.doubleFormat("0.00"));
+							}).asText(OGameUtils.FORMAT);
 						}))//
-						.withColumn("Crystal (KK)", Double.class, h -> {
+						.withColumn("Crystal", Double.class, h -> h.getCrystal() * 1.0, //
+							crystalCol -> crystalCol.formatText((h, c) -> {
 							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
-								return h.getCrystal() * 1.0;
+									return OGameUniGui.printUpgradeTime(Duration.ofSeconds(c.longValue()));
 							} else {
-								return h.getCrystal() / 1E6;
-							}
-						}, crystalCol -> crystalCol.formatText((h, d) -> {
-							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
-								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(d.longValue()));
-							} else {
-								return OGameUtils.TWO_DIGIT_FORMAT.format(d);
+									return OGameUtils.printResourceAmount(c);
 							}
 						}).withMutation(crystalMutation -> {
-							crystalMutation.mutateAttribute((h, c) -> h.setCrystal((long) (c * 1E6))).editableIf((h, n) -> {
+								crystalMutation.mutateAttribute((h, c) -> h.setCrystal(c.longValue())).editableIf((h, n) -> {
 								if (h instanceof SyntheticHolding) {
 									return false;
 								} else {
 									return h.getType() == null;
 								}
-							}).asText(Format.doubleFormat("0.00"));
+								}).asText(OGameUtils.FORMAT);
 						}))//
-						.withColumn("Deuterium (KK)", Double.class, h -> {
-							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
-								return h.getDeuterium() * 1.0;
-							} else {
-								return h.getDeuterium() / 1E6;
-							}
-						}, deutCol -> deutCol.formatText((h, d) -> {
+						.withColumn("Deuterium", Double.class, h -> h.getDeuterium() * 1.0, //
+							deutCol -> deutCol.formatText((h, d) -> {
 							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
 								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(d.longValue()));
 							} else {
-								return OGameUtils.TWO_DIGIT_FORMAT.format(d);
+									return OGameUtils.printResourceAmount(d);
 							}
-						}).withMutation(metalMutation -> {
-							metalMutation.mutateAttribute((h, d) -> h.setDeuterium((long) (d * 1E6))).editableIf((h, n) -> {
+							}).withMutation(deutMutation -> {
+								deutMutation.mutateAttribute((h, d) -> h.setDeuterium(d.longValue())).editableIf((h, n) -> {
 								if (h instanceof SyntheticHolding) {
 									return false;
 								} else {
 									return h.getType() == null;
 								}
-							}).asText(Format.doubleFormat("0.00"));
+								}).asText(OGameUtils.FORMAT);
 						}))//
 						.withColumn("Cargoes", Long.class, h -> {
 							if (h instanceof SyntheticHolding) {
@@ -610,7 +595,7 @@ public class HoldingsPanel {
 								theUniGui.getSelectedAccount().get());
 							return (long) Math.ceil(total * 1.0 / cap);
 						}, col -> col.formatText(cargoes -> cargoes == null ? "" : commaFormat.format(cargoes * 1.0)))//
-						.withColumn("Value (KK)", Double.class, h -> {
+						.withColumn("Value", Double.class, h -> {
 							TradeRatios r = theUniGui.getSelectedAccount().get().getUniverse().getTradeRatios();
 							double v = h.getMetal()//
 								+ h.getCrystal() / r.getCrystal() * r.getMetal()//
@@ -618,13 +603,13 @@ public class HoldingsPanel {
 							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
 								return 0.0;
 							} else {
-								return v / 1E6;
+								return v;
 							}
-						}, valueCol -> valueCol.formatText((h, d) -> {
+						}, valueCol -> valueCol.formatText((h, v) -> {
 							if (h == theProductionTimeHolding || h == theUpgradeTimeHolding) {
 								return "";
 							} else {
-								return OGameUtils.TWO_DIGIT_FORMAT.format(d);
+								return OGameUtils.printResourceAmount(v);
 							}
 						}))//
 						.withAdd(
@@ -678,68 +663,53 @@ public class HoldingsPanel {
 								.editableIf((t, r) -> !(t instanceof SyntheticTrade))
 								.filterAccept((t, r) -> r <= 0 ? "Rate must be positive" : null);
 						}))//
-						.withColumn("Metal (KK)", Double.class, h -> {
-							if (h == theUpgradeTimeTrade || h == theTotalTradesUpgradeTime) {
-								return h.getMetal() * 1.0;
-							} else {
-								return h.getMetal() / 1E6;
-							}
-						}, metalCol -> metalCol.formatText((h, m) -> {
+						.withColumn("Metal", Double.class, h -> h.getMetal() * 1.0, //
+							metalCol -> metalCol.withWidths(60, 65, 80).formatText((h, m) -> {
 							if (h == theUpgradeTimeTrade || h == theTotalTradesUpgradeTime) {
 								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(m.longValue()));
 							} else {
-								return OGameUtils.TWO_DIGIT_FORMAT.format(m);
+									return OGameUtils.printResourceAmount(m);
 							}
 						}).withMutation(metalMutation -> {
-							metalMutation.mutateAttribute((h, m) -> h.setMetal((long) (m * 1E6))).editableIf((h, n) -> {
+								metalMutation.mutateAttribute((h, m) -> h.setMetal(m.longValue())).editableIf((h, n) -> {
 								if (h instanceof SyntheticTrade) {
 									return false;
 								} else {
 									return h.getType() != ResourceType.Metal;
 								}
-							}).asText(Format.doubleFormat("0.00"));
+								}).asText(OGameUtils.FORMAT);
 						}))//
-						.withColumn("Crystal (KK)", Double.class, h -> {
+						.withColumn("Crystal", Double.class, h -> h.getCrystal() * 1.0, //
+							crystalCol -> crystalCol.withWidths(60, 65, 80).formatText((h, c) -> {
 							if (h == theUpgradeTimeTrade || h == theTotalTradesUpgradeTime) {
-								return h.getCrystal() * 1.0;
+									return OGameUniGui.printUpgradeTime(Duration.ofSeconds(c.longValue()));
 							} else {
-								return h.getCrystal() / 1E6;
-							}
-						}, crystalCol -> crystalCol.formatText((h, d) -> {
-							if (h == theUpgradeTimeTrade || h == theTotalTradesUpgradeTime) {
-								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(d.longValue()));
-							} else {
-								return OGameUtils.TWO_DIGIT_FORMAT.format(d);
+									return OGameUtils.printResourceAmount(c);
 							}
 						}).withMutation(crystalMutation -> {
-							crystalMutation.mutateAttribute((h, c) -> h.setCrystal((long) (c * 1E6))).editableIf((h, n) -> {
+								crystalMutation.mutateAttribute((h, c) -> h.setCrystal(c.longValue())).editableIf((h, n) -> {
 								if (h instanceof SyntheticTrade) {
 									return false;
 								} else {
 									return h.getType() != ResourceType.Crystal;
 								}
-							}).asText(Format.doubleFormat("0.00"));
+								}).asText(OGameUtils.FORMAT);
 						}))//
-							.withColumn("Deut (KK)", Double.class, h -> {
-							if (h == theUpgradeTimeTrade || h == theTotalTradesUpgradeTime) {
-								return h.getDeuterium() * 1.0;
-							} else {
-								return h.getDeuterium() / 1E6;
-							}
-						}, deutCol -> deutCol.formatText((h, d) -> {
+						.withColumn("Deut", Double.class, h -> h.getDeuterium() * 1.0, //
+							deutCol -> deutCol.withWidths(60, 65, 80).formatText((h, d) -> {
 							if (h == theUpgradeTimeTrade || h == theTotalTradesUpgradeTime) {
 								return OGameUniGui.printUpgradeTime(Duration.ofSeconds(d.longValue()));
 							} else {
-								return OGameUtils.TWO_DIGIT_FORMAT.format(d);
+									return OGameUtils.printResourceAmount(d);
 							}
 						}).withMutation(metalMutation -> {
-							metalMutation.mutateAttribute((h, d) -> h.setDeuterium((long) (d * 1E6))).editableIf((h, n) -> {
+								metalMutation.mutateAttribute((h, d) -> h.setDeuterium(d.longValue())).editableIf((h, n) -> {
 								if (h instanceof SyntheticTrade) {
 									return false;
 								} else {
 									return h.getType() != ResourceType.Deuterium;
 								}
-							}).asText(Format.doubleFormat("0.00"));
+								}).asText(OGameUtils.FORMAT);
 						}))//
 							.withColumn("Rx LC", Long.class, h -> {
 								if (h.getType() == null) {
@@ -760,7 +730,7 @@ public class HoldingsPanel {
 								int cargoSpace = theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.LargeCargo,
 									theUniGui.getSelectedAccount().get());
 								return (long) Math.ceil(amount * 1.0 / cargoSpace);
-							}, rxLcCol -> rxLcCol.formatText(v -> v == null ? "" : commaFormat.format(v * 1.0)).withWidths(30, 40, 80)
+						}, rxLcCol -> rxLcCol.formatText(v -> v == null ? "" : commaFormat.format(v * 1.0)).withWidths(30, 50, 80)
 								.withHeaderTooltip("Number of Large Cargoes required to hold the resources being received"))//
 							.withColumn("Tx LC", Long.class, h -> {
 								if (h.getType() == null) {
@@ -770,7 +740,7 @@ public class HoldingsPanel {
 								int cargoSpace = theUniGui.getRules().get().fleet().getCargoSpace(ShipyardItemType.LargeCargo,
 									theUniGui.getSelectedAccount().get());
 								return (long) Math.ceil(amount * 1.0 / cargoSpace);
-							}, rxLcCol -> rxLcCol.formatText(v -> v == null ? "" : commaFormat.format(v * 1.0)).withWidths(30, 40, 80)
+						}, rxLcCol -> rxLcCol.formatText(v -> v == null ? "" : commaFormat.format(v * 1.0)).withWidths(30, 50, 80)
 								.withHeaderTooltip("Number of Large Cargoes required to hold the resources being sent"))//
 						.withAdd(
 							() -> theUniGui.getSelectedAccount().get().getTrades().create()//

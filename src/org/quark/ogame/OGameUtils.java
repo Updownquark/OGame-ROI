@@ -18,7 +18,8 @@ import org.quark.ogame.uni.TradeRatios;
 import org.quark.ogame.uni.Utilizable;
 
 public class OGameUtils {
-	public static final Format<Double> FORMAT = Format.doubleFormat(5).printIntFor(6, false).withExpCondition(4, -1)//
+	public static final Format<Double> FORMAT = Format.doubleFormat(5).printIntFor(6, false).withExpCondition(4, -1)
+		.caseSensitive(false, false).printIntFor(4, true)//
 		.withPrefix("K", 3)//
 		.withPrefix("M", 6)//
 		.withPrefix("B", 9)//

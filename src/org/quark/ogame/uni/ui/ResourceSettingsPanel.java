@@ -65,7 +65,7 @@ public class ResourceSettingsPanel extends JPanel {
 			.addTable(
 				ObservableCollection.of(TypeTokens.get().of(ResourceRow.class), ResourceRow.values()).flow()
 					.refresh(selectedPlanet.noInitChanges()).collect(),
-				resTable -> resTable.fill()//
+				resTable -> resTable.fill().fillV()//
 					.withColumn("Type", ResourceRow.class, t -> t, typeCol -> typeCol.withWidths(100, 100, 100))//
 					.withColumn(
 						resourceColumn("", int.class, goals, (p, row) -> getPSValue(p, row, goals), this::setPSValue, selectedPlanet, 0, 35)

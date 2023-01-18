@@ -446,7 +446,7 @@ public class OGameUniGui extends JPanel {
 				try {
 					recalcPlanning();
 				} finally {
-					isCalculatingPlanning = false;
+					EventQueue.invokeLater(() -> isCalculatingPlanning = false);
 				}
 			}
 		});
@@ -862,17 +862,29 @@ public class OGameUniGui extends JPanel {
 	}
 
 	private static final Duration WEEK = Duration.ofDays(7);
+	private static final Duration DAY = Duration.ofDays(1);
 
 	static String printUpgradeTime(Duration upgradeTime) {
 		if (upgradeTime == null) {
 			return "";
-		}
-		if (upgradeTime.compareTo(WEEK) < 0) {
+		} else if (upgradeTime.compareTo(DAY) < 0) {
 			return QommonsUtils.printDuration(upgradeTime, true);
+		} else if (upgradeTime.compareTo(WEEK) < 0) {
+			int days = (int) (upgradeTime.getSeconds() / DAY.getSeconds());
+			Duration hours = Duration.ofSeconds((upgradeTime.getSeconds() % DAY.getSeconds()) / 60 * 60, 0);
+			if (hours.isZero()) {
+				return days+"d";
+			} else {
+				return days + "d " + QommonsUtils.printDuration(hours, true);
+			}
 		} else {
 			int wks = (int) (upgradeTime.getSeconds() / WEEK.getSeconds());
-			Duration days = Duration.ofSeconds(upgradeTime.getSeconds() % WEEK.getSeconds(), upgradeTime.getNano());
-			return wks + "w " + QommonsUtils.printDuration(days, true);
+			Duration days = Duration.ofSeconds((upgradeTime.getSeconds() % WEEK.getSeconds()) / 3_600 * 3_600, 0);
+			if (days.isZero()) {
+				return wks+"w";
+			} else {
+				return wks + "w " + QommonsUtils.printDuration(days, true);
+			}
 		}
 	}
 
