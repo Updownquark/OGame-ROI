@@ -86,7 +86,7 @@ public class RoiSequenceGenerator {
 	public RoiSequenceGenerator(OGameRuleSet rules, Account account) {
 		theRules = rules;
 		theAccount = account;
-		StampedLockingStrategy locker = new StampedLockingStrategy(this, ThreadConstraint.EDT);
+		StampedLockingStrategy locker = new StampedLockingStrategy(this, ThreadConstraint.ANY);
 		isActive = SettableValue.build(boolean.class).withValue(false).withLocking(locker).build();
 		ObservableValue<String> disabled = isActive.map(active -> active ? "Sequence is already being calculated" : null);
 

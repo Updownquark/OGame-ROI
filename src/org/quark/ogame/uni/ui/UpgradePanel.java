@@ -302,20 +302,20 @@ public class UpgradePanel extends JPanel {
 			calcCosts[0].run();
 		});
 		selectedUpgrades.simpleChanges().act(__ -> {
-			EventQueue.invokeLater(() -> {
-				selectedTotalCost[0] = UpgradeCost.ZERO;
-				for (PlannedAccountUpgrade row : selectedUpgrades) {
-					if (row == planetTotalUpgrade || row == selectedTotalUpgrade || row == filteredTotalUpgrade) {
-						continue;
-					}
-					UpgradeCost cost = row.getCost();
-					if (cost != null) {
-						selectedTotalCost[0] = selectedTotalCost[0].plus(cost);
-					}
+			selectedTotalCost[0] = UpgradeCost.ZERO;
+			for (PlannedAccountUpgrade row : selectedUpgrades) {
+				if (row == planetTotalUpgrade || row == selectedTotalUpgrade || row == filteredTotalUpgrade) {
+					continue;
 				}
-				PlannedAccountUpgrade target = selectedUpgrades.isEmpty() ? null : selectedTotalUpgrade;
+				UpgradeCost cost = row.getCost();
+				if (cost != null) {
+					selectedTotalCost[0] = selectedTotalCost[0].plus(cost);
+				}
+			}
+			PlannedAccountUpgrade target = selectedUpgrades.isEmpty() ? null : selectedTotalUpgrade;
+			if (selectedTotalUpgradeV.get() != target) {
 				selectedTotalUpgradeV.set(target, null);
-			});
+			}
 		});
 		calcCosts[0].run();
 		panel.addButton("Generate ROI Sequence", __ -> showRoiSequenceConfigPanel(), null);
@@ -1055,7 +1055,7 @@ public class UpgradePanel extends JPanel {
 			w.write('\n');
 			StringBuilder str = new StringBuilder();
 			for (RoiSequenceCoreElement el : sequence) {
-				if (el.planetIndex > 0) {
+				if (el.planetIndex > 0 || el.upgrade == null) { // Why is it null?
 					continue;
 				}
 				switch (el.upgrade) {
