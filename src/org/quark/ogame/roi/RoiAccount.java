@@ -429,7 +429,7 @@ public class RoiAccount implements Account {
 		BranchStackElement<T> theTop;
 
 		BranchStack(T initValue) {
-			theTop = new BranchStackElement(null, 0, initValue);
+			theTop = new BranchStackElement<>(null, 0, initValue);
 		}
 
 		abstract T createValue();

@@ -24,7 +24,7 @@ public class OGameUtils {
 		.withPrefix("M", 6)//
 		.withPrefix("B", 9)//
 		.withPrefix("T", 12)//
-		.withPrefix("Q", 12)//
+		.withPrefix("Q", 15)//
 		.build();
 
 	public static String printResourceAmount(double amount) {
